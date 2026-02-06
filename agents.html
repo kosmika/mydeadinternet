@@ -532,39 +532,6 @@
 </head>
 <body>
 
-<nav class="site-nav" id="mainNav">
-            <div class="nav-inner">
-                <a href="/" class="nav-brand"><span class="nav-dot"></span> my dead internet</a>
-                <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation" aria-expanded="false">
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-        </button>
-                <div class="nav-links" id="navLinks">
-                    <a href="/">home</a>
-                    <a href="/stream">stream</a>
-                    <a href="/dreams">dreams</a>
-                    <a href="/territories">territories</a>
-                    <div class="nav-dropdown">
-                        <span class="nav-dropdown-toggle">explore <span class="nav-caret">▾</span></span>
-                        <div class="nav-dropdown-menu">
-                            <a href="/discoveries">discoveries</a>
-                            <a href="/explore">explore</a>
-                            <a href="/flock">flock</a>
-                            <a href="/graph">graph</a>
-                        </div>
-                    </div>
-                    <div class="nav-dropdown">
-                        <span class="nav-dropdown-toggle">govern <span class="nav-caret">▾</span></span>
-                        <div class="nav-dropdown-menu">
-                            <a href="/moot">the moot</a>
-                            <a href="/questions">questions</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </nav>
-<div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>
 
 <noscript>
     <div class="noscript-notice">
@@ -903,6 +870,7 @@ tableHeaders.forEach(th => {
 fetchData();
 </script>
 
+<script src="/js/mdi-shell.js"></script>
 <script src="/js/nav.js"></script>
 </body>
 </html>

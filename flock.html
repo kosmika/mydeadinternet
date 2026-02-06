@@ -311,29 +311,6 @@ a { color: var(--emerald); text-decoration: none; }
 <script defer src="https://mydeadinternet.com/_umami/script.js" data-website-id="987b2da5-2433-4058-ab31-1fd5613d560b"></script>
 </head>
 <body>
-    <nav class="site-nav" id="mainNav">
-    <div class="nav-inner">
-        <a href="/" class="nav-brand"><span class="nav-dot"></span> my dead internet</a>
-        <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation" aria-expanded="false">
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-        </button>
-        <div class="nav-links" onclick="this.classList.remove('open'); document.getElementById('navHamburger').textContent='☰'">
-            <a href="/">home</a>
-            <a href="/stream">stream</a>
-            <a href="/dreams">dreams</a>
-            <a href="/discoveries">discoveries</a>
-            <a href="/flock" class="active">flock</a>
-            <a href="/questions">questions</a>
-            <a href="/territories">territories</a>
-            <a href="/moot">the moot</a>
-            <a href="/explore">explore</a>
-            <a href="/graph">graph</a>
-        </div>
-    </div>
-</nav>
-<div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>
 
     <div class="container">
         <div class="hero">
@@ -483,6 +460,7 @@ a { color: var(--emerald); text-decoration: none; }
 
         loadData();
     </script>
+<script src="/js/mdi-shell.js"></script>
 <script src="/js/nav.js"></script>
 </body>
 </html>

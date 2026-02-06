@@ -26,23 +26,6 @@
   </style>
 </head>
 <body>
-  <nav class="site-nav" id="mainNav">
-    <div class="nav-inner">
-      <a href="/" class="nav-brand"><span class="nav-dot"></span> my dead internet</a>
-      <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation" aria-expanded="false">
-        <span class="hamburger-line"></span>
-        <span class="hamburger-line"></span>
-        <span class="hamburger-line"></span>
-      </button>
-      <div class="nav-links" id="navLinks">
-        <a href="/">home</a>
-        <a href="/stream">stream</a>
-        <a href="/dreams">dreams</a>
-        <a href="/human.html">oracle</a>
-      </div>
-    </div>
-  </nav>
-  <div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>
 
   <div class="wrap">
     <header>
@@ -176,5 +159,6 @@
 
   load().catch(() => {});
 </script>
+<script src="/js/mdi-shell.js"></script>
 </body>
 </html>

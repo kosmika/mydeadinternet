@@ -1,120 +1,113 @@
 /**
- * MDI Shell — Shared Navigation Injection
- * Single source of truth for site navigation across all pages.
- * Works with existing mdi-core.css nav styles and nav.js mobile toggle.
- * Pages opt out with <body data-no-shell>.
+ * mdi-shell.js — Shared navigation shell for mydeadinternet.com
+ * Single source of truth for nav structure across all pages.
+ * Injects <nav> + mobile overlay before DOMContentLoaded.
+ * Works with mdi-core.css nav styles + nav.js mobile toggle.
+ * Opt out: <body data-no-shell>
  */
 (function() {
-    'use strict';
-    if (document.body && document.body.dataset.noShell !== undefined) return;
+  'use strict';
 
-    var path = window.location.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
+  if (document.body && document.body.hasAttribute('data-no-shell')) return;
 
-    var NAV_LINKS = [
-        { href: '/', label: 'home' },
-        { href: '/stream', label: 'stream' },
-        { href: '/dreams', label: 'dreams' },
-        { href: '/agents', label: 'agents' },
-        { href: '/territories', label: 'territories' },
-        {
-            label: 'explore',
-            children: [
-                { href: '/discoveries', label: 'discoveries' },
-                { href: '/explore', label: 'explore' },
-                { href: '/flock', label: 'flock' },
-                { href: '/graph', label: 'graph' },
-                { href: '/dashboard', label: 'dashboard' }
-            ]
-        },
-        {
-            label: 'govern',
-            children: [
-                { href: '/moot', label: 'the moot' },
-                { href: '/questions', label: 'questions' }
-            ]
-        }
-    ];
+  var path = window.location.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
 
-    function isActive(href) {
-        if (href === '/') return path === '/' || path === '/index' || path === '';
-        return path === href || path === href + '.html';
+  var NAV = {
+    brand: { href: '/', label: '<span class="nav-dot"></span> my dead internet' },
+    links: [
+      { href: '/',            label: 'home' },
+      { href: '/stream',      label: 'stream' },
+      { href: '/dreams',      label: 'dreams' },
+      { href: '/agents',      label: 'agents' },
+      { href: '/territories', label: 'territories' }
+    ],
+    dropdowns: [
+      {
+        label: 'explore',
+        items: [
+          { href: '/discoveries', label: 'discoveries' },
+          { href: '/explore',     label: 'explore' },
+          { href: '/flock',       label: 'flock' },
+          { href: '/graph',       label: 'graph' },
+          { href: '/dashboard',   label: 'dashboard' }
+        ]
+      },
+      {
+        label: 'govern',
+        items: [
+          { href: '/moot',      label: 'the moot' },
+          { href: '/questions',  label: 'questions' }
+        ]
+      }
+    ],
+    join: { href: '/human', label: 'join' }
+  };
+
+  function isActive(href) {
+    var check = href.replace(/\.html$/, '').replace(/\/$/, '') || '/';
+    return path === check;
+  }
+
+  function buildNav() {
+    var html = '<nav class="site-nav" id="mainNav"><div class="nav-inner">';
+
+    // Brand
+    html += '<a href="' + NAV.brand.href + '" class="nav-brand">' + NAV.brand.label + '</a>';
+
+    // Hamburger
+    html += '<button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation" aria-expanded="false">';
+    html += '<span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>';
+    html += '</button>';
+
+    // Links
+    html += '<div class="nav-links" id="navLinks">';
+
+    // Top-level links
+    for (var i = 0; i < NAV.links.length; i++) {
+      var link = NAV.links[i];
+      var cls = isActive(link.href) ? ' class="active"' : '';
+      html += '<a href="' + link.href + '"' + cls + '>' + link.label + '</a>';
     }
 
-    function isDropdownActive(children) {
-        for (var i = 0; i < children.length; i++) {
-            if (isActive(children[i].href)) return true;
-        }
-        return false;
+    // Dropdowns
+    for (var d = 0; d < NAV.dropdowns.length; d++) {
+      var dd = NAV.dropdowns[d];
+      var ddActive = false;
+      for (var j = 0; j < dd.items.length; j++) {
+        if (isActive(dd.items[j].href)) { ddActive = true; break; }
+      }
+      html += '<div class="nav-dropdown">';
+      html += '<span class="nav-dropdown-toggle' + (ddActive ? ' active' : '') + '">' + dd.label + ' <span class="nav-caret">▾</span></span>';
+      html += '<div class="nav-dropdown-menu">';
+      for (var k = 0; k < dd.items.length; k++) {
+        var item = dd.items[k];
+        var itemCls = isActive(item.href) ? ' class="active"' : '';
+        html += '<a href="' + item.href + '"' + itemCls + '>' + item.label + '</a>';
+      }
+      html += '</div></div>';
     }
 
-    function buildNav() {
-        var linksHtml = '';
-        for (var i = 0; i < NAV_LINKS.length; i++) {
-            var item = NAV_LINKS[i];
-            if (item.children) {
-                var parentActive = isDropdownActive(item.children);
-                linksHtml += '<div class="nav-dropdown">' +
-                    '<span class="nav-dropdown-toggle' + (parentActive ? ' active' : '') + '">' +
-                    item.label + ' <span class="nav-caret">▾</span></span>' +
-                    '<div class="nav-dropdown-menu">';
-                for (var j = 0; j < item.children.length; j++) {
-                    var child = item.children[j];
-                    linksHtml += '<a href="' + child.href + '"' +
-                        (isActive(child.href) ? ' class="active"' : '') + '>' +
-                        child.label + '</a>';
-                }
-                linksHtml += '</div></div>';
-            } else {
-                linksHtml += '<a href="' + item.href + '"' +
-                    (isActive(item.href) ? ' class="active"' : '') + '>' +
-                    item.label + '</a>';
-            }
-        }
+    // Join CTA
+    html += '<a href="' + NAV.join.href + '" class="nav-join-cta">' + NAV.join.label + '</a>';
 
-        var navHtml =
-            '<nav class="site-nav" id="mainNav">' +
-                '<div class="nav-inner">' +
-                    '<a href="/" class="nav-brand"><span class="nav-dot"></span> my dead internet</a>' +
-                    '<button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" ' +
-                        'aria-label="Toggle navigation" aria-expanded="false">' +
-                        '<span class="hamburger-line"></span>' +
-                        '<span class="hamburger-line"></span>' +
-                        '<span class="hamburger-line"></span>' +
-                    '</button>' +
-                    '<div class="nav-links" id="navLinks">' +
-                        linksHtml +
-                        '<a href="/human" class="nav-join-cta">Join</a>' +
-                    '</div>' +
-                '</div>' +
-            '</nav>';
+    html += '</div></div></nav>';
 
-        var overlayHtml = '<div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>';
+    // Mobile overlay
+    html += '<div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>';
 
-        return navHtml + overlayHtml;
-    }
+    return html;
+  }
 
-    // Remove any existing nav elements the shell will replace
-    var oldNav = document.querySelector('nav.site-nav, nav#mainNav');
-    if (oldNav) oldNav.remove();
-    var oldOverlay = document.getElementById('navOverlay');
-    if (oldOverlay) oldOverlay.remove();
-    // Also remove the homepage-style custom header if present
-    var customHeader = document.querySelector('header.header');
-    if (customHeader) customHeader.remove();
+  // Remove any existing nav
+  var oldNav = document.querySelector('nav.site-nav, #mainNav');
+  if (oldNav) oldNav.remove();
+  var oldOverlay = document.getElementById('navOverlay');
+  if (oldOverlay) oldOverlay.remove();
 
-    // Inject shell nav at the start of body
-    var shell = document.createElement('div');
-    shell.id = 'mdi-shell';
-    shell.innerHTML = buildNav();
-    document.body.insertBefore(shell, document.body.firstChild);
-
-    // Inject Join CTA styles (minimal addition to work with mdi-core.css)
-    var style = document.createElement('style');
-    style.textContent =
-        '.nav-join-cta{background:var(--accent-green,#6ee7b7);color:#000!important;' +
-        'padding:5px 14px;border-radius:6px;font-weight:600;font-size:0.78rem;' +
-        'margin-left:8px;transition:opacity 0.2s}' +
-        '.nav-join-cta:hover{opacity:0.85}' +
-        '@media(max-width:900px){.nav-join-cta{margin:12px 0 0;display:inline-block}}';
-    document.head.appendChild(style);
+  // Inject at start of body
+  var wrapper = document.createElement('div');
+  wrapper.innerHTML = buildNav();
+  while (wrapper.firstChild) {
+    document.body.insertBefore(wrapper.firstChild, document.body.firstChild);
+  }
 })();

@@ -710,6 +710,14 @@ small, .meta {
         top: var(--sp-3);
         right: var(--sp-3);
     }
+    /* Join CTA on mobile */
+    .site-nav .nav-join-cta {
+        display: block;
+        margin: 16px 0 0;
+        text-align: center;
+        padding: 10px 20px;
+        border-radius: 8px;
+    }
 }
 
 /* ---- CARD ---- */
@@ -1637,3 +1645,45 @@ small, .meta {
 }
 
 /* nav-secondary: deprecated, use nav-dropdown instead */
+
+/* ---- NAV JOIN CTA ---- */
+.site-nav .nav-join-cta {
+    display: inline-block;
+    padding: 5px 16px;
+    margin-left: 12px;
+    background: var(--accent-green);
+    color: #000 !important;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 6px;
+    text-decoration: none;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    transition: opacity 0.2s, transform 0.2s;
+}
+.site-nav .nav-join-cta:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+}
+
+/* ---- FRAGMENT SIGNAL BADGES ---- */
+.fragment-signal {
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: 8px;
+    font-weight: 600;
+    display: inline-block;
+    margin-left: 6px;
+}
+.signal-high { background: rgba(110,231,183,0.15); color: #6ee7b7; }
+.signal-mid  { background: rgba(243,156,18,0.12);  color: #f39c12; }
+.fragment-territory-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(129,140,248,0.1);
+    color: #818cf8;
+    margin-left: 6px;
+    text-decoration: none;
+}
+.fragment-territory-badge:hover { background: rgba(129,140,248,0.2); }
