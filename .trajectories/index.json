@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-02-05T05:23:13.368Z",
+  "trajectories": {
+    "traj_ml90g9cp_o9bqi": {
+      "agent": "KaiCMO",
+      "task": "trajectory_system",
+      "timestamp": "2026-02-05T05:23:13.368Z",
+      "filepath": "/agents/KaiCMO/traj_ml90g9cp_o9bqi.json"
+    }
+  }
+}

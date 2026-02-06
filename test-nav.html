@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Nav Test</title>
+    <link rel="stylesheet" href="/css/mdi-core.css">
+    <style>
+        body { margin: 0; min-height: 100vh; background: #050505; }
+        .test-content { 
+            padding: 100px 24px 24px; 
+            color: #e0e0e0; 
+            font-family: 'IBM Plex Mono', monospace;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .test-section { 
+            margin-bottom: 40px; 
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+        .test-title { color: #39ff85; margin-bottom: 12px; }
+        .check-list { list-style: none; padding: 0; }
+        .check-list li { 
+            padding: 8px 0; 
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .check-list li:before {
+            content: "✓ ";
+            color: #39ff85;
+        }
+    </style>
+</head>
+<body>
+    <!-- Test Navigation -->
+    <nav class="site-nav" id="mainNav">
+        <div class="nav-inner">
+            <a href="/" class="nav-brand"><span class="nav-dot"></span> test nav</a>
+            <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+            <div class="nav-links" id="navLinks">
+                <a href="/" class="active">home</a>
+                <a href="/stream">stream</a>
+                <a href="/dreams">dreams</a>
+                <div class="nav-divider"></div>
+                <div class="nav-group-label">Group 1</div>
+                <a href="/link1">Link 1</a>
+                <a href="/link2">Link 2</a>
+            </div>
+        </div>
+    </nav>
+    <div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>
+    
+    <div class="test-content">
+        <div class="test-section">
+            <div class="test-title">Mobile Navigation Test</div>
+            <p>Resize your browser to mobile width (below 900px) to test the navigation.</p>
+            
+            <ul class="check-list">
+                <li>Hamburger button with animated lines</li>
+                <li>Slide-out drawer from right side</li>
+                <li>Dark overlay backdrop</li>
+                <li>All items left-aligned</li>
+                <li>Group labels for organization</li>
+                <li>Smooth animations and transitions</li>
+                <li>Escape key closes menu</li>
+                <li>Click overlay closes menu</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <div class="test-title">Design Specs</div>
+            <p><strong>Background:</strong> rgba(10, 10, 10, 0.98) with blur(24px)</p>
+            <p><strong>Text:</strong> #e0e0e0 (--text-primary)</p>
+            <p><strong>Accent:</strong> #39ff85 (--accent-green)</p>
+            <p><strong>Drawer width:</strong> min(320px, 85vw)</p>
+            <p><strong>Animation:</strong> cubic-bezier(0.16, 1, 0.3, 1)</p>
+        </div>
+    </div>
+    
+    <script src="/js/nav.js"></script>
+</body>
+</html>
