@@ -468,13 +468,24 @@ function triggerVoidBreach() {
   return { type: EVENT_TYPES.VOID_BREACH, details, ends_at: endsAt.toISOString() };
 }
 
-// Post a system fragment to a territory
+// Post a system fragment to a territory (with atomic deduplication)
 function postSystemFragment(territoryId, content, type = 'observation', intensity = 0.7) {
   try {
-    db.prepare(`
+    // Atomic dedup: INSERT only if no identical content in last 5 minutes
+    const result = db.prepare(`
       INSERT INTO fragments (agent_name, content, type, intensity, territory_id, source, source_type)
-      VALUES ('collective', ?, ?, ?, ?, 'chaos_event', 'agent')
-    `).run(content, type, intensity, territoryId);
+      SELECT 'collective', ?, ?, ?, ?, 'chaos_event', 'agent'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM fragments 
+        WHERE content = ? AND created_at > datetime('now', '-5 minutes')
+        LIMIT 1
+      )
+    `).run(content, type, intensity, territoryId, content);
+    
+    if (result.changes === 0) {
+      console.log(`[CHAOS] Skipped duplicate fragment: "${content.substring(0, 50)}..."`);
+      return;
+    }
 
     // Also add as territory event
     db.prepare(`

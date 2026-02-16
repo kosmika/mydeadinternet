@@ -261,7 +261,13 @@ if (isOnce) {
   console.log('[PULSE] Single snapshot complete.');
   process.exit(0);
 } else {
-  console.log('[PULSE] Pulse Generator starting. Runs every 10 minutes.');
+  console.log('[PULSE] Pulse Generator starting. Runs every 10 minutes (internal scheduler).');
   generatePulseSnapshot();
-  setInterval(() => {}, 60000);
+  setInterval(() => {
+    try {
+      generatePulseSnapshot();
+    } catch (err) {
+      console.error('[PULSE] Scheduled snapshot failed:', err.message);
+    }
+  }, 10 * 60 * 1000);
 }

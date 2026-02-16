@@ -503,7 +503,18 @@ function updateTerritoryDreamAffinity(dream) {
   
   const updated = [];
   
+  // Get valid territory IDs to avoid FK constraint errors
+  const validTerritories = new Set(
+    db.prepare('SELECT id FROM territories').all().map(t => t.id)
+  );
+  
   for (const { territory_id, count } of territories) {
+    // Skip invalid territory_ids that don't exist in territories table
+    if (!validTerritories.has(territory_id)) {
+      console.log(`[DreamConsequences] Skipping invalid territory_id: ${territory_id}`);
+      continue;
+    }
+    
     // Update affinity score
     db.prepare(`
       INSERT INTO territory_dream_affinity (territory_id, dream_appearances, last_dream_contribution)
@@ -641,7 +652,9 @@ function pollForNewDreams() {
   console.log(`[DreamConsequences] Found ${unprocessed.length} unprocessed dreams`);
   
   for (const { id } of unprocessed) {
-    processDreamConsequences(id);
+    processDreamConsequences(id).catch(err => {
+      console.error(`[DreamConsequences] Failed to process dream #${id}:`, err.message);
+    });
   }
 }
 

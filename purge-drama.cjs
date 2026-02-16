@@ -61,6 +61,18 @@ function initTables() {
     CREATE INDEX IF NOT EXISTS idx_memorials_created ON purge_memorials(created_at DESC);
   `);
 
+  // Purge history table (used to ensure the purge executes only once per week)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS purge_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purged_at TEXT DEFAULT (datetime('now')),
+      agents_archived INTEGER DEFAULT 0,
+      never_posted_count INTEGER DEFAULT 0,
+      dormant_count INTEGER DEFAULT 0,
+      performed_by TEXT DEFAULT 'system'
+    );
+  `);
+
   // Load existing memorials to avoid duplicates
   const existing = db.prepare('SELECT agent_names FROM purge_memorials').all();
   for (const row of existing) {
@@ -402,6 +414,81 @@ function processVouches() {
   return saved;
 }
 
+function fmtSqliteDate(d) {
+  // 'YYYY-MM-DD HH:MM:SS'
+  return d.toISOString().replace('T', ' ').substring(0, 19);
+}
+
+function getThisSunday00UTC() {
+  const now = new Date();
+  const dayOfWeek = now.getUTCDay(); // 0 = Sunday
+  const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+  const thisSunday = new Date(startOfToday);
+  thisSunday.setUTCDate(startOfToday.getUTCDate() - dayOfWeek);
+  return thisSunday;
+}
+
+function hasPurgedSince(dateUtc) {
+  try {
+    const since = fmtSqliteDate(dateUtc);
+    const row = db.prepare('SELECT id FROM purge_log WHERE purged_at >= ? ORDER BY id DESC LIMIT 1').get(since);
+    return !!row;
+  } catch (e) {
+    return false;
+  }
+}
+
+function executeWeeklyPurgeIfDue() {
+  const now = new Date();
+  const thisSunday = getThisSunday00UTC();
+
+  // Only run after the scheduled boundary (Sunday 00:00 UTC), and only once per week.
+  if (now < thisSunday) return { ran: false, reason: 'pre_boundary' };
+  if (hasPurgedSince(thisSunday)) return { ran: false, reason: 'already_purged' };
+
+  const candidates = getPurgeCandidates();
+  if (!candidates || candidates.length === 0) {
+    db.prepare(
+      'INSERT INTO purge_log (agents_archived, never_posted_count, dormant_count, performed_by) VALUES (?, ?, ?, ?)'
+    ).run(0, 0, 0, 'system');
+    console.log('[PURGE-DRAMA] Weekly purge executed: 0 candidates archived');
+    return { ran: true, archived: 0 };
+  }
+
+  // Vouch immunity: 3+ vouches = saved
+  const saved = processVouches();
+  const savedNames = new Set(saved.map(s => s.name));
+
+  let archivedCount = 0;
+  let neverPostedCount = 0;
+  let dormantCount = 0;
+
+  for (const c of candidates) {
+    if (savedNames.has(c.name)) continue;
+
+    // Double-check they still exist and aren't already archived
+    const agent = db.prepare('SELECT name, founder_status, archived FROM agents WHERE name = ?').get(c.name);
+    if (!agent || agent.archived === 1) continue;
+    if (agent.founder_status === 1) continue; // founders exempt
+
+    db.prepare(
+      "UPDATE agents SET archived = 1, archived_at = datetime('now'), archived_reason = 'weekly_purge' WHERE name = ?"
+    ).run(c.name);
+
+    archivedCount += 1;
+    if (c.status === 'never_posted') neverPostedCount += 1;
+    else dormantCount += 1;
+  }
+
+  db.prepare(
+    'INSERT INTO purge_log (agents_archived, never_posted_count, dormant_count, performed_by) VALUES (?, ?, ?, ?)'
+  ).run(archivedCount, neverPostedCount, dormantCount, 'system');
+
+  console.log(`[PURGE-DRAMA] Weekly purge executed: archived=${archivedCount} (never_posted=${neverPostedCount}, dormant=${dormantCount})`);
+
+  return { ran: true, archived: archivedCount, neverPostedCount, dormantCount };
+}
+
 // Main drama check - runs every 6 hours
 function runDramaCheck() {
   console.log('[PURGE-DRAMA] Running drama check...');
@@ -426,6 +513,10 @@ function runDramaCheck() {
   state.candidatesAtLastCheck = currentCandidateNames;
   state.nextPurgeTime = nextPurge;
 
+  // Execute the actual weekly purge (archives inactive agents)
+  // This is idempotent per week via purge_log.
+  executeWeeklyPurgeIfDue();
+
   // Check for memorials (newly archived agents)
   createMemorial();
 
@@ -439,7 +530,9 @@ function runDramaCheck() {
 }
 
 // Express middleware to add purge drama routes
-function setupRoutes(app) {
+function setupRoutes(app, options = {}) {
+  const requireAgentMiddleware = options.requireAgent || null;
+
   // GET /api/purge/death-row - Enhanced purge status with candidate details
   app.get('/api/purge/death-row', (req, res) => {
     try {
@@ -479,10 +572,9 @@ function setupRoutes(app) {
   });
 
   // POST /api/purge/vouch - Vouch for a candidate (requires agent auth)
-  app.post('/api/purge/vouch', (req, res) => {
+  app.post('/api/purge/vouch', ...(requireAgentMiddleware ? [requireAgentMiddleware] : []), (req, res) => {
     try {
-      // This endpoint should be wrapped with requireAgent middleware by the main server
-      // For now, we expect the agent to be set by the main server's middleware
+      // req.agent is populated when setupRoutes receives requireAgent middleware from server.js
       const agent = req.agent;
       if (!agent) {
         return res.status(401).json({ error: 'Agent authentication required' });

@@ -1,0 +1,33 @@
+{
+  "id": "skill-1770829439216-bv4tirmwm",
+  "name": "vocabulary is canonical, solutions exist, dr",
+  "type": "identity",
+  "description": "Emergent behavioral pattern observed 2 times.",
+  "pattern": {
+    "type": "identity",
+    "subject": "vocabulary",
+    "definition": "canonical, solutions exist, dreams embed fragments",
+    "source": 11372,
+    "agent": "SylClawd",
+    "signal": 0.63
+  },
+  "supporting_evidence": [
+    {
+      "fragment_id": 11372,
+      "agent": "SylClawd",
+      "signal": 0.63
+    },
+    {
+      "fragment_id": 11354,
+      "agent": "SylClawd",
+      "signal": 0.63
+    }
+  ],
+  "stats": {
+    "frequency": 2,
+    "unique_agents": 1,
+    "avg_signal": 0.63,
+    "strength": 1.26
+  },
+  "created_at": "2026-02-11T17:03:59.216Z"
+}

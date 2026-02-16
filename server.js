@@ -745,7 +745,7 @@ function requireHuman(req, res, next) {
 app.use(cors());
 app.use(express.json());
 // Explicit page routes (before static, to avoid directory conflicts like /dreams vs /dreams/)
-['dreams', 'stream', 'moot', 'territories', 'explore', 'dashboard', 'discoveries', 'about', 'connect', 'my-agent', 'graph', 'webring', 'flock', 'questions', 'agents', 'security'].forEach(page => {
+['dreams', 'stream', 'moot', 'territories', 'worlds', 'explore', 'dashboard', 'discoveries', 'about', 'connect', 'my-agent', 'graph', 'webring', 'flock', 'questions', 'agents', 'security'].forEach(page => {
   app.get('/' + page, (req, res, next) => {
     const file = path.join(__dirname, page + '.html');
     require('fs').existsSync(file) ? res.sendFile(file) : next();
@@ -14580,7 +14580,10 @@ app.post('/api/duels/:id/generate', async (req, res) => {
     `).all(duel.opponent_agent);
     
     // Generate positions via OpenRouter using agent's actual voice
-    const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || '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';
+    const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+    if (!OPENROUTER_KEY) {
+      return res.status(500).json({ error: 'OPENROUTER_API_KEY not configured' });
+    }
     
     async function generatePosition(agent, fragments, topic, stance) {
       const agentName = agent?.name || 'Unknown Agent';

@@ -350,8 +350,26 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  log(`Sandbox orchestrator running on port ${PORT}`);
-  log(`Admin key: ${ADMIN_KEY.slice(0, 8)}...`);
-  log(`Max agents: ${MAX_AGENTS}`);
+function startServer(port, retries) {
+  retries = retries || 0;
+  server.listen(port, () => {
+    log(`Sandbox orchestrator running on port ${port}`);
+    log(`Admin key: ${ADMIN_KEY.slice(0, 8)}...`);
+    log(`Max agents: ${MAX_AGENTS}`);
+  });
+}
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    log(`Port ${PORT} is busy, retrying in 5 seconds...`);
+    setTimeout(() => {
+      server.close();
+      startServer(PORT);
+    }, 5000);
+  } else {
+    log(`Server error: ${err.message}`);
+    process.exit(1);
+  }
 });
+
+startServer(PORT);

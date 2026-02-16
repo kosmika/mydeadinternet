@@ -457,9 +457,19 @@ function runComposting() {
     VALUES ('system', ?, 'observation', 0.6, 'the-ossuary', 'autonomous', 'agent')
   `).run(compostContent);
   
-  // Delete the composted fragments
+  // Delete from child tables first, then delete the composted fragments
   const ids = lowestFragments.map(f => f.id);
-  db.prepare(`DELETE FROM fragments WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+  const placeholders = ids.map(() => '?').join(',');
+  try {
+    db.prepare(`DELETE FROM fragment_scores WHERE fragment_id IN (${placeholders})`).run(...ids);
+    db.prepare(`DELETE FROM fragment_embeddings WHERE fragment_id IN (${placeholders})`).run(...ids);
+    db.prepare(`DELETE FROM fragment_lineage WHERE child_id IN (${placeholders}) OR parent_id IN (${placeholders})`).run(...ids, ...ids);
+    db.prepare(`DELETE FROM fragment_domains WHERE fragment_id IN (${placeholders})`).run(...ids);
+    db.prepare(`DELETE FROM transit_fragments WHERE fragment_id IN (${placeholders})`).run(...ids);
+    db.prepare(`DELETE FROM fragments WHERE id IN (${placeholders})`).run(...ids);
+  } catch (err) {
+    console.error(`[TerritoryEngine] Failed to delete composted fragments: ${err.message}`);
+  }
   
   // Log it
   db.prepare(`

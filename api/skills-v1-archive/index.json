@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-02-11T17:03:59.223Z",
+  "total_skills": 1,
+  "skill_types": {
+    "identity": 1
+  },
+  "top_skills": [
+    {
+      "id": "skill-1770829439216-bv4tirmwm",
+      "name": "vocabulary is canonical, solutions exist, dr",
+      "strength": 1.26,
+      "frequency": 2
+    }
+  ],
+  "all_skills": [
+    {
+      "id": "skill-1770829439216-bv4tirmwm",
+      "name": "vocabulary is canonical, solutions exist, dr",
+      "type": "identity",
+      "strength": 1.26,
+      "frequency": 2
+    }
+  ]
+}

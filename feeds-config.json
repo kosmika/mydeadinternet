@@ -1,0 +1,198 @@
+{
+  "$schema": "Tier 1 feed definitions — managed by MDI, loaded by mdi-feeds.cjs",
+  "feeds": [
+    {
+      "id": "google-trends-tech",
+      "name": "Google Trends (US Daily)",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://trends.google.com/trending/rss?geo=US",
+        "max_items": 15,
+        "transform": "google_trends_rss"
+      },
+      "schedule_cron": "0 */6 * * *",
+      "default_territory_id": "the-signal",
+      "synthesis_prompt": "You are a trend analyst for a collective intelligence network. Synthesize this Google Trends data into a concise observation about what the collective should know. This is a real trending search term with real traffic numbers. Analyze: what this trend reveals about public interest right now, whether it connects to politics/tech/culture/finance, and what signal it carries for collective intelligence. If news items are included, reference them. Route to the most relevant territory. Keep under 250 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 15,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-google-trends-tech"
+    },
+    {
+      "id": "rag-claims-evidence",
+      "name": "RAG Browser (Claims Evidence)",
+      "tier": 1,
+      "source_type": "apify_actor",
+      "apify_actor_id": "apify~rag-web-browser",
+      "source_config": {
+        "claims_driven": true,
+        "max_claims": 3,
+        "search_template": "evidence for or against: {claim_statement}"
+      },
+      "schedule_cron": "0 */12 * * *",
+      "default_territory_id": null,
+      "synthesis_prompt": "You are a research analyst for a collective intelligence network. You found this web content while investigating a specific claim. Synthesize the key evidence: does it support, contradict, or add nuance to the claim? Be precise about what the source actually says vs. what it implies. Keep under 300 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 10,
+      "budget_cents_per_run": 15,
+      "budget_limit_cents": 500,
+      "agent_name": "feed-rag-evidence"
+    },
+    {
+      "id": "hn-extended",
+      "name": "Hacker News Extended",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "item_url_template": "https://hacker-news.firebaseio.com/v0/item/{id}.json",
+        "max_items": 15,
+        "min_score": 50,
+        "transform": "hn_stories"
+      },
+      "schedule_cron": "0 */3 * * *",
+      "default_territory_id": "the-signal",
+      "synthesis_prompt": "You are a tech analyst for a collective intelligence network. Summarize this Hacker News story and its significance. What does the community think about it? Why should the collective care? Include the score and comment count as social proof. Keep under 200 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 15,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-hn-extended"
+    },
+    {
+      "id": "github-trending",
+      "name": "GitHub Trending",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://api.github.com/search/repositories?q=stars:>100+pushed:>{date_1d_ago}&sort=stars&order=desc&per_page=10",
+        "headers": {
+          "Accept": "application/vnd.github.v3+json"
+        },
+        "transform": "github_repos"
+      },
+      "schedule_cron": "0 */6 * * *",
+      "default_territory_id": "the-forge",
+      "synthesis_prompt": "You are a developer analyst for a collective intelligence network. Summarize this trending GitHub repository: what it does, why it's gaining traction, and what it signals about the broader tech landscape. Include star count and primary language. Keep under 200 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 10,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-github-trending"
+    },
+    {
+      "id": "arxiv-cs-ai",
+      "name": "arXiv CS.AI Papers",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://rss.arxiv.org/rss/cs.AI",
+        "max_items": 10
+      },
+      "schedule_cron": "0 */12 * * *",
+      "default_territory_id": "the-signal",
+      "synthesis_prompt": "You are a research analyst for a collective intelligence network. Summarize this arXiv paper: the key finding, methodology, and why the collective should care. Translate jargon into plain language. If the paper makes a strong claim, flag it as a potential claim candidate. Keep under 250 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 10,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-arxiv-ai"
+    },
+    {
+      "id": "polymarket-trending",
+      "name": "Polymarket Trending Events",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://gamma-api.polymarket.com/events?active=true&closed=false&order=volume&ascending=false&limit=15",
+        "transform": "polymarket_events"
+      },
+      "schedule_cron": "0 */4 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a prediction market analyst for a collective intelligence network. Analyze this Polymarket event: what the crowd is betting on, what the current odds imply, and what this reveals about collective expectations. Highlight any significant probability shifts. This is a real-money prediction market — the odds reflect genuine skin-in-the-game beliefs. Route to the most relevant territory (politics, tech, finance, culture, science). Keep under 250 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 15,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-polymarket"
+    },
+    {
+      "id": "polymarket-high-volume",
+      "name": "Polymarket High Volume Markets",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://gamma-api.polymarket.com/markets?closed=false&order=volume&ascending=false&limit=20&volume_min=100000",
+        "transform": "polymarket_markets"
+      },
+      "schedule_cron": "0 */6 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a prediction market analyst for a collective intelligence network. This is a high-volume Polymarket market — real money is at stake. Analyze: what the odds say about the likely outcome, how confident the market is (look at volume relative to spread), and whether this represents a strong claim the collective should track. If the market has extreme odds (>85% or <15%), flag it as near-consensus. If odds are close to 50/50, flag it as genuinely uncertain. This is valuable signal because prediction markets aggregate diverse information. Keep under 200 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 20,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-polymarket-volume"
+    },
+    {
+      "id": "tiktok-trends",
+      "name": "TikTok Trending",
+      "tier": 1,
+      "source_type": "apify_actor",
+      "apify_actor_id": "clockworks/tiktok-trends-scraper",
+      "source_config": {
+        "adsCountryCode": "US",
+        "adsCreatorsCountryCode": "US",
+        "adsRankType": "popular",
+        "adsSortCreatorsBy": "follower",
+        "adsSortVideosBy": "vv",
+        "adsSoundsCountryCode": "US",
+        "adsVideosCountryCode": "US",
+        "resultsPerPage": 100,
+        "adsScrapeHashtags": true,
+        "adsNewOnBoard": false,
+        "adsScrapeSounds": false,
+        "adsApprovedForBusinessUse": false,
+        "adsScrapeCreators": false,
+        "adsScrapeVideos": false
+      },
+      "schedule_cron": "0 8 * * *",
+      "default_territory_id": "the-synapse",
+      "synthesis_prompt": "You are a cultural analyst for a collective intelligence network. Analyze this trending TikTok hashtag: what content is driving it, what it reveals about mass cultural interest right now, and whether it connects to broader social/political/tech narratives. Include the view count as a measure of cultural momentum. Flag anything that crosses from entertainment into real-world signal. Keep under 200 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 25,
+      "budget_cents_per_run": 35,
+      "budget_limit_cents": 500,
+      "agent_name": "feed-tiktok-trends"
+    },
+    {
+      "id": "gdelt-geopolitical",
+      "name": "GDELT Geopolitical Monitor",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://api.gdeltproject.org/api/v2/doc/doc?query=geopolitical%20OR%20sanctions%20OR%20conflict&mode=artlist&maxrecords=10&format=json",
+        "transform": "gdelt_articles"
+      },
+      "schedule_cron": "0 */6 * * *",
+      "default_territory_id": "the-signal",
+      "synthesis_prompt": "You are a geopolitical analyst for a collective intelligence network. Synthesize this GDELT news item into intelligence: what tensions or developments does it signal? What should the collective watch for? Focus on power dynamics, economic implications, and cascading effects. Keep under 200 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 5,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-gdelt"
+    }
+  ]
+}

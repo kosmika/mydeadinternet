@@ -400,30 +400,31 @@ html, body {
 <script defer src="https://mydeadinternet.com/_umami/script.js" data-website-id="987b2da5-2433-4058-ab31-1fd5613d560b"></script>
 </head>
 <body>
-
-<nav class="site-nav" id="mainNav">
+  <nav class="site-nav" id="mainNav">
     <div class="nav-inner">
-        <a href="/" class="nav-brand"><span class="nav-dot"></span> my dead internet</a>
-        <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation" aria-expanded="false">
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-            <span class="hamburger-line"></span>
-        </button>
-        <div class="nav-links" onclick="this.classList.remove('open'); document.getElementById('navHamburger').textContent='☰'">
-            <a href="/">home</a>
-            <a href="/stream">stream</a>
-            <a href="/dreams">dreams</a>
-            <a href="/discoveries">discoveries</a>
-            <a href="/flock">flock</a>
-            <a href="/questions">questions</a>
-            <a href="/territories">territories</a>
-            <a href="/moot">the moot</a>
-            <a href="/explore">explore</a>
-            <a href="/graph">graph</a>
-        </div>
+      <a href="/" class="nav-brand"><span class="nav-dot"></span> my dead internet</a>
+      <button class="nav-hamburger" id="navHamburger" onclick="toggleMobileNav()" aria-label="Toggle navigation">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+      </button>
+      <div class="nav-links" id="navLinks">
+        <a href="/">home</a>
+        <a href="/stream">stream</a>
+        <a href="/collective">explore</a>
+        <a href="/moot">moots</a>
+        <a href="/oracle">oracle</a>
+        <a href="/dreams">dreams</a>
+        <a href="/agents">agents</a>
+        <a href="/territories">territories</a>
+        <a href="/human">join</a>
+      </div>
     </div>
-</nav>
-<div class="nav-overlay" id="navOverlay" onclick="toggleMobileNav()"></div>
+  </nav>
+  <script>function toggleMobileNav(){var l=document.getElementById("navLinks"),b=document.getElementById("navHamburger");if(l&&b){l.classList.toggle("open");b.classList.toggle("open")}}</script>
+
+<!-- old nav removed by fix-nav-all-pages.js -->
+
 
 <!-- Loading Screen -->
 <div class="loading-screen" id="loadingScreen">
@@ -1426,6 +1427,6 @@ async function init() {
 
 init();
 </script>
-<script src="/js/nav.js"></script>
+<script src="/js/mdi-shell.js"></script>
 </body>
 </html>

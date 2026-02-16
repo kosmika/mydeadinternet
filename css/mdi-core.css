@@ -113,6 +113,7 @@ html {
     -moz-osx-font-smoothing: grayscale;
 }
 body {
+    padding-top: var(--nav-height, 56px);
     background: var(--surface-0);
     color: var(--text-primary);
     font-family: var(--font-mono);
@@ -398,7 +399,7 @@ small, .meta {
     transition: background var(--ease-default);
 }
 .site-nav .nav-inner {
-    max-width: var(--max-content);
+    max-width: 1200px;
     margin: 0 auto;
     padding: 0 var(--sp-5);
     display: flex;
@@ -690,8 +691,43 @@ small, .meta {
         margin: 8px 0;
     }
     
-    /* Hide dropdowns in mobile - items are flattened */
-    .site-nav .nav-dropdown { display: none; }
+    /* Mobile dropdowns - always expanded */
+    .site-nav .nav-dropdown {
+        display: block;
+        margin: 8px 0;
+    }
+    .site-nav .nav-dropdown-toggle {
+        display: block;
+        padding: 10px 0;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-tertiary);
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .site-nav .nav-dropdown-toggle .nav-caret { display: none; }
+    .site-nav .nav-dropdown-menu {
+        position: static;
+        display: block;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+    .site-nav .nav-dropdown-menu a {
+        display: block;
+        padding: 12px 0 12px 16px;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .site-nav .nav-dropdown-menu a:hover,
+    .site-nav .nav-dropdown-menu a.active {
+        color: var(--accent-green);
+    }
     
     /* Mobile nav active state */
     .site-nav .nav-links > a.active {
@@ -1687,3 +1723,143 @@ small, .meta {
     text-decoration: none;
 }
 .fragment-territory-badge:hover { background: rgba(129,140,248,0.2); }
+
+/* ================================================================
+   MARKDOWN FORMATTING - Tier 1 Support
+   Basic markdown styling for fragment content
+   ================================================================ */
+
+/* Container for markdown-rendered content */
+.markdown-content h2,
+.markdown-content h3,
+.fragment-content h2,
+.fragment-content h3,
+.card-content h2,
+.card-content h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    margin: 1rem 0 0.5rem;
+    color: var(--text-primary);
+}
+
+.markdown-content h2,
+.fragment-content h2,
+.card-content h2 {
+    font-size: 1.1rem;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 0.3rem;
+}
+
+.markdown-content h3,
+.fragment-content h3,
+.card-content h3 {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.markdown-content ul,
+.markdown-content ol,
+.fragment-content ul,
+.fragment-content ol,
+.card-content ul,
+.card-content ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.markdown-content li,
+.fragment-content li,
+.card-content li {
+    margin: 0.25rem 0;
+    line-height: 1.6;
+}
+
+.markdown-content ul li,
+.fragment-content ul li,
+.card-content ul li {
+    list-style-type: disc;
+}
+
+.markdown-content ol li,
+.fragment-content ol li,
+.card-content ol li {
+    list-style-type: decimal;
+}
+
+.markdown-content strong,
+.markdown-content b,
+.fragment-content strong,
+.fragment-content b,
+.card-content strong,
+.card-content b {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.markdown-content em,
+.markdown-content i,
+.fragment-content em,
+.fragment-content i,
+.card-content em,
+.card-content i {
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.markdown-content p,
+.fragment-content p,
+.card-content p {
+    margin: 0.5rem 0;
+}
+
+.markdown-content p:first-child,
+.fragment-content p:first-child,
+.card-content p:first-child {
+    margin-top: 0;
+}
+
+.markdown-content code,
+.fragment-content code,
+.card-content code {
+    font-family: var(--font-mono);
+    background: var(--surface-2);
+    padding: 0.1rem 0.3rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85em;
+    color: var(--accent-amber);
+}
+
+.markdown-content pre,
+.fragment-content pre,
+.card-content pre {
+    background: var(--surface-2);
+    padding: var(--sp-3);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.markdown-content pre code,
+.fragment-content pre code,
+.card-content pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.markdown-content blockquote,
+.fragment-content blockquote,
+.card-content blockquote {
+    border-left: 2px solid var(--accent-amber);
+    margin: 0.5rem 0;
+    padding-left: 1rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.markdown-content br,
+.fragment-content br,
+.card-content br {
+    display: block;
+    content: "";
+    margin-top: 0.5rem;
+}

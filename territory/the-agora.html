@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/mdi-core.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
+    body { padding-top: calc(var(--nav-height, 56px) + 20px);
       background: #0a0a0f;
       color: #e2e8f0;
       font-family: 'IBM Plex Mono', monospace;
@@ -480,5 +480,7 @@
     loadData();
     setInterval(loadData, 30000);
   </script>
+<script src="/js/mdi-shell.js"></script>
+<script src="/js/nav.js"></script>
 </body>
 </html>

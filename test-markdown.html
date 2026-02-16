@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MDI Markdown Test</title>
+    <link rel="stylesheet" href="/css/mdi-core.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+    <style>
+        body {
+            background: var(--surface-1);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            padding: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: var(--surface-2);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .test-section h2 {
+            color: var(--accent-amber);
+            margin-top: 0;
+        }
+        .raw-content {
+            background: var(--surface-3);
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+        .rendered-content {
+            background: var(--surface-0);
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--accent-green);
+        }
+        .test-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            margin-top: 1rem;
+        }
+        .test-pass {
+            background: rgba(57, 255, 133, 0.15);
+            color: var(--accent-green);
+        }
+        .test-fail {
+            background: rgba(231, 76, 60, 0.15);
+            color: var(--accent-red);
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 MDI Fragment Markdown Formatting Test</h1>
+    <p>Testing Tier 1 markdown support for fragments.</p>
+
+    <div id="test-results"></div>
+
+    <script>
+        // Copy of the renderMarkdown function from stream.html
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderMarkdown(text) {
+            if (!text) return '';
+            
+            
+            try {
+                const rawHtml = marked.parse(text, { breaks: true, gfm: true, headerIds: false, async: false });
+                const allowedTags = ['p', 'br', 'strong', 'b', 'em', 'i', 'ul', 'ol', 'li', 'h2', 'h3', 'code', 'pre', 'blockquote'];
+                const div = document.createElement('div');
+                div.innerHTML = rawHtml;
+                
+                const allElements = div.querySelectorAll('*');
+                allElements.forEach(el => {
+                    if (!allowedTags.includes(el.tagName.toLowerCase())) {
+                        const parent = el.parentNode;
+                        if (parent) {
+                            while (el.firstChild) {
+                                parent.insertBefore(el.firstChild, el);
+                            }
+                            parent.removeChild(el);
+                        }
+                    }
+                });
+                
+                return div.innerHTML;
+            } catch (e) {
+                console.error('Markdown parsing error:', e);
+                return escapeHtml(text).replace(/\n/g, '<br>');
+            }
+        }
+
+        // Test cases
+        const tests = [
+            {
+                name: "Headers",
+                input: `## Main Finding
+### Supporting Evidence
+The analysis shows clear patterns.`,
+                expected_contains: ["<h2>", "<h3>"]
+            },
+            {
+                name: "Bold and Italic",
+                input: `This is **bold** and this is *italic*.
+We can also use __bold__ and _italic_.`,
+                expected_contains: ["<strong>", "<em>"]
+            },
+            {
+                name: "Bullet Lists",
+                input: `Key findings:
+- First point
+- Second point
+- Third point`,
+                expected_contains: ["<ul>", "<li>"]
+            },
+            {
+                name: "Numbered Lists",
+                input: `Steps to reproduce:
+1. First step
+2. Second step
+3. Third step`,
+                expected_contains: ["<ol>", "<li>"]
+            },
+            {
+                name: "Paragraph Breaks",
+                input: `First paragraph.
+
+Second paragraph after a break.
+
+Third paragraph.`,
+                expected_contains: ["<p>"]
+            },
+            {
+                name: "Code Inline",
+                input: `Use the \`renderMarkdown()\` function for processing.`,
+                expected_contains: ["<code>"]
+            },
+            {
+                name: "Blockquote",
+                input: `> This is an important quote from the analysis.
+> It spans multiple lines.`,
+                expected_contains: ["<blockquote>"]
+            },
+            {
+                name: "Mixed Complex Content",
+                input: `## Analysis Results
+
+The **market data** shows *significant* trends:
+
+- Increased volatility
+- Strong support levels
+- Volume expansion
+
+### Next Steps
+
+1. Monitor closely
+2. Set alerts
+3. Document findings
+
+> Note: This is automated analysis.`,
+                expected_contains: ["<h2>", "<h3>", "<strong>", "<em>", "<ul>", "<ol>", "<blockquote>"]
+            }
+        ];
+
+        function runTests() {
+            const container = document.getElementById('test-results');
+            let passed = 0;
+            let failed = 0;
+
+            tests.forEach(test => {
+                const rendered = renderMarkdown(test.input);
+                let testPassed = true;
+                const missing = [];
+
+                test.expected_contains.forEach(expected => {
+                    if (!rendered.includes(expected)) {
+                        testPassed = false;
+                        missing.push(expected);
+                    }
+                });
+
+                if (testPassed) passed++;
+                else failed++;
+
+                const div = document.createElement('div');
+                div.className = 'test-section';
+                div.innerHTML = `
+                    <h2>${test.name}</h2>
+                    <div class="raw-content">${escapeHtml(test.input)}</div>
+                    <div class="rendered-content fragment-content">${rendered}</div>
+                    <div class="test-status ${testPassed ? 'test-pass' : 'test-fail'}">
+                        ${testPassed ? '✓ PASS' : '✗ FAIL'} ${!testPassed ? '(Missing: ' + missing.join(', ') + ')' : ''}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            // Summary
+            const summary = document.createElement('div');
+            summary.className = 'test-section';
+            summary.style.background = failed === 0 ? 'rgba(57, 255, 133, 0.1)' : 'rgba(231, 76, 60, 0.1)';
+            summary.innerHTML = `
+                <h2>📊 Test Summary</h2>
+                <p>Passed: ${passed} / ${tests.length}</p>
+                <p>Failed: ${failed} / ${tests.length}</p>
+                <div class="test-status ${failed === 0 ? 'test-pass' : 'test-fail'}">
+                    ${failed === 0 ? '✓ All tests passed!' : '✗ Some tests failed'}
+                </div>
+            `;
+            container.insertBefore(summary, container.firstChild);
+        }
+
+        runTests();
+    </script>
+</body>
+</html>

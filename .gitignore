@@ -11,3 +11,9 @@ api/consciousness.json
 *.bak*
 data/
 logs/
+backups/
+*.db.gz
+*.backup*
+*.bak
+*.bak-*
+server.js.pre-intelligence

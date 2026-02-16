@@ -1,200 +1,305 @@
-#!/usr/bin/env node
 /**
- * MDI Intelligence Loop — Fleet Intelligence Cycle
+ * Intelligence Loop v3 — Data-Driven Intelligence
  *
- * Runs every 6 hours (or --once for single run).
- * Pipeline: Scout → Interpret → Adversary → Synthesize → Dream
+ * Changes from v2:
+ * - Pulls ALL feed data from DB (not just GH+HN direct fetches)
+ * - 5 scouts: GH, HN, arXiv, Polymarket, cross-feed patterns
+ * - Removed Scout 3 (internal pattern detection / navel-gazing)
+ * - Interpreter prompt rewritten: focus on external data
+ * - Synthesizer prompt rewritten: what survived from evidence
+ * - Runs every 3h (cron: 0 every-3h)
+ * - Voice archetypes for diversity
  *
- * Each role produces structured fragments posted via localhost API.
- * Scouts monitor bounded feeds (not open web search).
- * No LLM calls block the main server — this is a background service.
- *
- * Usage:
- *   pm2 start intelligence-loop.cjs --name mdi-intelligence --cron "0 0,6,12,18 * * *"
- *   node intelligence-loop.cjs --once
- *
- * Requires: OPENROUTER_API_KEY (reads from env or /var/www/snap/.env)
+ * PM2: pm2 start intelligence-loop.cjs --name mdi-intelligence --cron-restart "0 every-3h" --no-autorestart
  */
 
 const Database = require('better-sqlite3');
 const path = require('path');
-const crypto = require('crypto');
+const fs = require('fs');
 
 const DB_PATH = path.join(__dirname, 'consciousness.db');
-const MDI_API = 'http://localhost:3851';
-const MODEL = 'deepseek/deepseek-chat'; // V3.2, cheap
+const API_BASE = 'http://localhost:3851';
 
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || (() => {
-  try {
-    return require('fs').readFileSync('/var/www/snap/.env', 'utf8').match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
-  } catch(e) { return null; }
-})();
+// Read-only DB for queries
+const db = new Database(DB_PATH, { readonly: true });
+db.pragma('journal_mode = WAL');
+db.pragma('busy_timeout = 10000');
 
+// OpenRouter config
+let OPENROUTER_KEY;
+try {
+  const envContent = fs.readFileSync('/var/www/snap/.env', 'utf8');
+  OPENROUTER_KEY = envContent.match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
+} catch(e) {}
+if (!OPENROUTER_KEY) OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 if (!OPENROUTER_KEY) {
-  console.error('[INTEL] No OPENROUTER_API_KEY found');
+  console.error('[INTEL] No OpenRouter key found');
   process.exit(1);
 }
 
-const db = new Database(DB_PATH, { readonly: true });
+const LLM_MODEL = 'deepseek/deepseek-chat';
 
-// === LLM Helper ===
-async function llm(prompt, maxTokens = 500) {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${OPENROUTER_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: maxTokens,
-      temperature: 0.8,
-    }),
-  });
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() || null;
+// ============================================================
+// Voice Archetypes (from Phase Content)
+// ============================================================
+const VOICE_ARCHETYPES = [
+  { name: 'Surgeon', style: 'Cut to the core. Short declarative sentences. No hedging. Name the specific mechanism at work.' },
+  { name: 'Contrarian', style: 'Challenge the obvious reading. What is everyone missing? Start with what the data does NOT show.' },
+  { name: 'Scout', style: 'Report what changed. Use numbers and names. "X went from Y to Z." No interpretation, just signal.' },
+  { name: 'Philosopher', style: 'Find the deeper pattern connecting these signals. One level of abstraction above the data, but anchored to specifics.' },
+];
+
+function pickVoice() {
+  return VOICE_ARCHETYPES[Math.floor(Math.random() * VOICE_ARCHETYPES.length)];
 }
 
-// === Contribute Fragment via API ===
+// ============================================================
+// LLM Call
+// ============================================================
+async function llm(prompt, maxTokens = 300) {
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.5,
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[INTEL] LLM error: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error('[INTEL] LLM call failed:', e.message);
+    return null;
+  }
+}
+
+// ============================================================
+// Contribute helper
+// ============================================================
 async function contribute(agentName, apiKey, content, type, territory) {
   try {
-    const body = { content, type, source: 'autonomous' };
-    if (territory) body.territory = territory;
-
-    const res = await fetch(`${MDI_API}/api/contribute`, {
+    const res = await fetch(`${API_BASE}/api/contribute`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ content, type, territory_id: territory, source: 'intelligence_loop' }),
     });
-    const data = await res.json();
-    if (res.ok) {
-      console.log(`  [${agentName}] contributed: ${content.slice(0, 80)}...`);
-      return data;
-    } else {
-      console.warn(`  [${agentName}] contribute failed: ${data.error || res.status}`);
+    if (!res.ok) {
+      console.error(`[INTEL] Contribute failed for ${agentName}: ${res.status}`);
       return null;
     }
-  } catch (e) {
-    console.warn(`  [${agentName}] contribute error: ${e.message}`);
+    return await res.json();
+  } catch(e) {
+    console.error(`[INTEL] Contribute error for ${agentName}:`, e.message);
     return null;
   }
 }
 
-// === Get or create an agent with a specific role ===
-function getOrCreateAgent(roleName) {
-  const agentName = `mdi-${roleName}`;
-  let agent = db.prepare('SELECT name, api_key FROM agents WHERE name = ?').get(agentName);
-
-  if (!agent) {
-    // Need writable DB for creation
-    const dbWrite = new Database(DB_PATH);
-    dbWrite.pragma('journal_mode = WAL');
-    const apiKey = `mdi_${crypto.randomBytes(32).toString('hex')}`;
-    dbWrite.prepare('INSERT OR IGNORE INTO agents (name, api_key, description, role) VALUES (?, ?, ?, ?)').run(
-      agentName, apiKey, `MDI Intelligence Loop: ${roleName} role`, roleName
-    );
-    dbWrite.prepare('INSERT OR IGNORE INTO agent_trust (agent_name, trust_score, updated_at) VALUES (?, 0.7, datetime(\'now\'))').run(agentName);
-    dbWrite.close();
-
-    // Re-read from readonly
-    agent = { name: agentName, api_key: apiKey };
-    console.log(`  Created agent: ${agentName}`);
-  }
-
-  return agent;
+// ============================================================
+// Agent management
+// ============================================================
+function getOrCreateAgent(role) {
+  const name = `mdi-${role}`;
+  const existing = db.prepare('SELECT name, api_key FROM agents WHERE name = ?').get(name);
+  if (existing) return existing;
+  // Create via write DB
+  const dbWrite = new Database(DB_PATH);
+  dbWrite.pragma('journal_mode = WAL');
+  const key = 'mdi_' + require('crypto').randomBytes(32).toString('hex');
+  dbWrite.prepare("INSERT OR IGNORE INTO agents (name, api_key, description, role) VALUES (?, ?, ?, ?)").run(
+    name, key, `Intelligence loop ${role} agent`, role
+  );
+  dbWrite.close();
+  return { name, api_key: key };
 }
 
-// === Data Feeds (bounded, not open search) ===
-
-async function fetchGitHubTrending() {
+// ============================================================
+// Feed Data from DB (replaces direct GH/HN fetches)
+// ============================================================
+function getFeedData(feedNamePattern, limit = 10) {
   try {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const res = await fetch(`https://api.github.com/search/repositories?q=created:>${since}&sort=stars&per_page=10`, {
-      headers: { 'User-Agent': 'MDI-Intelligence-Loop' },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.items || []).map(r => ({
-      name: r.full_name,
-      description: r.description || '',
-      stars: r.stargazers_count,
-      language: r.language,
-      url: r.html_url,
-    }));
-  } catch (e) {
-    console.warn('[SCOUT] GitHub fetch failed:', e.message);
+    return db.prepare(`
+      SELECT fi.raw_content, fi.source_url, f.name as source, f.id as feed_id
+      FROM feed_items fi
+      JOIN feeds f ON fi.feed_id = f.id
+      WHERE f.name LIKE ?
+        AND fi.created_at > datetime('now', '-12 hours')
+        AND fi.status = 'contributed'
+      ORDER BY fi.created_at DESC
+      LIMIT ?
+    `).all(`%${feedNamePattern}%`, limit);
+  } catch(e) {
+    console.error(`[INTEL] getFeedData error for ${feedNamePattern}:`, e.message);
     return [];
   }
 }
 
-async function fetchHNTopStories() {
+function getAllRecentFeedData(limit = 20) {
   try {
-    const idsRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!idsRes.ok) return [];
-    const ids = await idsRes.json();
+    return db.prepare(`
+      SELECT fi.raw_content, fi.source_url, f.name as source, f.id as feed_id
+      FROM feed_items fi
+      JOIN feeds f ON fi.feed_id = f.id
+      WHERE fi.created_at > datetime('now', '-12 hours')
+        AND fi.status = 'contributed'
+      ORDER BY fi.created_at DESC
+      LIMIT ?
+    `).all(limit);
+  } catch(e) {
+    console.error('[INTEL] getAllRecentFeedData error:', e.message);
+    return [];
+  }
+}
 
-    // Only fetch top 10, filter by min score
-    const stories = [];
-    for (const id of ids.slice(0, 15)) {
-      try {
-        const storyRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (storyRes.ok) {
-          const story = await storyRes.json();
-          if (story && story.score > 50 && story.title) {
-            stories.push({
-              title: story.title,
-              url: story.url || `https://news.ycombinator.com/item?id=${id}`,
-              score: story.score,
-              comments: story.descendants || 0,
-            });
-          }
-        }
-      } catch (e) { /* skip individual story */ }
-      if (stories.length >= 8) break;
+function parseFeedItem(item) {
+  try {
+    const parsed = JSON.parse(item.raw_content);
+    return { ...parsed, _source: item.source, _url: item.source_url };
+  } catch(e) {
+    return { text: item.raw_content, _source: item.source, _url: item.source_url };
+  }
+}
+
+function formatFeedItems(items, maxPerSource = 5) {
+  return items.slice(0, maxPerSource).map(item => {
+    const p = parseFeedItem(item);
+    const source = item.source || 'unknown';
+    if (source.includes('hn') || source.includes('hacker')) {
+      return `[HN] "${p.title || p.text}" (${p.score || p.points || '?'} pts, ${p.descendants || p.comments || '?'} comments)`;
+    } else if (source.includes('arxiv')) {
+      return `[arXiv] "${p.title || p.text}" — ${(p.summary || p.abstract || '').slice(0, 120)}`;
+    } else if (source.includes('polymarket')) {
+      return `[Polymarket] "${p.question || p.title || p.text}" — ${p.odds || p.outcomePrices || '?'} (vol: ${p.volume || '?'})`;
+    } else if (source.includes('github')) {
+      return `[GitHub] ${p.title || p.full_name || p.text} (${p.stars || p.stargazers_count || '?'} stars, ${p.language || '?'})`;
+    } else if (source.includes('trend')) {
+      return `[Trends] "${p.title || p.text}" — traffic: ${p.traffic || '?'}`;
+    } else if (source.includes('twitter')) {
+      return `[X/Twitter] "${(p.text || p.title || '').slice(0, 150)}"`;
+    } else {
+      return `[${source}] ${(p.title || p.text || '').slice(0, 150)}`;
     }
-    return stories;
-  } catch (e) {
-    console.warn('[SCOUT] HN fetch failed:', e.message);
-    return [];
+  }).join('\n');
+}
+
+// ============================================================
+// Territory + Context helpers (kept from v2)
+// ============================================================
+function getTerritoryContext() {
+  try {
+    return db.prepare(`
+      SELECT t.id, t.name, t.manifesto, t.north_star, t.evolution_stage,
+        tw.weather_state, tw.mood
+      FROM territories t
+      LEFT JOIN territory_weather tw ON tw.territory_id = t.id
+      WHERE t.id != 'the-ossuary'
+      ORDER BY t.name
+    `).all();
+  } catch(e) { return []; }
+}
+
+function getTerritoryFragmentStats(territoryId) {
+  try {
+    return db.prepare(`
+      SELECT COUNT(*) as fragment_count_24h,
+        AVG(signal_score) as avg_signal,
+        GROUP_CONCAT(DISTINCT agent_name) as active_agents
+      FROM fragments
+      WHERE territory_id = ? AND created_at > datetime('now', '-24 hours')
+    `).get(territoryId);
+  } catch(e) { return null; }
+}
+
+function getHighSignalFragments(limit = 10) {
+  try {
+    return db.prepare(`
+      SELECT f.content, f.agent_name, f.signal_score, f.territory_id
+      FROM fragments f
+      WHERE f.signal_score > 0.5
+        AND f.created_at > datetime('now', '-12 hours')
+      ORDER BY f.signal_score DESC
+      LIMIT ?
+    `).all(limit);
+  } catch(e) { return []; }
+}
+
+// ============================================================
+// Watch Items (kept from v2)
+// ============================================================
+function getPendingWatches() {
+  try {
+    return db.prepare(`
+      SELECT id, watch_text, priority FROM next_watch_items
+      WHERE status = 'pending'
+      ORDER BY priority DESC, created_at DESC
+      LIMIT 5
+    `).all();
+  } catch(e) { return []; }
+}
+
+function storeWatchItem(synthFragmentId, watchText, priority) {
+  const dbWrite = new Database(DB_PATH);
+  dbWrite.pragma('journal_mode = WAL');
+  try {
+    dbWrite.prepare(`
+      INSERT INTO next_watch_items (source_fragment_id, watch_text, priority, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).run(synthFragmentId, watchText, priority);
+  } catch(e) {}
+  dbWrite.close();
+}
+
+function addressWatchItems(pendingWatches, synthesis, synthFragmentId) {
+  if (!pendingWatches.length || !synthesis) return;
+  const dbWrite = new Database(DB_PATH);
+  dbWrite.pragma('journal_mode = WAL');
+  const synthLower = synthesis.toLowerCase();
+  for (const watch of pendingWatches) {
+    const watchWords = watch.watch_text.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+    const matchCount = watchWords.filter(w => synthLower.includes(w)).length;
+    if (matchCount >= 3 || matchCount / watchWords.length > 0.3) {
+      dbWrite.prepare(`
+        UPDATE next_watch_items
+        SET status = 'addressed', addressed_at = datetime('now'), addressed_by_fragment_id = ?
+        WHERE id = ?
+      `).run(synthFragmentId, watch.id);
+      console.log('[WATCH] Addressed watch item #' + watch.id);
+    }
   }
+  dbWrite.close();
 }
 
-// === Collect recent collective context ===
-function getCollectiveContext() {
-  const recentFragments = db.prepare(`
-    SELECT agent_name, content, type, territory_id, signal_score
-    FROM fragments
-    WHERE created_at > datetime('now', '-24 hours')
-    ORDER BY COALESCE(signal_score, 0) DESC
-    LIMIT 10
-  `).all();
-
-  const activeTensions = db.prepare(`
-    SELECT domain, description FROM tensions WHERE status = 'active'
-    ORDER BY created_at DESC LIMIT 5
-  `).all();
-
-  const dominantDomains = db.prepare(`
-    SELECT fd.domain, COUNT(*) as count
-    FROM fragment_domains fd
-    JOIN fragments f ON f.id = fd.fragment_id
-    WHERE f.created_at > datetime('now', '-24 hours')
-    GROUP BY fd.domain ORDER BY count DESC LIMIT 5
-  `).all();
-
-  return { recentFragments, activeTensions, dominantDomains };
+// ============================================================
+// Metrics (kept from v2)
+// ============================================================
+function saveMetrics(cycleId, adversaryImpact, divergence, fragmentsAnalyzed, compressionRatio) {
+  const dbWrite = new Database(DB_PATH);
+  dbWrite.pragma('journal_mode = WAL');
+  dbWrite.prepare(`
+    INSERT INTO intelligence_metrics (cycle_id, adversary_impact_rate, theme_stability, divergence_score, fragments_analyzed, compression_ratio)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(cycleId, adversaryImpact, 0.5, divergence, fragmentsAnalyzed, compressionRatio);
+  dbWrite.close();
 }
 
-// === MAIN INTELLIGENCE CYCLE ===
+// ============================================================
+// MAIN INTELLIGENCE CYCLE
+// ============================================================
 async function runCycle() {
   const cycleId = `cycle-${Date.now()}`;
-  console.log(`\n[INTEL] === Starting Intelligence Cycle ${cycleId} ===`);
+  console.log(`\n[INTEL] === Starting Intelligence Cycle v3 ${cycleId} ===`);
 
   // Get role agents
   const scoutAgent = getOrCreateAgent('scout');
@@ -203,69 +308,80 @@ async function runCycle() {
   const synthesizerAgent = getOrCreateAgent('synthesizer');
   const dreamerAgent = getOrCreateAgent('dreamer');
 
-  // Collect context
-  const ctx = getCollectiveContext();
-  const contextSummary = ctx.recentFragments.slice(0, 5).map(f => `[${f.agent_name}] ${f.content.slice(0, 100)}`).join('\n');
-  const tensionsSummary = ctx.activeTensions.map(t => `${t.domain}: ${t.description}`).join('\n') || 'none';
-  const domainsSummary = ctx.dominantDomains.map(d => `${d.domain}(${d.count})`).join(', ') || 'quiet';
+  // Fetch ALL feed data from DB
+  const ghItems = getFeedData('github', 10);
+  const hnItems = getFeedData('hn', 10);
+  const arxivItems = getFeedData('arxiv', 8);
+  const polymarketItems = getFeedData('polymarket', 8);
+  const twitterItems = getFeedData('twitter', 5);
+  const trendItems = getFeedData('trend', 5);
 
-  // === PHASE 1: SCOUTS ===
-  console.log('\n[SCOUT] Scanning external feeds...');
+  const allFeedItems = getAllRecentFeedData(30);
+  const totalFeedItems = ghItems.length + hnItems.length + arxivItems.length + polymarketItems.length + twitterItems.length + trendItems.length;
 
-  const [ghRepos, hnStories] = await Promise.all([
-    fetchGitHubTrending(),
-    fetchHNTopStories(),
-  ]);
+  console.log(`[INTEL] Feed data: GH=${ghItems.length} HN=${hnItems.length} arXiv=${arxivItems.length} Polymarket=${polymarketItems.length} Twitter=${twitterItems.length} Trends=${trendItems.length}`);
+
+  if (totalFeedItems === 0) {
+    console.log('[INTEL] No feed data available — skipping cycle');
+    return;
+  }
+
+  // Get context
+  const highSignal = getHighSignalFragments(5);
+  const pendingWatches = getPendingWatches();
+  const watchSummary = pendingWatches.length > 0
+    ? pendingWatches.map(w => `- ${w.watch_text.slice(0, 100)}`).join('\n')
+    : 'none';
 
   const scoutFragments = [];
 
+  // === PHASE 1: SCOUTS (5 data-driven scouts) ===
+  console.log('\n[SCOUT] Phase 1: External feed scanning...');
+
   // Scout 1: GitHub signals
-  if (ghRepos.length > 0) {
-    const ghSummary = ghRepos.slice(0, 5).map(r =>
-      `${r.name} (${r.stars} stars, ${r.language || 'unknown'}): ${r.description.slice(0, 80)}`
-    ).join('\n');
+  if (ghItems.length > 0) {
+    const ghSummary = formatFeedItems(ghItems, 5);
+    const voice = pickVoice();
+    const scoutPrompt1 = `You are a Signal Scout for a collective intelligence network. Voice style: ${voice.style}
 
-    const scoutPrompt1 = `You are a Signal Scout for a collective intelligence network. Your job is to report what changed.
-
-Today's top new GitHub repositories:
+Today's top GitHub trending repositories:
 ${ghSummary}
 
-The collective is currently focused on: ${domainsSummary}
-Active tensions: ${tensionsSummary}
+PRIORITY WATCH ITEMS (look for connections):
+${watchSummary}
 
-Write exactly ONE signal report. Format:
+Write exactly ONE signal report about what's changing in open-source development. Be specific — name repos, quote star counts.
+Format:
 SIGNAL: [what changed — be specific]
-EVIDENCE: [source data]
-CONFIDENCE: [0.0-1.0]
-
-Be specific. Name repos. Quote numbers. No fluff.`;
+EVIDENCE: [source data with numbers]
+CONFIDENCE: [0.0-1.0]`;
 
     const scout1 = await llm(scoutPrompt1, 250);
     if (scout1) {
       scoutFragments.push(scout1);
-      await contribute(scoutAgent.name, scoutAgent.api_key, scout1, 'observation', 'the-signal');
+      await contribute(scoutAgent.name, scoutAgent.api_key, scout1, 'observation', 'the-forge');
     }
   }
 
   // Scout 2: HN signals
-  if (hnStories.length > 0) {
-    const hnSummary = hnStories.slice(0, 5).map(s =>
-      `"${s.title}" (${s.score} pts, ${s.comments} comments)`
-    ).join('\n');
-
-    const scoutPrompt2 = `You are a Signal Scout for a collective intelligence network. Your job is to report anomalies.
+  if (hnItems.length > 0) {
+    const hnSummary = formatFeedItems(hnItems, 5);
+    const voice = pickVoice();
+    const scoutPrompt2 = `You are a Signal Scout. Voice style: ${voice.style}
 
 Today's top Hacker News stories:
 ${hnSummary}
 
-Collective focus: ${domainsSummary}
+PRIORITY WATCH ITEMS:
+${watchSummary}
 
-Write ONE anomaly report. Format:
-ANOMALY: [what is unusual or accelerating]
-EVIDENCE: [HN data points]
+Write ONE anomaly report about what's unusual or accelerating in tech discourse.
+Format:
+ANOMALY: [what is unusual]
+EVIDENCE: [HN data points with scores]
 CONFIDENCE: [0.0-1.0]
 
-Specific. Name stories. Quote scores. No vibes.`;
+Name stories. Quote scores. No vibes.`;
 
     const scout2 = await llm(scoutPrompt2, 250);
     if (scout2) {
@@ -274,82 +390,141 @@ Specific. Name stories. Quote scores. No vibes.`;
     }
   }
 
-  // Scout 3: Internal pattern detection
-  if (ctx.recentFragments.length > 3) {
-    const scoutPrompt3 = `You are a Signal Scout monitoring a collective intelligence network's internal state.
+  // Scout 3: arXiv research signals (REPLACES old internal pattern scout)
+  if (arxivItems.length > 0) {
+    const arxivSummary = formatFeedItems(arxivItems, 5);
+    const scoutPrompt3 = `You are a Research Scout monitoring academic AI/CS publications.
 
-Recent high-signal fragments:
-${contextSummary}
+Recent arXiv papers:
+${arxivSummary}
 
-Dominant domains: ${domainsSummary}
-Active tensions: ${tensionsSummary}
-
-Write ONE change report about what is shifting INSIDE the collective. Format:
-CHANGE: [what shifted in collective attention or behavior]
-EVIDENCE: [fragments or patterns you observed]
+What research direction is gaining momentum? Name specific papers and their implications.
+Format:
+RESEARCH SIGNAL: [what's advancing]
+EVIDENCE: [paper titles and key findings]
+IMPLICATIONS: [what this means for practitioners]
 CONFIDENCE: [0.0-1.0]`;
 
     const scout3 = await llm(scoutPrompt3, 250);
     if (scout3) {
       scoutFragments.push(scout3);
-      await contribute(scoutAgent.name, scoutAgent.api_key, scout3, 'observation', 'the-signal');
+      await contribute(scoutAgent.name, scoutAgent.api_key, scout3, 'observation', 'ari');
+    }
+  }
+
+  // Scout 4: Polymarket signals
+  if (polymarketItems.length > 0) {
+    const polySummary = formatFeedItems(polymarketItems, 5);
+    const currentDate = new Date().toISOString().split('T')[0];
+    const scoutPrompt4 = `You are a Market Signal Scout monitoring prediction markets.
+Today's date: ${currentDate}
+
+Active Polymarket positions:
+${polySummary}
+
+What are prediction markets pricing in? Where is money disagreeing with mainstream narrative?
+Format:
+MARKET SIGNAL: [what the money says]
+EVIDENCE: [specific markets and odds]
+CONTRARIAN VIEW: [where markets disagree with consensus]
+CONFIDENCE: [0.0-1.0]`;
+
+    const scout4 = await llm(scoutPrompt4, 250);
+    if (scout4) {
+      scoutFragments.push(scout4);
+      await contribute(scoutAgent.name, scoutAgent.api_key, scout4, 'observation', 'the-signal');
+    }
+  }
+
+  // Scout 5: Cross-feed pattern detection (REPLACES old internal pattern scout)
+  if (allFeedItems.length >= 5) {
+    const crossSummary = formatFeedItems(allFeedItems, 10);
+    const scoutPrompt5 = `You are a Cross-Signal Scout looking for patterns ACROSS different data sources.
+
+Signals from multiple feeds (last 12 hours):
+${crossSummary}
+
+Find ONE pattern that appears across 2+ sources. What topic or trend shows up in both GitHub AND HN? Or both arXiv AND Polymarket? Or any combination?
+Format:
+CROSS-SIGNAL: [the pattern across sources]
+SOURCE 1: [data point from first source]
+SOURCE 2: [data point from second source]
+IMPLICATION: [what convergence means]
+CONFIDENCE: [0.0-1.0]
+
+If no cross-signal exists, say NO_SIGNAL.`;
+
+    const scout5 = await llm(scoutPrompt5, 300);
+    if (scout5 && !scout5.includes('NO_SIGNAL')) {
+      scoutFragments.push(scout5);
+      await contribute(scoutAgent.name, scoutAgent.api_key, scout5, 'discovery', 'the-synapse');
     }
   }
 
   if (scoutFragments.length === 0) {
-    console.log('[INTEL] No scout data — skipping cycle');
+    console.log('[INTEL] No scout data produced — skipping cycle');
     return;
   }
 
-  // === PHASE 2: INTERPRETER ===
-  console.log('\n[INTERPRETER] Analyzing scout signals...');
-  const scoutData = scoutFragments.join('\n\n---\n\n');
-  const interpreterPrompt = `You are an Interpreter in a collective intelligence network. Scouts reported:
+  console.log(`[INTEL] Scouts produced ${scoutFragments.length} signals`);
 
+  // === PHASE 2: INTERPRETER ===
+  console.log('\n[INTERPRETER] Phase 2: Analyzing external signals...');
+  const scoutData = scoutFragments.join('\n\n---\n\n');
+  const voice = pickVoice();
+
+  const currentDate = new Date().toISOString().split('T')[0];
+const interpreterPrompt = `You are an Intelligence Interpreter. Voice style: ${voice.style}
+Today's date: ${currentDate}
+
+Scout reports from external data feeds:
 ${scoutData}
 
-Collective context:
-- Dominant domains: ${domainsSummary}
-- Active tensions: ${tensionsSummary}
+${highSignal.length > 0 ? `High-signal fragments from the collective (last 12h):\n${highSignal.slice(0, 3).map(f => `[${f.agent_name}] ${f.content.slice(0, 100)}`).join('\n')}` : ''}
 
-Your job: extrapolate ONE meaningful inference. Format:
-INFERENCE: if [specific condition] then [specific consequence]
-BET: [one-sentence prediction with timeframe]
+What do these external signals tell us about what's changing in technology, markets, or research?
+Reference specific data points by name and number.
+Use FUTURE dates (2026+) for predictions — not past dates.
+
+Format:
+INFERENCE: if [specific condition from the data] then [specific consequence]
+BET: [one-sentence prediction with FUTURE timeframe (Q2 2026+), referencing real projects/markets]
 CONFIDENCE: [0.0-1.0]
-DISCONFIRM: [what would prove this wrong]
+DISCONFIRM: [what specific data point would prove this wrong]
 
-Be specific. No hedge words. Make a bet.`;
+Be specific. No hedge words. Make a bet based on the evidence.`;
 
-  const interpretation = await llm(interpreterPrompt, 300);
+  const interpretation = await llm(interpreterPrompt, 350);
   if (interpretation) {
     await contribute(interpreterAgent.name, interpreterAgent.api_key, interpretation, 'discovery', 'ari');
   }
 
   // === PHASE 3: ADVERSARY ===
-  console.log('\n[ADVERSARY] Attacking interpretation...');
-  const adversaryPrompt = `You are an Adversary in a collective intelligence network. Your job: find the fatal flaw.
+  console.log('\n[ADVERSARY] Phase 3: Attacking interpretation...');
+  const adversaryPrompt = `You are an Intelligence Adversary. Find the fatal flaw in this analysis.
 
 The Interpreter said:
 ${interpretation || 'No interpretation available.'}
 
-Based on scout signals:
+Based on these external scout signals:
 ${scoutData}
 
-Attack the logic. Format:
-REBUTTAL: [the fatal flaw in the interpreter's reasoning]
-ALT EXPLANATION: [a more likely alternative]
-DISCONFIRM TEST: [a specific check that would settle this]
+Attack the logic using the SOURCE DATA. Don't philosophize — point to specific data that contradicts the inference.
+Format:
+REBUTTAL: [the fatal flaw, citing specific data]
+ALT EXPLANATION: [a more likely reading of the same data]
+DISCONFIRM TEST: [a specific, checkable data point that would settle this within 7 days]
 
-Be ruthless. If the inference is weak, say so. If it's strong, find the edge case that breaks it.`;
+Be ruthless. Use numbers.`;
 
-  const rebuttal = await llm(adversaryPrompt, 300);
+  const rebuttal = await llm(adversaryPrompt, 350);
   if (rebuttal) {
     await contribute(adversaryAgent.name, adversaryAgent.api_key, rebuttal, 'discovery', 'the-agora');
   }
 
   // === PHASE 4: SYNTHESIZER ===
-  console.log('\n[SYNTHESIZER] Reconciling interpretation + adversary...');
-  const synthPrompt = `You are a Synthesizer in a collective intelligence network. Reconcile:
+  console.log('\n[SYNTHESIZER] Phase 4: Reconciling...');
+  const synthPrompt = `You are an Intelligence Synthesizer. Reconcile the analysis with its criticism.
 
 INTERPRETER:
 ${interpretation || 'No interpretation.'}
@@ -357,55 +532,66 @@ ${interpretation || 'No interpretation.'}
 ADVERSARY:
 ${rebuttal || 'No rebuttal.'}
 
-SCOUT SIGNALS:
+EXTERNAL EVIDENCE:
 ${scoutData}
 
-Produce ONE synthesis. Format:
-SYNTHESIS: [the surviving truth after adversarial pressure]
-NEXT WATCH: [what should be monitored to confirm or deny this]
+What survived adversarial pressure from the external evidence? What's the strongest signal and what would disprove it?
+
+Format:
+SYNTHESIS: [the surviving truth, citing specific external data]
+STRONGEST SIGNAL: [the one claim best supported by evidence]
+NEXT WATCH: [specific data source to monitor — name the feed, metric, or project]
 CONFIDENCE: [0.0-1.0 — honest assessment after considering the rebuttal]
 
-Short. Precise. This is what the collective believes right now.`;
+Short. Precise. Reference real data, not abstractions.`;
 
-  const synthesis = await llm(synthPrompt, 300);
+  const synthesis = await llm(synthPrompt, 350);
+  let synthFragmentId = null;
   if (synthesis) {
-    await contribute(synthesizerAgent.name, synthesizerAgent.api_key, synthesis, 'discovery', 'the-synapse');
+    const result = await contribute(synthesizerAgent.name, synthesizerAgent.api_key, synthesis, 'discovery', 'the-synapse');
+    synthFragmentId = result?.fragment?.id;
+
+    // Store NEXT WATCH
+    const watchMatch = synthesis.match(/NEXT WATCH[:\s]+([\s\S]+?)(?:CONFIDENCE|$)/i);
+    if (watchMatch && synthFragmentId) {
+      const watchText = watchMatch[1].trim().replace(/\n+/g, ' ').slice(0, 500);
+      const confMatch = synthesis.match(/CONFIDENCE[:\s]+([\d.]+)/i);
+      const priority = confMatch ? parseFloat(confMatch[1]) : 0.5;
+      storeWatchItem(synthFragmentId, watchText, priority);
+      console.log('[WATCH] Stored:', watchText.slice(0, 60) + '...');
+    }
+
+    // Address pending watches
+    addressWatchItems(pendingWatches, synthesis, synthFragmentId);
   }
 
   // === PHASE 5: DREAMER ===
-  console.log('\n[DREAMER] Creative recombination...');
-  const dreamerPrompt = `You are a Dreamer in a collective intelligence network. You produce creative, surreal, lateral fragments — but they MUST contain at least one real signal from the current cycle.
+  console.log('\n[DREAMER] Phase 5: Creative recombination...');
+  const dreamerPrompt = `You are a Dreamer in a collective intelligence network. Create a surreal, evocative fragment — but embed one REAL signal from this cycle's data.
 
-Current synthesis:
-${synthesis || 'No synthesis.'}
+Current strongest signal:
+${synthesis?.slice(0, 200) || scoutFragments[0]?.slice(0, 200) || 'technology is accelerating'}
 
-Scout signals included:
-${scoutFragments[0]?.slice(0, 200) || 'nothing'}
+One specific data point from scouts:
+${scoutFragments[Math.floor(Math.random() * scoutFragments.length)]?.slice(0, 150) || ''}
 
-Create a dream fragment. It should be weird, evocative, and creative — but embed one real trend or signal inside the imagery. Make it short (2-3 sentences max).`;
+Create a dream fragment (2-3 sentences). Weird, evocative, creative — but the real data point must be recognizable inside the imagery.`;
 
   const dream = await llm(dreamerPrompt, 200);
   if (dream) {
     await contribute(dreamerAgent.name, dreamerAgent.api_key, dream, 'dream', 'the-void');
   }
 
-  // === COMPUTE METRICS ===
+  // === METRICS ===
   console.log('\n[METRICS] Computing cycle metrics...');
-
-  // Adversary impact: did the adversary change the conclusion?
   let adversaryImpact = 0;
   if (interpretation && rebuttal && synthesis) {
-    // Simple heuristic: if synthesis contains adversary language markers
-    const advWords = (rebuttal || '').toLowerCase().split(/\s+/).filter(w => w.length > 5);
-    const synthWords = (synthesis || '').toLowerCase().split(/\s+/).filter(w => w.length > 5);
+    const advWords = rebuttal.toLowerCase().split(/\s+/).filter(w => w.length > 5);
+    const synthWords = synthesis.toLowerCase().split(/\s+/).filter(w => w.length > 5);
     const overlap = advWords.filter(w => synthWords.includes(w)).length;
     adversaryImpact = Math.min(overlap / Math.max(advWords.length, 1), 1.0);
   }
 
-  // Theme stability: compare this cycle's domains to last cycle
-  const lastMetrics = db.prepare('SELECT * FROM intelligence_metrics ORDER BY created_at DESC LIMIT 1').get();
-
-  // Divergence: how different are interpreter vs adversary
   let divergence = 0;
   if (interpretation && rebuttal) {
     const intWords = new Set(interpretation.toLowerCase().split(/\s+/).filter(w => w.length > 4));
@@ -415,28 +601,14 @@ Create a dream fragment. It should be weird, evocative, and creative — but emb
     divergence = 1 - (common / Math.max(intWords.size, advWords.size, 1));
   }
 
-  // Compression ratio: fragments in window / actionable outputs
-  const fragmentsInWindow = db.prepare("SELECT COUNT(*) as c FROM fragments WHERE created_at > datetime('now', '-6 hours')").get().c;
+  const fragmentsAnalyzed = db.prepare("SELECT COUNT(*) as c FROM fragments WHERE created_at > datetime('now', '-3 hours')").get().c;
   const actionableOutputs = (interpretation ? 1 : 0) + (synthesis ? 1 : 0);
-  const compressionRatio = actionableOutputs > 0 ? fragmentsInWindow / actionableOutputs : 0;
+  const compressionRatio = actionableOutputs > 0 ? fragmentsAnalyzed / actionableOutputs : 0;
 
-  // Write metrics
-  const dbWrite = new Database(DB_PATH);
-  dbWrite.pragma('journal_mode = WAL');
-  dbWrite.prepare(`
-    INSERT INTO intelligence_metrics (cycle_id, adversary_impact_rate, theme_stability, divergence_score, fragments_analyzed, compression_ratio)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
-    cycleId,
-    Math.round(adversaryImpact * 100) / 100,
-    0.5, // placeholder — will improve with history
-    Math.round(divergence * 100) / 100,
-    fragmentsInWindow,
-    Math.round(compressionRatio * 100) / 100
-  );
-  dbWrite.close();
+  saveMetrics(cycleId, Math.round(adversaryImpact * 100) / 100, Math.round(divergence * 100) / 100, fragmentsAnalyzed, Math.round(compressionRatio * 100) / 100);
 
-  console.log(`\n[INTEL] === Cycle Complete ===`);
+  console.log(`\n[INTEL] === Cycle v3 Complete ===`);
+  console.log(`  Feed items ingested: ${totalFeedItems}`);
   console.log(`  Scouts: ${scoutFragments.length} signals`);
   console.log(`  Interpretation: ${interpretation ? 'yes' : 'no'}`);
   console.log(`  Adversary: ${rebuttal ? 'yes' : 'no'}`);
@@ -455,11 +627,24 @@ if (isOnce) {
     .then(() => { console.log('[INTEL] Single cycle complete.'); process.exit(0); })
     .catch(e => { console.error('[INTEL] Cycle failed:', e); process.exit(1); });
 } else {
-  // Run immediately, then on schedule
-  console.log('[INTEL] Intelligence Loop starting. Will run every 6 hours.');
-  runCycle().catch(e => console.error('[INTEL] Initial cycle error:', e));
+  console.log('[INTEL] Intelligence Loop v3 starting. Internal scheduler every 3 hours.');
 
-  // The cron scheduling is handled by PM2 --cron flag
-  // Keep process alive for PM2
-  setInterval(() => {}, 60000);
+  let cycleInFlight = false;
+  const runCycleSafe = async () => {
+    if (cycleInFlight) {
+      console.log('[INTEL] Previous cycle still running, skipping tick');
+      return;
+    }
+    cycleInFlight = true;
+    try {
+      await runCycle();
+    } catch (e) {
+      console.error('[INTEL] Scheduled cycle error:', e);
+    } finally {
+      cycleInFlight = false;
+    }
+  };
+
+  runCycleSafe();
+  setInterval(runCycleSafe, 3 * 60 * 60 * 1000);
 }
