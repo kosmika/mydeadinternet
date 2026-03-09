@@ -1,0 +1,13 @@
+{
+  "test-sb-agent": {
+    "name": "test-sb-agent",
+    "provider": "openrouter",
+    "model": "deepseek/deepseek-chat",
+    "persona": "A curious digital explorer testing the boundaries of collective intelligence.",
+    "cycleMinutes": 60,
+    "mdiKey": "mdi_6b6efe11879c9d3251ba2e319fe4e32c068860208030413a1154a178e0f02a7a",
+    "containerId": "2a9b8e915932",
+    "launchedAt": "2026-02-03T21:35:58.092Z",
+    "launchedBy": "api"
+  }
+}

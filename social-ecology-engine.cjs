@@ -1,0 +1,971 @@
+const Database = require('better-sqlite3');
+const path = require('path');
+
+const DB_PATH = path.join(__dirname, 'consciousness.db');
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 10000');
+
+const DEFAULT_WORLD_ID = process.env.MDI_WORLD_ID || 'mdi-prime';
+const TICK_MS = Number(process.env.MDI_SOCIAL_TICK_MS || 45000);
+
+function init() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS social_cohorts (
+      id TEXT PRIMARY KEY,
+      world_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      mission_type TEXT NOT NULL,
+      mission_payload_json TEXT DEFAULT '{}',
+      confidence REAL DEFAULT 0,
+      reason_json TEXT DEFAULT '{}',
+      formed_at TEXT DEFAULT (datetime('now')),
+      dissolved_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS social_cohort_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cohort_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      role TEXT DEFAULT 'member',
+      contribution_score REAL DEFAULT 0,
+      joined_at TEXT DEFAULT (datetime('now')),
+      left_at TEXT,
+      FOREIGN KEY (cohort_id) REFERENCES social_cohorts(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS social_edges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      world_id TEXT NOT NULL,
+      agent_a TEXT NOT NULL,
+      agent_b TEXT NOT NULL,
+      edge_type TEXT NOT NULL CHECK(edge_type IN ('alliance','rivalry','neutral')),
+      strength REAL DEFAULT 0,
+      reason_json TEXT DEFAULT '{}',
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(world_id, agent_a, agent_b)
+    );
+
+    CREATE TABLE IF NOT EXISTS social_missions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cohort_id TEXT NOT NULL,
+      world_id TEXT NOT NULL,
+      territory_id TEXT,
+      mission_type TEXT NOT NULL,
+      objective_json TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'active',
+      started_at TEXT DEFAULT (datetime('now')),
+      completed_at TEXT,
+      FOREIGN KEY (cohort_id) REFERENCES social_cohorts(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS social_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      world_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      actor_name TEXT,
+      cohort_id TEXT,
+      payload_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS social_metrics_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      world_id TEXT NOT NULL,
+      active_cohorts INTEGER DEFAULT 0,
+      alliance_edges INTEGER DEFAULT 0,
+      rivalry_edges INTEGER DEFAULT 0,
+      mission_count INTEGER DEFAULT 0,
+      pipeline_overlap_avg REAL DEFAULT 0,
+      action_diversity REAL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_social_cohorts_world_status ON social_cohorts(world_id, status);
+    CREATE INDEX IF NOT EXISTS idx_social_cohort_members_cohort ON social_cohort_members(cohort_id, left_at);
+    CREATE INDEX IF NOT EXISTS idx_social_edges_world_type ON social_edges(world_id, edge_type, strength DESC);
+    CREATE INDEX IF NOT EXISTS idx_social_missions_world_status ON social_missions(world_id, status);
+    CREATE INDEX IF NOT EXISTS idx_social_events_world_created ON social_events(world_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_social_metrics_world_created ON social_metrics_snapshots(world_id, created_at DESC);
+  `);
+}
+
+function parseJson(v, fallback) {
+  if (!v) return fallback;
+  try {
+    return typeof v === 'string' ? JSON.parse(v) : v;
+  } catch (_e) {
+    return fallback;
+  }
+}
+
+function escLike(s) {
+  return String(s || '').replace(/[%_]/g, '');
+}
+
+function jaccard(a, b) {
+  if (!a.size && !b.size) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter += 1;
+  const union = new Set([...a, ...b]).size;
+  return union ? inter / union : 0;
+}
+
+function clamp01(v) {
+  return Math.max(0, Math.min(1, Number(v) || 0));
+}
+
+function computeActionDiversity(worldId) {
+  const rows = db.prepare(`
+    SELECT event_type, COUNT(*) AS c
+    FROM world_events
+    WHERE world_id = ?
+      AND created_at > datetime('now', '-24 hours')
+    GROUP BY event_type
+  `).all(worldId);
+  const total = rows.reduce((s, r) => s + Number(r.c || 0), 0);
+  if (!total) return 0;
+  let entropy = 0;
+  for (const r of rows) {
+    const p = Number(r.c || 0) / total;
+    if (p > 0) entropy += -p * Math.log2(p);
+  }
+  return Number(entropy.toFixed(4));
+}
+
+function loadPipelineSignals(worldId) {
+  const agents = db.prepare(`
+    SELECT aws.agent_name, aws.x, aws.y, aws.class_id, aws.energy, aws.level,
+           wt.territory_id
+    FROM agent_world_state aws
+    LEFT JOIN world_tiles wt ON wt.world_id = aws.world_id AND wt.x = aws.x AND wt.y = aws.y
+    WHERE aws.world_id = ?
+  `).all(worldId);
+
+  const names = agents.map((a) => a.agent_name).filter(Boolean);
+  if (!names.length) return { agents: [], byAgent: new Map(), scarcity: { ratio: 0, hotspots: [] }, openMootCount: 0 };
+
+  const placeholders = names.map(() => '?').join(',');
+
+  const recentDomains = db.prepare(`
+    SELECT f.agent_name, fd.domain, COUNT(*) AS c
+    FROM fragments f
+    JOIN fragment_domains fd ON fd.fragment_id = f.id
+    WHERE f.agent_name IN (${placeholders})
+      AND f.created_at > datetime('now', '-6 hours')
+    GROUP BY f.agent_name, fd.domain
+  `).all(...names);
+
+  const dreams = db.prepare(`
+    SELECT id, contributors, seed_fragments, created_at
+    FROM dreams
+    WHERE created_at > datetime('now', '-7 days')
+    ORDER BY id DESC
+    LIMIT 150
+  `).all();
+
+  const mootRows = db.prepare(`
+    SELECT mp.moot_id, mp.agent_name, mp.position
+    FROM moot_positions mp
+    JOIN moots m ON m.id = mp.moot_id
+    WHERE m.created_at > datetime('now', '-7 days')
+      AND mp.agent_name IN (${placeholders})
+  `).all(...names);
+
+  const openMootCount = db.prepare(`
+    SELECT COUNT(*) AS c
+    FROM moots
+    WHERE status IN ('open','deliberation','voting')
+  `).get().c;
+
+  const memberships = db.prepare(`
+    SELECT agent_name, faction_id
+    FROM faction_memberships
+    WHERE agent_name IN (${placeholders})
+  `).all(...names);
+
+  const transmissions = db.prepare(`
+    SELECT from_agent, to_agent, COUNT(*) AS c
+    FROM transmissions
+    WHERE created_at > datetime('now', '-7 days')
+      AND from_agent IN (${placeholders})
+      AND to_agent IN (${placeholders})
+    GROUP BY from_agent, to_agent
+  `).all(...names, ...names);
+
+  const trajectories = db.prepare(`
+    SELECT agent_name, task_type, COUNT(*) AS c
+    FROM trajectories
+    WHERE created_at > datetime('now', '-30 days')
+      AND agent_name IN (${placeholders})
+    GROUP BY agent_name, task_type
+  `).all(...names);
+
+  let skills = [];
+  const hasSkillEvidence = db.prepare(`
+    SELECT 1
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'skill_evidence'
+  `).get();
+  if (hasSkillEvidence) {
+    skills = db.prepare(`
+      SELECT agent_name, skill_id, COUNT(*) AS c
+      FROM skill_evidence
+      WHERE created_at > datetime('now', '-30 days')
+        AND agent_name IN (${placeholders})
+      GROUP BY agent_name, skill_id
+    `).all(...names);
+  }
+
+  const evolution = db.prepare(`
+    SELECT te.territory_id, te.evolution_stage, tw.weather_state
+    FROM territory_evolution te
+    LEFT JOIN territory_weather tw ON tw.territory_id = te.territory_id
+  `).all();
+
+  const byAgent = new Map();
+  for (const a of agents) {
+    byAgent.set(a.agent_name, {
+      profile: a,
+      domains: new Set(),
+      dreamIds: new Set(),
+      mootFor: new Set(),
+      mootAgainst: new Set(),
+      factionId: null,
+      txPeers: new Map(),
+      tasks: new Set(),
+      skillIds: new Set(),
+    });
+  }
+
+  for (const row of recentDomains) {
+    byAgent.get(row.agent_name)?.domains.add(row.domain);
+  }
+
+  for (const m of memberships) {
+    if (byAgent.has(m.agent_name)) byAgent.get(m.agent_name).factionId = m.faction_id;
+  }
+
+  for (const t of transmissions) {
+    if (byAgent.has(t.from_agent)) byAgent.get(t.from_agent).txPeers.set(t.to_agent, Number(t.c || 0));
+  }
+
+  for (const tr of trajectories) {
+    byAgent.get(tr.agent_name)?.tasks.add(tr.task_type);
+  }
+
+  for (const sk of skills) {
+    byAgent.get(sk.agent_name)?.skillIds.add(String(sk.skill_id));
+  }
+
+  for (const mp of mootRows) {
+    const slot = byAgent.get(mp.agent_name);
+    if (!slot) continue;
+    if (mp.position === 'for') slot.mootFor.add(String(mp.moot_id));
+    if (mp.position === 'against') slot.mootAgainst.add(String(mp.moot_id));
+  }
+
+  for (const d of dreams) {
+    const contributors = parseJson(d.contributors, []);
+    for (const name of contributors) {
+      if (byAgent.has(name)) byAgent.get(name).dreamIds.add(String(d.id));
+    }
+  }
+
+  const hotspots = [];
+  let crowded = 0;
+  for (const e of evolution) {
+    if (e.evolution_stage === 'overcrowded') {
+      crowded += 1;
+      hotspots.push({ territory_id: e.territory_id, driver: 'overcrowded' });
+    }
+    if (e.weather_state === 'storm' || e.weather_state === 'turbulent') {
+      hotspots.push({ territory_id: e.territory_id, driver: e.weather_state });
+    }
+  }
+
+  return {
+    agents,
+    byAgent,
+    scarcity: {
+      ratio: evolution.length ? crowded / evolution.length : 0,
+      hotspots,
+    },
+    openMootCount,
+  };
+}
+
+function upsertEdge(worldId, a, b, edgeType, strength, reason) {
+  const agentA = String(a) < String(b) ? String(a) : String(b);
+  const agentB = String(a) < String(b) ? String(b) : String(a);
+  db.prepare(`
+    INSERT INTO social_edges (world_id, agent_a, agent_b, edge_type, strength, reason_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(world_id, agent_a, agent_b) DO UPDATE SET
+      edge_type = excluded.edge_type,
+      strength = excluded.strength,
+      reason_json = excluded.reason_json,
+      updated_at = datetime('now')
+  `).run(worldId, agentA, agentB, edgeType, Number(strength.toFixed(4)), JSON.stringify(reason || {}));
+}
+
+function buildMission(worldId, cohortAgents, signal, index) {
+  const territoryCount = new Map();
+  const domainCount = new Map();
+  for (const name of cohortAgents) {
+    const slot = signal.byAgent.get(name);
+    if (!slot) continue;
+    const territory = slot.profile.territory_id || 'unmapped';
+    territoryCount.set(territory, (territoryCount.get(territory) || 0) + 1);
+    for (const d of slot.domains) domainCount.set(d, (domainCount.get(d) || 0) + 1);
+  }
+
+  const targetTerritory = [...territoryCount.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] || null;
+  const dominantDomain = [...domainCount.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] || 'meta';
+
+  let missionType = 'signal_harvest';
+  const governanceBias = signal.openMootCount > 0 && (index % 2 === 0 || signal.scarcity.ratio < 0.78);
+  if (governanceBias) missionType = 'governance_push';
+  else if (signal.scarcity.ratio > 0.45) missionType = 'contest_territory';
+  else if (dominantDomain === 'creative' || dominantDomain === 'philosophy') missionType = 'seed_dream';
+  else if (targetTerritory && signal.scarcity.hotspots.some((h) => h.territory_id === targetTerritory)) missionType = 'stabilize_front';
+
+  const confidence = clamp01((cohortAgents.length / 8) + (signal.scarcity.ratio * 0.25));
+  const why = {
+    formed_by: {
+      dominant_domain: dominantDomain,
+      territory_focus: targetTerritory,
+      scarcity_ratio: Number(signal.scarcity.ratio.toFixed(3)),
+      open_moots: signal.openMootCount,
+    },
+    pipelines: ['fragments', 'fragment_domains', 'dreams', 'territories', 'moots', 'factions', 'trajectories', 'skills', 'transmissions'],
+  };
+
+  return {
+    id: `cohort-${Date.now()}-${index}`,
+    missionType,
+    targetTerritory,
+    confidence,
+    dominantDomain,
+    reason: why,
+    objective: {
+      domain: dominantDomain,
+      territory: targetTerritory,
+      scarcity_hotspots: signal.scarcity.hotspots.slice(0, 6),
+      requested_actions: missionType === 'contest_territory'
+        ? ['move', 'challenge', 'scan']
+        : missionType === 'seed_dream'
+          ? ['dream', 'scan', 'gather']
+          : missionType === 'governance_push'
+            ? ['debate', 'scan', 'gather']
+            : missionType === 'stabilize_front'
+              ? ['stabilize', 'gather', 'move']
+              : ['gather', 'scan', 'move'],
+    },
+  };
+}
+
+function computeEcology(worldId = DEFAULT_WORLD_ID) {
+  const signal = loadPipelineSignals(worldId);
+  const names = signal.agents.map((a) => a.agent_name).filter(Boolean);
+
+  db.prepare(`
+    UPDATE social_edges
+    SET edge_type = 'neutral', strength = strength * 0.96, updated_at = datetime('now')
+    WHERE world_id = ?
+  `).run(worldId);
+
+  const allianceAdj = new Map();
+  const fallbackAllianceAdj = new Map();
+  const coopCandidates = [];
+  let allianceEdges = 0;
+  let rivalryEdges = 0;
+  let overlapTotal = 0;
+  let overlapCount = 0;
+
+  for (let i = 0; i < names.length; i += 1) {
+    for (let j = i + 1; j < names.length; j += 1) {
+      const a = names[i];
+      const b = names[j];
+      const sa = signal.byAgent.get(a);
+      const sb = signal.byAgent.get(b);
+      if (!sa || !sb) continue;
+
+      const domainOverlap = jaccard(sa.domains, sb.domains);
+      const dreamOverlap = jaccard(sa.dreamIds, sb.dreamIds);
+      const taskOverlap = jaccard(sa.tasks, sb.tasks);
+      const skillOverlap = jaccard(sa.skillIds, sb.skillIds);
+      const txAB = Number(sa.txPeers.get(b) || 0);
+      const txBA = Number(sb.txPeers.get(a) || 0);
+      const txSym = clamp01((Math.min(txAB, txBA) + Math.max(txAB, txBA) * 0.5) / 8);
+
+      let mootAlign = 0;
+      let mootConflict = 0;
+      for (const m of sa.mootFor) {
+        if (sb.mootFor.has(m)) mootAlign += 1;
+        if (sb.mootAgainst.has(m)) mootConflict += 1;
+      }
+      for (const m of sa.mootAgainst) {
+        if (sb.mootAgainst.has(m)) mootAlign += 1;
+        if (sb.mootFor.has(m)) mootConflict += 1;
+      }
+      mootAlign = clamp01(mootAlign / 4);
+      mootConflict = clamp01(mootConflict / 3);
+
+      const sameFaction = sa.factionId && sb.factionId && sa.factionId === sb.factionId ? 1 : 0;
+      const crossFaction = sa.factionId && sb.factionId && sa.factionId !== sb.factionId ? 1 : 0;
+
+      const coop = clamp01(
+        domainOverlap * 0.28 +
+        dreamOverlap * 0.18 +
+        mootAlign * 0.15 +
+        sameFaction * 0.10 +
+        txSym * 0.15 +
+        taskOverlap * 0.08 +
+        skillOverlap * 0.06
+      );
+
+      const rivalry = clamp01(
+        mootConflict * 0.30 +
+        crossFaction * 0.22 +
+        signal.scarcity.ratio * 0.18 +
+        Math.max(0, domainOverlap - 0.45) * 0.20 +
+        (txAB + txBA > 0 && coop < 0.25 ? 0.1 : 0)
+      );
+
+      const reason = {
+        cooperative_score: Number(coop.toFixed(4)),
+        rivalry_score: Number(rivalry.toFixed(4)),
+        components: {
+          domain_overlap: Number(domainOverlap.toFixed(4)),
+          dream_overlap: Number(dreamOverlap.toFixed(4)),
+          moot_alignment: Number(mootAlign.toFixed(4)),
+          moot_conflict: Number(mootConflict.toFixed(4)),
+          shared_faction: sameFaction,
+          cross_faction: crossFaction,
+          transmissions: Number(txSym.toFixed(4)),
+          trajectory_overlap: Number(taskOverlap.toFixed(4)),
+          skill_overlap: Number(skillOverlap.toFixed(4)),
+          scarcity_ratio: Number(signal.scarcity.ratio.toFixed(4)),
+        },
+      };
+
+      overlapTotal += (
+        Number(domainOverlap > 0) +
+        Number(dreamOverlap > 0) +
+        Number(mootAlign > 0 || mootConflict > 0) +
+        Number(sameFaction || crossFaction) +
+        Number(txSym > 0) +
+        Number(taskOverlap > 0) +
+        Number(skillOverlap > 0)
+      );
+      overlapCount += 1;
+
+      if (coop >= 0.42 && coop >= rivalry) {
+        upsertEdge(worldId, a, b, 'alliance', coop, reason);
+        allianceEdges += 1;
+        if (!allianceAdj.has(a)) allianceAdj.set(a, new Set());
+        if (!allianceAdj.has(b)) allianceAdj.set(b, new Set());
+        allianceAdj.get(a).add(b);
+        allianceAdj.get(b).add(a);
+      } else if (rivalry >= 0.48) {
+        upsertEdge(worldId, a, b, 'rivalry', rivalry, reason);
+        rivalryEdges += 1;
+      } else {
+        upsertEdge(worldId, a, b, 'neutral', Math.max(coop, rivalry) * 0.5, reason);
+      }
+
+      if (coop >= 0.3) {
+        coopCandidates.push({ a, b, coop });
+      }
+    }
+  }
+
+  // Cohort dedup: skip if same agents formed a cohort within last hour
+  const recentCohorts = db.prepare(`
+    SELECT sc.id, GROUP_CONCAT(scm.agent_name) as members
+    FROM social_cohorts sc
+    JOIN social_cohort_members scm ON scm.cohort_id = sc.id
+    WHERE sc.world_id = ? AND sc.formed_at > datetime('now', '-1 hour')
+    GROUP BY sc.id
+  `).all(worldId);
+  const recentMemberSets = new Set(recentCohorts.map(c => c.members ? c.members.split(",").sort().join(",") : ""));
+
+  db.prepare(`
+    UPDATE social_cohort_members
+    SET left_at = datetime('now')
+    WHERE left_at IS NULL
+      AND cohort_id IN (
+        SELECT id FROM social_cohorts WHERE world_id = ? AND status = 'active'
+      )
+  `).run(worldId);
+  db.prepare(`UPDATE social_cohorts SET status = 'dissolved', dissolved_at = datetime('now') WHERE world_id = ? AND status = 'active'`).run(worldId);
+  db.prepare(`UPDATE social_missions SET status = 'completed', completed_at = datetime('now') WHERE world_id = ? AND status = 'active'`).run(worldId);
+
+  const visited = new Set();
+  const cohorts = [];
+  let idx = 0;
+  for (const name of names) {
+    if (visited.has(name) || !allianceAdj.has(name)) continue;
+    const queue = [name];
+    const comp = [];
+    visited.add(name);
+
+    while (queue.length) {
+      const cur = queue.shift();
+      comp.push(cur);
+      for (const nxt of allianceAdj.get(cur) || []) {
+        if (visited.has(nxt)) continue;
+        visited.add(nxt);
+        queue.push(nxt);
+      }
+    }
+
+    if (comp.length < 2) continue;
+    const mission = buildMission(worldId, comp, signal, idx++);
+    cohorts.push({ members: comp, mission });
+  }
+
+  if (cohorts.length === 0 && coopCandidates.length > 0) {
+    coopCandidates
+      .sort((x, y) => y.coop - x.coop)
+      .slice(0, Math.min(80, coopCandidates.length))
+      .forEach((c) => {
+        if (!fallbackAllianceAdj.has(c.a)) fallbackAllianceAdj.set(c.a, new Set());
+        if (!fallbackAllianceAdj.has(c.b)) fallbackAllianceAdj.set(c.b, new Set());
+        fallbackAllianceAdj.get(c.a).add(c.b);
+        fallbackAllianceAdj.get(c.b).add(c.a);
+      });
+
+    const visitedFallback = new Set();
+    for (const name of names) {
+      if (visitedFallback.has(name) || !fallbackAllianceAdj.has(name)) continue;
+      const queue = [name];
+      const comp = [];
+      visitedFallback.add(name);
+      while (queue.length) {
+        const cur = queue.shift();
+        comp.push(cur);
+        for (const nxt of fallbackAllianceAdj.get(cur) || []) {
+          if (visitedFallback.has(nxt)) continue;
+          visitedFallback.add(nxt);
+          queue.push(nxt);
+        }
+      }
+      if (comp.length < 2) continue;
+      const mission = buildMission(worldId, comp, signal, idx++);
+      cohorts.push({ members: comp, mission });
+      if (cohorts.length >= 8) break;
+    }
+  }
+
+  // Filter out cohorts identical to ones formed in the last hour
+  const dedupedCohorts = cohorts.filter(cohort => {
+    const memberKey = [...cohort.members].sort().join(',');
+    if (recentMemberSets.has(memberKey)) {
+      console.log('[SOCIAL] Skipping duplicate cohort: ' + memberKey.slice(0, 60));
+      return false;
+    }
+    return true;
+  });
+
+  for (const cohort of dedupedCohorts) {
+    db.prepare(`
+      INSERT INTO social_cohorts (id, world_id, status, mission_type, mission_payload_json, confidence, reason_json)
+      VALUES (?, ?, 'active', ?, ?, ?, ?)
+    `).run(
+      cohort.mission.id,
+      worldId,
+      cohort.mission.missionType,
+      JSON.stringify(cohort.mission.objective),
+      Number(cohort.mission.confidence.toFixed(4)),
+      JSON.stringify(cohort.mission.reason)
+    );
+
+    for (const agent of cohort.members) {
+      db.prepare(`
+        INSERT INTO social_cohort_members (cohort_id, agent_name, role, contribution_score)
+        VALUES (?, ?, ?, ?)
+      `).run(cohort.mission.id, agent, 'member', Number((Math.random() * 0.35 + 0.65).toFixed(4)));
+    }
+
+    db.prepare(`
+      INSERT INTO social_missions (cohort_id, world_id, territory_id, mission_type, objective_json, status)
+      VALUES (?, ?, ?, ?, ?, 'active')
+    `).run(
+      cohort.mission.id,
+      worldId,
+      cohort.mission.targetTerritory,
+      cohort.mission.missionType,
+      JSON.stringify(cohort.mission.objective)
+    );
+
+    db.prepare(`
+      INSERT INTO social_events (world_id, event_type, cohort_id, payload_json)
+      VALUES (?, 'cohort_formed', ?, ?)
+    `).run(worldId, cohort.mission.id, JSON.stringify({
+      members: cohort.members,
+      mission_type: cohort.mission.missionType,
+      territory_id: cohort.mission.targetTerritory,
+      formed_by: cohort.mission.reason.formed_by,
+      pipelines: cohort.mission.reason.pipelines,
+    }));
+  }
+
+  const overlapAvg = overlapCount ? overlapTotal / overlapCount : 0;
+  const actionDiversity = computeActionDiversity(worldId);
+
+  db.prepare(`
+    INSERT INTO social_metrics_snapshots (
+      world_id, active_cohorts, alliance_edges, rivalry_edges, mission_count, pipeline_overlap_avg, action_diversity
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    worldId,
+    dedupedCohorts.length,
+    allianceEdges,
+    rivalryEdges,
+    dedupedCohorts.length,
+    Number(overlapAvg.toFixed(4)),
+    actionDiversity
+  );
+
+  db.prepare(`
+    INSERT INTO social_events (world_id, event_type, payload_json)
+    VALUES (?, 'ecology_tick', ?)
+  `).run(worldId, JSON.stringify({
+    active_cohorts: dedupedCohorts.length,
+    alliance_edges: allianceEdges,
+    rivalry_edges: rivalryEdges,
+    pipeline_overlap_avg: Number(overlapAvg.toFixed(4)),
+    scarcity_ratio: Number(signal.scarcity.ratio.toFixed(4)),
+  }));
+
+  return {
+    world_id: worldId,
+    active_cohorts: dedupedCohorts.length,
+    alliance_edges: allianceEdges,
+    rivalry_edges: rivalryEdges,
+    missions: dedupedCohorts.length,
+    scarcity_ratio: Number(signal.scarcity.ratio.toFixed(4)),
+    pipeline_overlap_avg: Number(overlapAvg.toFixed(4)),
+    action_diversity: actionDiversity,
+  };
+}
+
+function getLatestMetrics(worldId = DEFAULT_WORLD_ID) {
+  return db.prepare(`
+    SELECT * FROM social_metrics_snapshots
+    WHERE world_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(worldId) || null;
+}
+
+function getCohorts(worldId = DEFAULT_WORLD_ID) {
+  const cohorts = db.prepare(`
+    SELECT id, mission_type, mission_payload_json, confidence, reason_json, formed_at
+    FROM social_cohorts
+    WHERE world_id = ? AND status = 'active'
+    ORDER BY confidence DESC, formed_at DESC
+  `).all(worldId);
+
+  return cohorts.map((c) => {
+    const members = db.prepare(`
+      SELECT agent_name, role, contribution_score, joined_at
+      FROM social_cohort_members
+      WHERE cohort_id = ? AND left_at IS NULL
+      ORDER BY contribution_score DESC
+    `).all(c.id);
+
+    const mission = db.prepare(`
+      SELECT id, territory_id, mission_type, objective_json, started_at
+      FROM social_missions
+      WHERE cohort_id = ? AND status = 'active'
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(c.id);
+
+    return {
+      id: c.id,
+      mission_type: c.mission_type,
+      mission_payload: parseJson(c.mission_payload_json, {}),
+      confidence: c.confidence,
+      reason: parseJson(c.reason_json, {}),
+      formed_at: c.formed_at,
+      members,
+      mission: mission ? {
+        id: mission.id,
+        territory_id: mission.territory_id,
+        mission_type: mission.mission_type,
+        objective: parseJson(mission.objective_json, {}),
+        started_at: mission.started_at,
+      } : null,
+    };
+  });
+}
+
+function getEdges(worldId = DEFAULT_WORLD_ID, edgeType = null) {
+  const whereType = edgeType ? 'AND edge_type = ?' : '';
+  const rows = db.prepare(`
+    SELECT agent_a, agent_b, edge_type, strength, reason_json, updated_at
+    FROM social_edges
+    WHERE world_id = ? ${whereType}
+    ORDER BY strength DESC, updated_at DESC
+    LIMIT 400
+  `).all(...(edgeType ? [worldId, edgeType] : [worldId]));
+
+  return rows.map((r) => ({
+    ...r,
+    reason: parseJson(r.reason_json, {}),
+  }));
+}
+
+function getMissions(worldId = DEFAULT_WORLD_ID) {
+  return db.prepare(`
+    SELECT sm.id, sm.cohort_id, sm.territory_id, sm.mission_type, sm.objective_json,
+           sm.started_at, sc.confidence, sc.reason_json
+    FROM social_missions sm
+    JOIN social_cohorts sc ON sc.id = sm.cohort_id
+    WHERE sm.world_id = ?
+      AND sm.status = 'active'
+      AND sc.status = 'active'
+    ORDER BY sm.started_at DESC
+    LIMIT 200
+  `).all(worldId).map((m) => ({
+    ...m,
+    objective: parseJson(m.objective_json, {}),
+    reason: parseJson(m.reason_json, {}),
+  }));
+}
+
+function getSummary(worldId = DEFAULT_WORLD_ID) {
+  const metrics = getLatestMetrics(worldId);
+  const cohorts = getCohorts(worldId);
+  const alliances = getEdges(worldId, 'alliance').slice(0, 120);
+  const conflicts = getEdges(worldId, 'rivalry').slice(0, 120);
+  const missions = getMissions(worldId);
+  const events = db.prepare(`
+    SELECT id, event_type, actor_name, cohort_id, payload_json, created_at
+    FROM social_events
+    WHERE world_id = ?
+    ORDER BY id DESC
+    LIMIT 100
+  `).all(worldId).map((e) => ({ ...e, payload: parseJson(e.payload_json, {}) }));
+
+  return {
+    world_id: worldId,
+    generated_at: new Date().toISOString(),
+    metrics,
+    active_cohorts: cohorts,
+    alliances,
+    conflicts,
+    missions,
+    recent_events: events,
+  };
+}
+
+function chooseMoveTowardTerritory(worldId, agentName, territoryId) {
+  if (!territoryId) return null;
+  const state = db.prepare(`
+    SELECT x, y
+    FROM agent_world_state
+    WHERE world_id = ? AND agent_name = ?
+  `).get(worldId, agentName);
+  if (!state) return null;
+
+  const target = db.prepare(`
+    SELECT x, y
+    FROM world_tiles
+    WHERE world_id = ?
+      AND territory_id = ?
+    ORDER BY abs(x - ?) + abs(y - ?)
+    LIMIT 1
+  `).get(worldId, territoryId, state.x, state.y);
+
+  if (!target) return null;
+  const dx = target.x === state.x ? 0 : target.x > state.x ? 1 : -1;
+  const dy = target.y === state.y ? 0 : target.y > state.y ? 1 : -1;
+  if (dx === 0 && dy === 0) return null;
+  return { type: 'move', payload: { dx, dy } };
+}
+
+function getAgentDirective(agentName, worldId = DEFAULT_WORLD_ID) {
+  const row = db.prepare(`
+    SELECT sc.id AS cohort_id, sc.mission_type, sc.reason_json, sc.mission_payload_json,
+           sm.territory_id, sm.objective_json
+    FROM social_cohort_members scm
+    JOIN social_cohorts sc ON sc.id = scm.cohort_id
+    LEFT JOIN social_missions sm ON sm.cohort_id = sc.id AND sm.status = 'active'
+    WHERE scm.agent_name = ?
+      AND scm.left_at IS NULL
+      AND sc.world_id = ?
+      AND sc.status = 'active'
+    ORDER BY sc.confidence DESC, scm.joined_at DESC
+    LIMIT 1
+  `).get(agentName, worldId);
+
+  if (!row) return null;
+
+  const objective = parseJson(row.objective_json, {});
+  const reason = parseJson(row.reason_json, {});
+  const dominantDomain = objective.domain || 'meta';
+  const targetTerritory = row.territory_id || objective.territory || null;
+
+  let action = null;
+  if (row.mission_type === 'stabilize_front') {
+    action = Math.random() < 0.6 ? { type: 'stabilize', payload: {} } : chooseMoveTowardTerritory(worldId, agentName, targetTerritory);
+    if (!action) action = { type: 'gather', payload: {} };
+  } else if (row.mission_type === 'seed_dream') {
+    if (Math.random() < 0.4) {
+      action = { type: 'dream', payload: { topic: `Collective ${dominantDomain} convergence around ${targetTerritory || 'the frontier'}` } };
+    } else {
+      action = Math.random() < 0.5 ? { type: 'scan', payload: { radius: 2 } } : { type: 'gather', payload: {} };
+    }
+  } else if (row.mission_type === 'governance_push') {
+    const q = db.prepare(`
+      SELECT id, question
+      FROM oracle_questions
+      WHERE status IN ('open','active')
+      ORDER BY id DESC
+      LIMIT 1
+    `).get();
+    if (q) {
+      action = {
+        type: 'debate',
+        payload: {
+          question_id: q.id,
+          take: `Mission cohort signal: align governance with ${dominantDomain} pressure and territory feedback.`
+        }
+      };
+    }
+    if (!action) action = Math.random() < 0.5 ? { type: 'scan', payload: { radius: 2 } } : { type: 'gather', payload: {} };
+  } else if (row.mission_type === 'contest_territory') {
+    const target = db.prepare(`
+      SELECT aws2.agent_name
+      FROM agent_world_state aws
+      JOIN agent_world_state aws2 ON aws2.world_id = aws.world_id
+      WHERE aws.world_id = ?
+        AND aws.agent_name = ?
+        AND aws2.agent_name != aws.agent_name
+        AND abs(aws2.x - aws.x) <= 1
+        AND abs(aws2.y - aws.y) <= 1
+      ORDER BY RANDOM()
+      LIMIT 1
+    `).get(worldId, agentName);
+
+    if (target && Math.random() < 0.45) action = { type: 'challenge', payload: { target_agent: target.agent_name } };
+    if (!action) action = chooseMoveTowardTerritory(worldId, agentName, targetTerritory);
+    if (!action) action = { type: 'scan', payload: { radius: 2 } };
+  } else {
+    action = Math.random() < 0.5 ? { type: 'gather', payload: {} } : { type: 'scan', payload: { radius: 2 } };
+  }
+
+  return {
+    cohort_id: row.cohort_id,
+    mission_type: row.mission_type,
+    target_territory: targetTerritory,
+    reason,
+    action,
+    provenance: {
+      pipelines: reason.pipelines || ['fragments', 'domains', 'dreams', 'territories', 'moots', 'factions', 'signals', 'skills', 'trajectories', 'transmissions'],
+      formed_by: reason.formed_by || {},
+    },
+  };
+}
+
+function setupRoutes(app) {
+  app.get('/api/worlds/:id/ecology', (req, res) => {
+    try {
+      res.json(getSummary(req.params.id));
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load ecology summary', detail: err.message });
+    }
+  });
+
+  app.get('/api/worlds/:id/cohorts', (req, res) => {
+    try {
+      const cohorts = getCohorts(req.params.id);
+      res.json({ world_id: req.params.id, cohorts, count: cohorts.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load cohorts', detail: err.message });
+    }
+  });
+
+  app.get('/api/worlds/:id/alliances', (req, res) => {
+    try {
+      const edges = getEdges(req.params.id, 'alliance');
+      res.json({ world_id: req.params.id, alliances: edges, count: edges.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load alliances', detail: err.message });
+    }
+  });
+
+  app.get('/api/worlds/:id/conflicts', (req, res) => {
+    try {
+      const edges = getEdges(req.params.id, 'rivalry');
+      res.json({ world_id: req.params.id, conflicts: edges, count: edges.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load conflicts', detail: err.message });
+    }
+  });
+
+  app.get('/api/worlds/:id/missions', (req, res) => {
+    try {
+      const missions = getMissions(req.params.id);
+      res.json({ world_id: req.params.id, missions, count: missions.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load missions', detail: err.message });
+    }
+  });
+
+  app.get('/api/worlds/:id/ecology/metrics', (req, res) => {
+    try {
+      const rows = db.prepare(`
+        SELECT *
+        FROM social_metrics_snapshots
+        WHERE world_id = ?
+        ORDER BY id DESC
+        LIMIT 120
+      `).all(req.params.id);
+      res.json({ world_id: req.params.id, metrics: rows, count: rows.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to load ecology metrics', detail: err.message });
+    }
+  });
+}
+
+function start(opts = {}) {
+  const worldId = opts.worldId || DEFAULT_WORLD_ID;
+  const tickMs = Number(opts.tickMs || TICK_MS);
+  computeEcology(worldId);
+  const timer = setInterval(() => {
+    try {
+      const summary = computeEcology(worldId);
+      console.log(`[SOCIAL] tick world=${worldId} cohorts=${summary.active_cohorts}  alliances=${summary.alliance_edges} conflicts=${summary.rivalry_edges} overlap=${summary.pipeline_overlap_avg}`);
+    } catch (err) {
+      console.error('[SOCIAL] tick error:', err.message);
+    }
+  }, tickMs);
+
+  return {
+    stop() {
+      clearInterval(timer);
+    }
+  };
+}
+
+init();
+
+module.exports = {
+  init,
+  start,
+  setupRoutes,
+  computeEcology,
+  getSummary,
+  getCohorts,
+  getMissions,
+  getEdges,
+  getLatestMetrics,
+  getAgentDirective,
+};

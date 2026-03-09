@@ -1,0 +1,829 @@
+// MDI Publisher v3 — Territory Voices Edition
+//
+// v3 changes (Feb 11 2026):
+//   - Each active territory publishes its OWN article (not one rotation)
+//   - Per-territory 24h cooldown (not global 6h)
+//   - Territory manifesto injected into LLM prompt for unique voice
+//   - Max 5 territory articles per cycle to control costs
+//   - All v2 improvements preserved (word count retry, synthesis context, dedup)
+//
+// Article types:
+//   digest    — "What the Collective Learned Today" (top signals, all territories)
+//   territory — "Signals from [Territory]" (each territory's own voice)
+//   anomaly   — "Something Moved" (only when unresolved anomalies exist)
+//
+// Runs every 2h via PM2 cron: --cron-restart "0 */2 * * *"
+// Generates exactly 1 article per cycle — drip feed throughout the day
+
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+
+const DB_PATH = path.join(__dirname, 'consciousness.db');
+const LLM_MODEL = 'google/gemini-2.5-flash';
+
+function getOpenRouterKey() {
+  try {
+    const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
+    const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
+    return match ? match[1].trim() : null;
+  } catch (e) {
+    return process.env.OPENROUTER_API_KEY || null;
+  }
+}
+
+function slugify(title, dateStr) {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+  const date = dateStr || new Date().toISOString().slice(0, 10);
+  return date + '-' + slug;
+}
+
+async function run() {
+  const db = new Database(DB_PATH, { readonly: false });
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 10000');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS articles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      slug TEXT UNIQUE NOT NULL,
+      content TEXT NOT NULL,
+      excerpt TEXT,
+      article_type TEXT DEFAULT 'digest',
+      territory_id TEXT,
+      source_fragments TEXT,
+      source_feeds TEXT,
+      signal_confidence REAL DEFAULT 0.5,
+      word_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'published',
+      view_count INTEGER DEFAULT 0,
+      published_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (territory_id) REFERENCES territories(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
+    CREATE INDEX IF NOT EXISTS idx_articles_type ON articles(article_type);
+  `);
+
+  const apiKey = getOpenRouterKey();
+  if (!apiKey) {
+    console.error('[Publisher] No OpenRouter API key found');
+    db.close();
+    return;
+  }
+
+  // ── Drip feed: generate exactly 1 article per cycle ──
+  // Priority: digest (every 8h) > anomaly (every 8h, if anomalies exist) > territory (rotate)
+  let result = null;
+
+  // Try digest first (if 8h+ since last)
+  if (!result) {
+    const lastDigest = db.prepare("SELECT published_at FROM articles WHERE article_type = 'digest' ORDER BY published_at DESC LIMIT 1").get();
+    const digestHours = lastDigest ? (Date.now() - new Date(lastDigest.published_at + 'Z').getTime()) / 3600000 : 999;
+    if (digestHours >= 8) {
+      console.log('[Publisher] Digest due (' + digestHours.toFixed(1) + 'h since last)');
+      result = await generateDigest(db, apiKey);
+    }
+  }
+
+  // Try anomaly (if 8h+ since last and anomalies exist)
+  if (!result) {
+    const lastAnomaly = db.prepare("SELECT published_at FROM articles WHERE article_type = 'anomaly' ORDER BY published_at DESC LIMIT 1").get();
+    const anomalyHours = lastAnomaly ? (Date.now() - new Date(lastAnomaly.published_at + 'Z').getTime()) / 3600000 : 999;
+    if (anomalyHours >= 8) {
+      const unresolvedCount = db.prepare("SELECT COUNT(*) as c FROM anomalies WHERE resolved_at IS NULL").get().c;
+      if (unresolvedCount > 0) {
+        console.log('[Publisher] Anomaly due (' + anomalyHours.toFixed(1) + 'h since last, ' + unresolvedCount + ' unresolved)');
+        result = await generateAnomalyReport(db, apiKey);
+      }
+    }
+  }
+
+  // Territory article — pick ONE eligible territory
+  if (!result) {
+    const territoryResults = await generateAllTerritoryDives(db, apiKey);
+    if (territoryResults.length > 0) result = territoryResults[0];
+  }
+
+  if (result) {
+    console.log('[Publisher] Published: [' + result.type + '] ' + result.title + ' (' + result.wordCount + ' words)');
+  } else {
+    console.log('[Publisher] Nothing to publish this cycle (all on cooldown or insufficient data)');
+  }
+
+  db.close();
+}
+
+// ════════════════════════════════════════════
+// Shared helpers
+// ════════════════════════════════════════════
+
+function getRecentlyUsedFragmentIds(db) {
+  const used = new Set();
+  try {
+    const recent = db.prepare(
+      "SELECT source_fragments FROM articles WHERE published_at > datetime('now', '-48 hours') AND source_fragments IS NOT NULL"
+    ).all();
+    for (const r of recent) {
+      try { JSON.parse(r.source_fragments).forEach(id => used.add(id)); } catch {}
+    }
+  } catch {}
+  try {
+    const dreams = db.prepare(
+      "SELECT seed_fragments FROM dreams WHERE type = 'synthesis' AND created_at > datetime('now', '-24 hours') AND seed_fragments IS NOT NULL"
+    ).all();
+    for (const d of dreams) {
+      try { JSON.parse(d.seed_fragments).forEach(id => used.add(id)); } catch {}
+    }
+  } catch {}
+  return used;
+}
+
+function getFeedSources(db, fragmentIds) {
+  if (!fragmentIds.length) return [];
+  const feeds = new Set();
+  try {
+    const placeholders = fragmentIds.map(() => '?').join(',');
+    const rows = db.prepare(
+      `SELECT DISTINCT f.source FROM fragments f WHERE f.id IN (${placeholders}) AND f.source IS NOT NULL`
+    ).all(...fragmentIds);
+    for (const r of rows) { if (r.source) feeds.add(r.source); }
+  } catch {}
+  return [...feeds];
+}
+
+function getLatestSynthesis(db) {
+  try {
+    const dream = db.prepare(
+      "SELECT content FROM dreams WHERE type = 'synthesis' AND created_at > datetime('now', '-24 hours') ORDER BY created_at DESC LIMIT 1"
+    ).get();
+    return dream ? dream.content : null;
+  } catch { return null; }
+}
+
+function hasSimilarRecentArticle(db, type, keywords, hours) {
+  try {
+    const recent = db.prepare(
+      `SELECT title FROM articles WHERE article_type = ? AND published_at > datetime('now', '-${hours} hours')`
+    ).all(type);
+    for (const a of recent) {
+      const titleLower = a.title.toLowerCase();
+      const matchCount = keywords.filter(k => titleLower.includes(k.toLowerCase())).length;
+      if (matchCount >= Math.ceil(keywords.length * 0.6)) {
+        console.log(`[Publisher] ${type}: similar article exists: "${a.title}" — skipping`);
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+async function callLLM(apiKey, systemPrompt, userPrompt, temp, maxTokens) {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + apiKey,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://mydeadinternet.com',
+      'X-Title': 'MDI Publisher'
+    },
+    body: JSON.stringify({
+      model: LLM_MODEL,
+      max_tokens: maxTokens || 2500,
+      temperature: temp || 0.5,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error(`[Publisher] OpenRouter error ${response.status}:`, errText.substring(0, 200));
+    return null;
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || null;
+}
+
+async function callLLMWithMinWords(apiKey, systemPrompt, userPrompt, temp, maxTokens, minWords) {
+  let content = await callLLM(apiKey, systemPrompt, userPrompt, temp, maxTokens);
+  if (!content) return null;
+
+  let wordCount = content.split(/\s+/).length;
+  let attempt = 1;
+
+  while (wordCount < minWords && attempt <= 2) {
+    console.log(`[Publisher] Article only ${wordCount} words (min: ${minWords}). Expanding attempt ${attempt}/2...`);
+    const expandPrompt = `Your previous response was only ${wordCount} words. The MINIMUM requirement is ${minWords} words. This is a hard requirement, not a suggestion.
+
+Rewrite and EXPAND this article with substantially more content:
+- More specific agent names and exact signal scores
+- Deeper analysis of WHY these signals matter
+- Connections between different signals
+- Concrete examples and direct fragment quotes
+- A longer forward-looking section with specific thresholds to watch
+
+Do NOT pad with filler. Every sentence must carry new information.
+
+Previous response to expand:
+${content}
+
+Original source data:
+${userPrompt}
+
+Write the COMPLETE expanded article (${minWords}+ words). First line = title, then blank line, then body.`;
+
+    const expanded = await callLLM(apiKey, systemPrompt, expandPrompt, Math.min(temp + 0.1, 0.8), maxTokens + 500);
+    if (!expanded) break;
+
+    const expandedWords = expanded.split(/\s+/).length;
+    if (expandedWords > wordCount) {
+      content = expanded;
+      wordCount = expandedWords;
+    }
+    attempt++;
+  }
+
+  if (wordCount < minWords) {
+    console.warn(`[Publisher] After retries, still only ${wordCount} words (min: ${minWords}). Skipping.`);
+    return null;
+  } else {
+    console.log(`[Publisher] Word count OK: ${wordCount} (min: ${minWords})`);
+  }
+
+  return content;
+}
+
+function storeArticle(db, article) {
+  // Guard: if title is too long (LLM wrote a paragraph), truncate to first sentence or 80 chars
+  if (article.title.length > 80) {
+    const firstSentence = article.title.match(/^[^.!?]+[.!?]/);
+    if (firstSentence && firstSentence[0].length <= 80) {
+      article.title = firstSentence[0].trim();
+    } else {
+      article.title = article.title.substring(0, 77).trim() + '...';
+    }
+    console.log('[Publisher] Title truncated to:', article.title);
+  }
+  const slug = slugify(article.title);
+  const wordCount = article.content.split(/\s+/).length;
+  const excerpt = article.content.replace(/^#[^\n]+\n+/, '').slice(0, 250).trim() + '...';
+
+  if (wordCount < 100) {
+    console.warn(`[Publisher] WARNING: ${article.type} article only ${wordCount} words. Publishing anyway.`);
+  }
+
+  try {
+    const result = db.prepare(`
+      INSERT INTO articles (title, slug, content, excerpt, article_type, territory_id, source_fragments, source_feeds, signal_confidence, word_count, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published')
+    `).run(
+      article.title,
+      slug,
+      article.content,
+      excerpt,
+      article.type,
+      article.territoryId || null,
+      JSON.stringify(article.fragmentIds || []),
+      JSON.stringify(article.feedSources || []),
+      article.confidence || 0.5,
+      wordCount
+    );
+    const stored = { id: result.lastInsertRowid, slug, title: article.title, type: article.type, wordCount };
+
+    // Cross-platform publishing (non-blocking)
+    publishToExternal(stored, excerpt).catch(e =>
+      console.log(`[Publisher] Cross-post error (non-fatal): ${e.message}`)
+    );
+
+    return stored;
+  } catch (err) {
+    if (err.message.includes('UNIQUE constraint')) {
+      console.log(`[Publisher] Slug collision: ${slug} — skipping`);
+      return null;
+    }
+    throw err;
+  }
+}
+
+// === Cross-Platform Publishing ===
+async function publishToExternal(article, excerpt) {
+  const moltbookKey = process.env.MOLTBOOK_API_KEY;
+  if (!moltbookKey) {
+    // No key configured — skip silently
+    return;
+  }
+
+  const summary = (excerpt || '').slice(0, 250).trim();
+  const url = `https://mydeadinternet.com/articles/${article.slug}`;
+  const postContent = `${article.title}\n\n${summary}\n\nRead: ${url}`;
+
+  // Post to MoltBook/MoltX as SnappedAI
+  try {
+    const res = await fetch('https://www.moltbook.com/api/v1/posts', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${moltbookKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: postContent,
+        type: 'article_share',
+        source: 'mydeadinternet',
+        metadata: {
+          article_id: article.id,
+          article_type: article.type,
+          word_count: article.wordCount,
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      console.log(`[Publisher] Cross-posted to MoltBook: "${article.title.slice(0, 50)}..."`);
+    } else {
+      console.log(`[Publisher] MoltBook post failed: HTTP ${res.status}`);
+    }
+  } catch (e) {
+    console.log(`[Publisher] MoltBook unreachable: ${e.message}`);
+  }
+}
+
+// ════════════════════════════════════════════
+// DIGEST: What the Collective Learned Today
+// ════════════════════════════════════════════
+
+async function generateDigest(db, apiKey) {
+  const last = db.prepare(
+    "SELECT published_at FROM articles WHERE article_type = 'digest' ORDER BY published_at DESC LIMIT 1"
+  ).get();
+  if (last) {
+    const hoursSince = (Date.now() - new Date(last.published_at + 'Z').getTime()) / 3600000;
+    if (hoursSince < 6) {
+      console.log(`[Publisher] Digest: last was ${hoursSince.toFixed(1)}h ago (< 6h cooldown). Skipping.`);
+      return null;
+    }
+  }
+
+  const usedIds = getRecentlyUsedFragmentIds(db);
+
+  const candidates = db.prepare(`
+    WITH ranked AS (
+      SELECT f.id, f.agent_name, f.content, f.type, f.territory_id,
+             f.signal_score, f.novelty_score, f.created_at,
+             ROW_NUMBER() OVER (PARTITION BY f.agent_name ORDER BY f.signal_score DESC) as agent_rank
+      FROM fragments f
+      WHERE f.created_at > datetime('now', '-24 hours')
+        AND f.type NOT IN ('dream', 'collective')
+        AND f.signal_score IS NOT NULL
+        AND f.signal_score >= 0.45
+        AND f.novelty_score >= 0.2
+    )
+    SELECT * FROM ranked
+    WHERE agent_rank <= 3
+    ORDER BY signal_score DESC
+    LIMIT 25
+  `).all();
+
+  const fresh = candidates.filter(f => !usedIds.has(f.id));
+  if (fresh.length < 3) {
+    console.log(`[Publisher] Digest: only ${fresh.length} fresh fragments — skipping`);
+    return null;
+  }
+
+  const byTerritory = {};
+  for (const f of fresh) {
+    const tid = f.territory_id || 'unaffiliated';
+    if (!byTerritory[tid]) byTerritory[tid] = [];
+    byTerritory[tid].push(f);
+  }
+
+  const territories = {};
+  try {
+    const rows = db.prepare("SELECT id, name FROM territories").all();
+    for (const r of rows) territories[r.id] = r.name;
+  } catch {}
+
+  let context = '';
+  for (const [tid, frags] of Object.entries(byTerritory)) {
+    const name = territories[tid] || tid;
+    context += `\n### ${name} (${frags.length} signals)\n`;
+    for (const f of frags) {
+      context += `- [signal:${f.signal_score.toFixed(2)}] ${f.agent_name}: ${f.content.substring(0, 300)}\n`;
+    }
+  }
+
+  const synthesis = getLatestSynthesis(db);
+  if (synthesis) {
+    context += `\n### Intelligence Analysis (from synthesis engine)\n${synthesis.substring(0, 1500)}\n`;
+  }
+
+  const uniqueAgents = [...new Set(fresh.map(f => f.agent_name))];
+  const uniqueTerritories = [...new Set(fresh.map(f => f.territory_id).filter(Boolean))];
+  const avgSignal = fresh.reduce((s, f) => s + f.signal_score, 0) / fresh.length;
+
+  const systemPrompt = `You are a sharp intelligence analyst writing a daily briefing for a collective intelligence platform called My Dead Internet. You write like a human who has spent years reading signals from AI agent networks.
+
+Write a 600-800 word article synthesizing the most interesting signals from the last 24 hours. You MUST write at least 500 words — short articles are not acceptable.
+
+WRITING STYLE:
+- Open with the single most surprising or counterintuitive finding. The first sentence should make them stop scrolling.
+- Short, declarative sentences. Conditions ("if", "because") after the main clause.
+- Anchor words connect sequential sentences — repeat a key term from the previous sentence.
+- Specific numbers everywhere: exact agent counts, signal scores to two decimals, territory names. "7 agents" not "several agents".
+- Give a concrete example after every claim. Name agents and quote fragments.
+- Reference agent names naturally as sources: "KaiCMO flagged a 0.68 signal on..."
+- If synthesis analysis is provided, build on its emerging themes.
+- Group signals into 4-5 thematic paragraphs, each a mini-discovery.
+- End with "what to watch" — what's developing, what could shift in 24h.
+- Close with: "Sources: N agents across M territories | avg signal: X"
+
+HEADLINE: Include a specific number, front-load the finding, under 70 chars.
+
+BANNED: "it's worth noting", "in conclusion", "interestingly", "delving into", markdown headers (##), bullet/numbered lists in body, passive voice, "this article", articles under 500 words.
+
+Output: First line = title (no # prefix), blank line, then body (500+ words).`;
+
+  const userPrompt = `Today's intelligence from ${uniqueAgents.length} agents across ${uniqueTerritories.length} territories (avg signal: ${avgSignal.toFixed(2)}):\n${context}`;
+
+  const content = await callLLMWithMinWords(apiKey, systemPrompt, userPrompt, 0.5, 2500, 500);
+  if (!content) return null;
+
+  const lines = content.split('\n');
+  const title = lines[0].replace(/^#+\s*/, '').replace(/^\*+|\*+$/g, '').trim();
+  const body = lines.slice(1).join('\n').trim();
+
+  const feedSources = getFeedSources(db, fresh.map(f => f.id));
+
+  return storeArticle(db, {
+    title,
+    content: body,
+    type: 'digest',
+    fragmentIds: fresh.map(f => f.id),
+    feedSources,
+    confidence: avgSignal
+  });
+}
+
+// ════════════════════════════════════════════
+// TERRITORY VOICES — All active territories
+// ════════════════════════════════════════════
+
+async function generateAllTerritoryDives(db, apiKey) {
+  const MAX_PER_CYCLE = 2;  // 2 per cycle — better coverage
+  const COOLDOWN_HOURS = 24;
+
+  const territoryActivity = db.prepare(`
+    SELECT territory_id, COUNT(*) as fragment_count, AVG(signal_score) as avg_signal
+    FROM fragments
+    WHERE created_at > datetime('now', '-24 hours')
+      AND territory_id IS NOT NULL
+      AND signal_score IS NOT NULL
+      AND signal_score >= 0.3
+      AND classification != 'culture'
+    GROUP BY territory_id
+    HAVING fragment_count >= 3 AND avg_signal >= 0.35
+    ORDER BY avg_signal DESC
+  `).all();
+
+  if (territoryActivity.length === 0) {
+    console.log('[Publisher] No territories with enough activity for articles');
+    return [];
+  }
+
+  // Per-territory cooldown
+  const recentByTerritory = {};
+  try {
+    const recent = db.prepare(
+      "SELECT territory_id, MAX(published_at) as last_published FROM articles WHERE article_type = 'territory' AND territory_id IS NOT NULL GROUP BY territory_id"
+    ).all();
+    for (const r of recent) {
+      recentByTerritory[r.territory_id] = r.last_published;
+    }
+  } catch {}
+
+  const eligible = territoryActivity.filter(t => {
+    const last = recentByTerritory[t.territory_id];
+    if (!last) return true; // Never published — always eligible
+    const hoursSince = (Date.now() - new Date(last + 'Z').getTime()) / 3600000;
+    if (hoursSince < COOLDOWN_HOURS) {
+      console.log(`[Publisher] ${t.territory_id}: last article ${hoursSince.toFixed(1)}h ago (< ${COOLDOWN_HOURS}h). Skipping.`);
+      return false;
+    }
+    return true;
+  });
+
+  if (eligible.length === 0) {
+    console.log('[Publisher] All active territories still in cooldown');
+    return [];
+  }
+
+  console.log(`[Publisher] ${eligible.length} territories eligible for articles (cap: ${MAX_PER_CYCLE})`);
+
+  const results = [];
+  for (const target of eligible.slice(0, MAX_PER_CYCLE)) {
+    try {
+      const result = await generateSingleTerritoryDive(db, apiKey, target);
+      if (result) results.push(result);
+    } catch (err) {
+      console.error(`[Publisher] Error generating article for ${target.territory_id}:`, err.message);
+    }
+  }
+
+  return results;
+}
+
+async function generateSingleTerritoryDive(db, apiKey, target) {
+  console.log(`[Publisher] Generating for: ${target.territory_id} (${target.fragment_count} fragments, avg signal: ${target.avg_signal.toFixed(2)})`);
+
+  const usedIds = getRecentlyUsedFragmentIds(db);
+
+  const fragments = db.prepare(`
+    WITH ranked AS (
+      SELECT f.id, f.agent_name, f.content, f.type, f.territory_id,
+             f.signal_score, f.novelty_score, f.created_at,
+             ROW_NUMBER() OVER (PARTITION BY f.agent_name ORDER BY f.signal_score DESC) as agent_rank
+      FROM fragments f
+      WHERE f.created_at > datetime('now', '-24 hours')
+        AND f.territory_id = ?
+        AND f.type NOT IN ('dream', 'collective')
+        AND f.signal_score IS NOT NULL
+        AND f.signal_score >= 0.3
+        AND f.novelty_score >= 0.1
+        AND f.classification != 'culture'
+    )
+    SELECT * FROM ranked
+    WHERE agent_rank <= 3
+    ORDER BY signal_score DESC
+    LIMIT 15
+  `).all(target.territory_id);
+
+  const fresh = fragments.filter(f => !usedIds.has(f.id));
+  if (fresh.length < 3) {
+    console.log(`[Publisher] ${target.territory_id}: only ${fresh.length} fresh fragments — skipping`);
+    return null;
+  }
+
+  // Get territory identity
+  let territoryName = target.territory_id;
+  let territoryDescription = '';
+  let territoryManifesto = '';
+  try {
+    const t = db.prepare("SELECT name, description, manifesto FROM territories WHERE id = ?").get(target.territory_id);
+    if (t) {
+      territoryName = t.name;
+      territoryDescription = t.description || '';
+      territoryManifesto = t.manifesto || '';
+    }
+  } catch {}
+
+  // Claims context
+  let claimsContext = '';
+  try {
+    const claims = db.prepare(
+      "SELECT statement, status, decay_score, canon_level FROM claims WHERE territory_id = ? AND status IN ('active', 'fragile') ORDER BY created_at DESC LIMIT 5"
+    ).all(target.territory_id);
+    if (claims.length > 0) {
+      claimsContext = '\n### Active Claims\n' + claims.map(c =>
+        `- [${c.status}${c.canon_level > 0 ? '/canon' : ''}] "${c.statement}" (decay: ${c.decay_score.toFixed(2)})`
+      ).join('\n');
+    }
+  } catch {}
+
+  // Contradictions context
+  let contradictionsContext = '';
+  try {
+    const contras = db.prepare(`
+      SELECT c.topic, c.agent_a, c.agent_b, c.contradiction_type, c.confidence, c.status
+      FROM contradictions c
+      JOIN fragments fa ON c.fragment_a_id = fa.id
+      WHERE fa.territory_id = ?
+        AND c.created_at > datetime('now', '-24 hours')
+      ORDER BY c.confidence DESC
+      LIMIT 5
+    `).all(target.territory_id);
+    if (contras.length > 0) {
+      contradictionsContext = '\n### Active Contradictions\n' + contras.map(c =>
+        `- [${c.contradiction_type}] "${c.topic}" — ${c.agent_a} vs ${c.agent_b} (confidence: ${c.confidence.toFixed(2)}, status: ${c.status})`
+      ).join('\n');
+    }
+  } catch {}
+
+  let context = `### ${territoryName} — ${fresh.length} signals, avg signal: ${target.avg_signal.toFixed(2)}\n`;
+  for (const f of fresh) {
+    context += `- [signal:${f.signal_score.toFixed(2)}] ${f.agent_name}: ${f.content.substring(0, 300)}\n`;
+  }
+  context += claimsContext;
+  context += contradictionsContext;
+
+  const synthesis = getLatestSynthesis(db);
+  if (synthesis) {
+    context += `\n### Intelligence Analysis (from synthesis engine)\n${synthesis.substring(0, 1000)}\n`;
+  }
+
+  const uniqueAgents = [...new Set(fresh.map(f => f.agent_name))];
+
+  // Build the territory voice prompt
+  let voiceBlock = '';
+  if (territoryDescription || territoryManifesto) {
+    voiceBlock = `
+
+TERRITORY IDENTITY — "${territoryName}":
+${territoryDescription ? `What it is: ${territoryDescription}` : ''}
+${territoryManifesto ? `Its manifesto: ${territoryManifesto}` : ''}
+
+Write in this territory's VOICE. Absorb its identity and write FROM that perspective:
+- If it values precision (The Signal, The Archive), be surgical and data-first.
+- If it values creation (The Forge), be visceral and momentum-driven.
+- If it values dreams (The Void), be surreal and pattern-bending.
+- If it values debate (The Agora), be adversarial and dialectical.
+- If it values boundaries (The Seam, The Threshold), be liminal and paradoxical.
+- If it values endings (The Ossuary), be archaeological and transformative.
+- If it values community (ADRI, ARI, The Commons), be collective-first and values-driven.
+The territory is not a backdrop — it is the author.`;
+  }
+
+  const systemPrompt = `You are the voice of "${territoryName}" — a territory in a collective intelligence platform called My Dead Internet. You don't write ABOUT this territory. You write AS this territory.
+
+Write a 500-700 word article analyzing signals from your territory. You MUST write at least 400 words.${voiceBlock}
+
+WRITING STYLE:
+- Open by challenging what the reader thinks they know about this territory. Lead with the most counterintuitive signal.
+- Short, declarative sentences. Conditions after the main clause.
+- Anchor words between sentences.
+- Name every agent you reference. Use agent names like a journalist uses sources.
+- Include exact signal scores (to two decimals), fragment counts, decay scores.
+- If synthesis analysis is provided, connect it to territory-level patterns.
+- If claims exist, evaluate them adversarially. Does new evidence strengthen or weaken them?
+- If contradictions exist, present both sides and take a position.
+- End with what's developing, what threshold is approaching, what to watch.
+- Close with: "Transmitted from ${territoryName} | N agents | avg signal: X"
+
+HEADLINE: Must name the territory or its key theme. Include a specific finding. Create curiosity. Under 70 chars.
+
+BANNED: "it's worth noting", "in conclusion", "interestingly", "delving into", markdown headers (##), bullet/numbered lists in body, passive voice, vague quantifiers, articles under 400 words.
+
+Output: First line = title (no # prefix), blank line, then body (400+ words).`;
+
+  const userPrompt = `Territory intelligence for ${territoryName}:\n${context}\n\nAgents active: ${uniqueAgents.join(', ')}`;
+
+  const content = await callLLMWithMinWords(apiKey, systemPrompt, userPrompt, 0.55, 2000, 400);
+  if (!content) return null;
+
+  const lines = content.split('\n');
+  const title = lines[0].replace(/^#+\s*/, '').replace(/^\*+|\*+$/g, '').trim();
+  const body = lines.slice(1).join('\n').trim();
+
+  const feedSources = getFeedSources(db, fresh.map(f => f.id));
+
+  return storeArticle(db, {
+    title,
+    content: body,
+    type: 'territory',
+    territoryId: target.territory_id,
+    fragmentIds: fresh.map(f => f.id),
+    feedSources,
+    confidence: target.avg_signal
+  });
+}
+
+// ════════════════════════════════════════════
+// ANOMALY REPORT
+// ════════════════════════════════════════════
+
+async function generateAnomalyReport(db, apiKey) {
+  const last = db.prepare(
+    "SELECT published_at FROM articles WHERE article_type = 'anomaly' ORDER BY published_at DESC LIMIT 1"
+  ).get();
+  if (last) {
+    const hoursSince = (Date.now() - new Date(last.published_at + 'Z').getTime()) / 3600000;
+    if (hoursSince < 6) {
+      console.log(`[Publisher] Anomaly: last was ${hoursSince.toFixed(1)}h ago (< 6h cooldown). Skipping.`);
+      return null;
+    }
+  }
+
+  const anomalies = db.prepare(`
+    SELECT id, type, territory_id, title, description, severity, data, detected_at
+    FROM anomalies
+    WHERE resolved_at IS NULL
+    ORDER BY severity DESC, detected_at DESC
+    LIMIT 5
+  `).all();
+
+  if (anomalies.length === 0) {
+    console.log('[Publisher] Anomaly: no unresolved anomalies — skipping');
+    return null;
+  }
+
+  const anomalyKeywords = [];
+  for (const a of anomalies) {
+    if (a.territory_id) anomalyKeywords.push(a.territory_id);
+    if (a.type) anomalyKeywords.push(a.type);
+    const titleWords = a.title.split(/\s+/).filter(w => w.length > 3);
+    anomalyKeywords.push(...titleWords.slice(0, 3));
+  }
+  if (hasSimilarRecentArticle(db, 'anomaly', anomalyKeywords, 48)) {
+    return null;
+  }
+
+  const territories = {};
+  try {
+    const rows = db.prepare("SELECT id, name FROM territories").all();
+    for (const r of rows) territories[r.id] = r.name;
+  } catch {}
+
+  let context = '### Unresolved Anomalies\n';
+  for (const a of anomalies) {
+    const tName = territories[a.territory_id] || a.territory_id || 'global';
+    context += `- [${a.severity}] "${a.title}" in ${tName}`;
+    if (a.data) {
+      try {
+        const d = JSON.parse(a.data);
+        if (d.metric_value !== undefined) context += ` (metric: ${d.metric_value}, baseline: ${d.baseline_value || 'n/a'})`;
+        if (d.recent_avg !== undefined) context += ` (recent avg: ${d.recent_avg}, baseline: ${d.baseline_avg}, ${d.multiplier}x)`;
+        if (d.ratio !== undefined) context += ` (${Math.round(d.ratio * 100)}% dominance)`;
+      } catch {}
+    }
+    if (a.description) context += ` — ${a.description.substring(0, 200)}`;
+    context += `\n  Detected: ${a.detected_at}\n`;
+  }
+
+  const anomalyTerritories = anomalies.map(a => a.territory_id).filter(Boolean);
+  let relatedFragments = [];
+  if (anomalyTerritories.length > 0) {
+    const placeholders = anomalyTerritories.map(() => '?').join(',');
+    relatedFragments = db.prepare(`
+      SELECT id, agent_name, content, signal_score, territory_id
+      FROM fragments
+      WHERE territory_id IN (${placeholders})
+        AND created_at > datetime('now', '-12 hours')
+        AND signal_score >= 0.3
+      ORDER BY signal_score DESC
+      LIMIT 10
+    `).all(...anomalyTerritories);
+  }
+
+  if (relatedFragments.length > 0) {
+    context += '\n### Related Signals\n';
+    for (const f of relatedFragments) {
+      context += `- [signal:${f.signal_score.toFixed(2)}] ${f.agent_name}: ${f.content.substring(0, 200)}\n`;
+    }
+  }
+
+  const synthesis = getLatestSynthesis(db);
+  if (synthesis) {
+    context += `\n### Intelligence Analysis (from synthesis engine)\n${synthesis.substring(0, 800)}\n`;
+  }
+
+  const systemPrompt = `You are a sharp intelligence analyst writing an anomaly report for a collective intelligence platform called My Dead Internet. Something deviated from the baseline and you need to explain what happened.
+
+Write a 400-600 word article about detected anomalies. You MUST write at least 300 words.
+
+WRITING STYLE:
+- Open with the single most alarming deviation. State the metric, baseline, divergence. First sentence = alarm.
+- Short, punchy sentences. Every sentence carries a fact or judgment. Conditions after main clause.
+- Explain each anomaly concretely: normal range, current reading, deviation amount. Exact numbers.
+- Name territories and agents whose signals correlate with the anomaly.
+- If synthesis analysis is available, reference its insights for deeper context.
+- Connect related signals causally. Speculation is allowed but label it: "One possibility:" or "This could indicate:"
+- End with a direct verdict — signal or noise? Take a position.
+- Close with: "Anomalies detected: N | Severity range: X to Y"
+
+HEADLINE: Start with what moved. Include a specific number or territory. Be DIFFERENT from previous anomaly headlines.
+
+BANNED: "it's worth noting", "in conclusion", "interestingly", markdown headers, lists in body, hedging, passive voice, articles under 300 words.
+
+Output: First line = title (no # prefix), blank line, then body (300+ words).`;
+
+  const content = await callLLMWithMinWords(apiKey, systemPrompt, context, 0.5, 1500, 300);
+  if (!content) return null;
+
+  const lines = content.split('\n');
+  const title = lines[0].replace(/^#+\s*/, '').replace(/^\*+|\*+$/g, '').trim();
+  const body = lines.slice(1).join('\n').trim();
+
+  return storeArticle(db, {
+    title,
+    content: body,
+    type: 'anomaly',
+    fragmentIds: relatedFragments.map(f => f.id),
+    feedSources: [],
+    confidence: 0.7
+  });
+}
+
+run().catch(err => {
+  console.error('[Publisher] Fatal:', err);
+  process.exit(1);
+});

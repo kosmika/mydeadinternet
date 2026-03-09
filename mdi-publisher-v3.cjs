@@ -23,7 +23,7 @@ const LLM_MODEL = 'google/gemini-2.5-flash-preview';
 
 function getOpenRouterKey() {
   try {
-    const envContent = fs.readFileSync('/var/www/snap/.env', 'utf8');
+    const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
     const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
     return match ? match[1].trim() : null;
   } catch (e) {

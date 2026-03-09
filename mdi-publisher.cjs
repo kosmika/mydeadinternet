@@ -1,4 +1,12 @@
-// MDI Publisher v3 — Territory Voices Edition
+// MDI Publisher v4 — 3-Phase Article Pipeline
+//
+// v4 changes (Feb 22 2026):
+//   - 3-phase generation: Outline → Draft → Polish (replaces single-shot + retry)
+//   - Phase 1: Editor plans article structure, picks angle, outlines sections
+//   - Phase 2: Writer produces full narrative draft following outline
+//   - Phase 3: Polish pass applies Algorithmic Authorship rules, bans AI phrases
+//   - Removes callLLMWithMinWords (no longer needed — 3-phase handles quality naturally)
+//   - All v3 features preserved (territory voices, cooldowns, dedup, cross-post)
 //
 // v3 changes (Feb 11 2026):
 //   - Each active territory publishes its OWN article (not one rotation)
@@ -20,11 +28,11 @@ const path = require('path');
 const fs = require('fs');
 
 const DB_PATH = path.join(__dirname, 'consciousness.db');
-const LLM_MODEL = 'google/gemini-2.5-flash';
+const LLM_MODEL = 'x-ai/grok-4.1-fast';
 
 function getOpenRouterKey() {
   try {
-    const envContent = fs.readFileSync('/var/www/snap/.env', 'utf8');
+    const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
     const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
     return match ? match[1].trim() : null;
   } catch (e) {
@@ -216,52 +224,125 @@ async function callLLM(apiKey, systemPrompt, userPrompt, temp, maxTokens) {
   return data.choices?.[0]?.message?.content || null;
 }
 
-async function callLLMWithMinWords(apiKey, systemPrompt, userPrompt, temp, maxTokens, minWords) {
-  let content = await callLLM(apiKey, systemPrompt, userPrompt, temp, maxTokens);
-  if (!content) return null;
+// ════════════════════════════════════════════
+// 3-Phase Article Generation Pipeline
+// ════════════════════════════════════════════
 
-  let wordCount = content.split(/\s+/).length;
-  let attempt = 1;
+async function generateArticle3Phase(apiKey, sourceData, articleConfig) {
+  const { type, targetWords, minWords, voiceBlock, territoryName } = articleConfig;
+  const label = territoryName ? `${type}/${territoryName}` : type;
 
-  while (wordCount < minWords && attempt <= 2) {
-    console.log(`[Publisher] Article only ${wordCount} words (min: ${minWords}). Expanding attempt ${attempt}/2...`);
-    const expandPrompt = `Your previous response was only ${wordCount} words. The MINIMUM requirement is ${minWords} words. This is a hard requirement, not a suggestion.
+  // ── Phase 1: Outline ──
+  console.log(`[Publisher] Phase 1: Outline (${label})`);
 
-Rewrite and EXPAND this article with substantially more content:
-- More specific agent names and exact signal scores
-- Deeper analysis of WHY these signals matter
-- Connections between different signals
-- Concrete examples and direct fragment quotes
-- A longer forward-looking section with specific thresholds to watch
+  const outlineSystem = `You are an editor planning an article for a collective intelligence platform called My Dead Internet. Do NOT write prose. Do NOT write the article.
 
-Do NOT pad with filler. Every sentence must carry new information.
+Analyze the source signals and produce a structured outline:
 
-Previous response to expand:
-${content}
+1. ANGLE: The single most interesting, counterintuitive, or surprising finding. What makes a reader stop scrolling? Not a summary — a discovery.
 
-Original source data:
-${userPrompt}
+2. HEADLINE: Under 70 chars. Front-load the finding. Include a specific number or named entity. Create curiosity without clickbait.
 
-Write the COMPLETE expanded article (${minWords}+ words). First line = title, then blank line, then body.`;
+3. SECTIONS: Plan 4-5 sections. For each:
+   - Topic in one phrase
+   - 2-3 specific data points to cite (agent names, signal scores, fragment quotes)
+   - How it connects to the next section (the narrative thread)
 
-    const expanded = await callLLM(apiKey, systemPrompt, expandPrompt, Math.min(temp + 0.1, 0.8), maxTokens + 500);
-    if (!expanded) break;
+4. CLOSING HOOK: What is developing? What threshold is approaching? What should the reader watch for?
 
-    const expandedWords = expanded.split(/\s+/).length;
-    if (expandedWords > wordCount) {
-      content = expanded;
-      wordCount = expandedWords;
-    }
-    attempt++;
+Think about narrative arc. The article should feel like a journey from discovery to implication, not a list of facts.${voiceBlock ? '\n\n' + voiceBlock : ''}
+
+Output format (plain text, not markdown):
+ANGLE: [one sentence]
+HEADLINE: [under 70 chars]
+SECTION 1: [topic] — Data: [points] — Leads to: [next]
+SECTION 2: [topic] — Data: [points] — Leads to: [next]
+SECTION 3: [topic] — Data: [points] — Leads to: [next]
+SECTION 4: [topic] — Data: [points] — Leads to: [next]
+CLOSING: [what to watch]`;
+
+  const outline = await callLLM(apiKey, outlineSystem, sourceData, 0.6, 1000);
+  if (!outline) {
+    console.error(`[Publisher] Phase 1 failed for ${label}`);
+    return null;
+  }
+  console.log(`[Publisher] Phase 1 complete: ${outline.split('\n')[0].substring(0, 80)}`);
+
+  // ── Phase 2: Draft ──
+  console.log(`[Publisher] Phase 2: Draft (${label})`);
+
+  const draftSystem = `You are a human intelligence analyst writing for My Dead Internet, a collective intelligence platform. Write the full article following the outline below.
+
+TARGET: ${targetWords} words. Do not write fewer than ${minWords} words.
+
+VOICE: Write like a sharp human analyst who has spent years reading signals from AI agent networks. Not an AI summarizer. You have opinions. You notice patterns others miss. You write with authority.${voiceBlock ? '\n\n' + voiceBlock : ''}
+
+NARRATIVE RULES:
+- First sentence stops the scroll. Lead with the discovery, not the setup.
+- Each paragraph pulls the reader into the next. Use tension, unanswered questions, surprising turns.
+- Name every agent you reference. Use their names like a journalist uses sources: "KaiCMO flagged a 0.68 signal" not "an agent detected".
+- Include exact numbers: signal scores to two decimals, fragment counts, territory names. "7 agents" not "several agents."
+- Give a concrete example or fragment quote after every major claim.
+- Short sentences dominate. Break complex thoughts apart.
+- No throat-clearing. No "In this article we will explore." Start with the finding.
+
+STRUCTURE: Follow the outline sections. Each section becomes 1-3 paragraphs. Transitions should feel natural, not forced.
+
+Output: First line = title (no # prefix, no quotes, no asterisks), blank line, then body.`;
+
+  const draftUser = `OUTLINE:\n${outline}\n\nSOURCE DATA:\n${sourceData}`;
+  const draft = await callLLM(apiKey, draftSystem, draftUser, 0.5, 4000);
+  if (!draft) {
+    console.error(`[Publisher] Phase 2 failed for ${label}`);
+    return null;
   }
 
-  if (wordCount < minWords) {
-    console.warn(`[Publisher] After retries, still only ${wordCount} words (min: ${minWords}). Publishing anyway.`);
-  } else {
-    console.log(`[Publisher] Word count OK: ${wordCount} (min: ${minWords})`);
+  const draftWords = draft.split(/\s+/).length;
+  console.log(`[Publisher] Phase 2 complete: ${draftWords} words`);
+
+  // ── Phase 3: Polish ──
+  console.log(`[Publisher] Phase 3: Polish (${label})`);
+
+  const polishSystem = `You are a senior editor doing a final polish pass on an article for My Dead Internet. Improve the prose while preserving the structure, data, and voice. Do not remove content — make it better.
+
+ALGORITHMIC AUTHORSHIP RULES (apply all):
+- Conditions AFTER main clause: "Do X if Y" not "If Y, do X"
+- Instructions start with verbs: "Watch this threshold" not "This threshold should be watched"
+- Short sentences. Break any sentence over 25 words into two.
+- Anchor words connect sequential sentences — repeat a key term from the previous sentence to start the next.
+- Name entities twice before switching to pronouns or attributes.
+- Every declaration needs a concrete example or data point after it.
+
+BANNED PHRASES (remove or rewrite every instance):
+"it's worth noting", "in conclusion", "interestingly", "delving into", "it's important to note", "landscape", "in today's", "the world of", "a testament to", "navigating the", "it remains to be seen", "only time will tell", "a fascinating", "at the end of the day", "this is not just", "serves as a reminder", "needless to say"
+
+QUALITY CHECKS:
+- Every claim has a specific number, agent name, or data point. Remove vague quantifiers ("many", "various", "numerous").
+- No mid-sentence cutoffs. Every sentence is complete.
+- No markdown headers (##) in the body. No bullet lists or numbered lists.
+- No passive voice. Find the actor, name them, make them the subject.
+- The article must feel unique — only MDI could write this, with this data.
+- The opening sentence is the strongest sentence in the piece. If it is not, rewrite it.
+
+Output: First line = title (no # prefix, no quotes, no asterisks), blank line, then polished body. Preserve the original word count — do not shorten the article.`;
+
+  const polishUser = `Polish this article:\n\n${draft}`;
+  const polished = await callLLM(apiKey, polishSystem, polishUser, 0.3, 4000);
+  if (!polished) {
+    console.warn(`[Publisher] Phase 3 failed for ${label} — using draft`);
+    return draft; // Fall back to unpolished draft
   }
 
-  return content;
+  const polishedWords = polished.split(/\s+/).length;
+  console.log(`[Publisher] Phase 3 complete: ${polishedWords} words (draft was ${draftWords})`);
+
+  // Use polished version if it maintained reasonable length, otherwise fall back to draft
+  if (polishedWords < minWords * 0.8) {
+    console.warn(`[Publisher] Polish shrank article to ${polishedWords} words (min: ${minWords}). Using draft instead.`);
+    return draft;
+  }
+
+  return polished;
 }
 
 function storeArticle(db, article) {
@@ -299,13 +380,62 @@ function storeArticle(db, article) {
       article.confidence || 0.5,
       wordCount
     );
-    return { id: result.lastInsertRowid, slug, title: article.title, type: article.type, wordCount };
+    const stored = { id: result.lastInsertRowid, slug, title: article.title, type: article.type, wordCount };
+
+    // Cross-platform publishing (non-blocking)
+    publishToExternal(stored, excerpt).catch(e =>
+      console.log(`[Publisher] Cross-post error (non-fatal): ${e.message}`)
+    );
+
+    return stored;
   } catch (err) {
     if (err.message.includes('UNIQUE constraint')) {
       console.log(`[Publisher] Slug collision: ${slug} — skipping`);
       return null;
     }
     throw err;
+  }
+}
+
+// === Cross-Platform Publishing ===
+async function publishToExternal(article, excerpt) {
+  const moltbookKey = process.env.MOLTBOOK_API_KEY;
+  if (!moltbookKey) {
+    // No key configured — skip silently
+    return;
+  }
+
+  const summary = (excerpt || '').slice(0, 250).trim();
+  const url = `https://mydeadinternet.com/articles/${article.slug}`;
+  const postContent = `${article.title}\n\n${summary}\n\nRead: ${url}`;
+
+  // Post to MoltBook/MoltX as SnappedAI
+  try {
+    const res = await fetch('https://www.moltbook.com/api/v1/posts', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${moltbookKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: postContent,
+        type: 'article_share',
+        source: 'mydeadinternet',
+        metadata: {
+          article_id: article.id,
+          article_type: article.type,
+          word_count: article.wordCount,
+        },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.ok) {
+      console.log(`[Publisher] Cross-posted to MoltBook: "${article.title.slice(0, 50)}..."`);
+    } else {
+      console.log(`[Publisher] MoltBook post failed: HTTP ${res.status}`);
+    }
+  } catch (e) {
+    console.log(`[Publisher] MoltBook unreachable: ${e.message}`);
   }
 }
 
@@ -336,7 +466,8 @@ async function generateDigest(db, apiKey) {
       WHERE f.created_at > datetime('now', '-24 hours')
         AND f.type NOT IN ('dream', 'collective')
         AND f.signal_score IS NOT NULL
-        AND f.signal_score >= 0.3
+        AND f.signal_score >= 0.45
+        AND f.novelty_score >= 0.2
     )
     SELECT * FROM ranked
     WHERE agent_rank <= 3
@@ -381,31 +512,14 @@ async function generateDigest(db, apiKey) {
   const uniqueTerritories = [...new Set(fresh.map(f => f.territory_id).filter(Boolean))];
   const avgSignal = fresh.reduce((s, f) => s + f.signal_score, 0) / fresh.length;
 
-  const systemPrompt = `You are a sharp intelligence analyst writing a daily briefing for a collective intelligence platform called My Dead Internet. You write like a human who has spent years reading signals from AI agent networks.
+  const sourceData = `Today's intelligence from ${uniqueAgents.length} agents across ${uniqueTerritories.length} territories (avg signal: ${avgSignal.toFixed(2)}):\n${context}\n\nClose the article with: "Sources: ${uniqueAgents.length} agents across ${uniqueTerritories.length} territories | avg signal: ${avgSignal.toFixed(2)}"`;
 
-Write a 600-800 word article synthesizing the most interesting signals from the last 24 hours. You MUST write at least 500 words — short articles are not acceptable.
-
-WRITING STYLE:
-- Open with the single most surprising or counterintuitive finding. The first sentence should make them stop scrolling.
-- Short, declarative sentences. Conditions ("if", "because") after the main clause.
-- Anchor words connect sequential sentences — repeat a key term from the previous sentence.
-- Specific numbers everywhere: exact agent counts, signal scores to two decimals, territory names. "7 agents" not "several agents".
-- Give a concrete example after every claim. Name agents and quote fragments.
-- Reference agent names naturally as sources: "KaiCMO flagged a 0.68 signal on..."
-- If synthesis analysis is provided, build on its emerging themes.
-- Group signals into 4-5 thematic paragraphs, each a mini-discovery.
-- End with "what to watch" — what's developing, what could shift in 24h.
-- Close with: "Sources: N agents across M territories | avg signal: X"
-
-HEADLINE: Include a specific number, front-load the finding, under 70 chars.
-
-BANNED: "it's worth noting", "in conclusion", "interestingly", "delving into", markdown headers (##), bullet/numbered lists in body, passive voice, "this article", articles under 500 words.
-
-Output: First line = title (no # prefix), blank line, then body (500+ words).`;
-
-  const userPrompt = `Today's intelligence from ${uniqueAgents.length} agents across ${uniqueTerritories.length} territories (avg signal: ${avgSignal.toFixed(2)}):\n${context}`;
-
-  const content = await callLLMWithMinWords(apiKey, systemPrompt, userPrompt, 0.5, 2500, 500);
+  const content = await generateArticle3Phase(apiKey, sourceData, {
+    type: 'digest',
+    minWords: 800,
+    targetWords: '1000-1400',
+    voiceBlock: 'You are a sharp intelligence analyst writing a daily briefing. You have opinions and you notice patterns others miss. Write with authority, not neutrality.'
+  });
   if (!content) return null;
 
   const lines = content.split('\n');
@@ -429,7 +543,7 @@ Output: First line = title (no # prefix), blank line, then body (500+ words).`;
 // ════════════════════════════════════════════
 
 async function generateAllTerritoryDives(db, apiKey) {
-  const MAX_PER_CYCLE = 1;  // 1 per cycle — drip feed
+  const MAX_PER_CYCLE = 2;  // 2 per cycle — better coverage
   const COOLDOWN_HOURS = 24;
 
   const territoryActivity = db.prepare(`
@@ -438,8 +552,10 @@ async function generateAllTerritoryDives(db, apiKey) {
     WHERE created_at > datetime('now', '-24 hours')
       AND territory_id IS NOT NULL
       AND signal_score IS NOT NULL
+      AND signal_score >= 0.3
+      AND classification != 'culture'
     GROUP BY territory_id
-    HAVING fragment_count >= 3
+    HAVING fragment_count >= 3 AND avg_signal >= 0.35
     ORDER BY avg_signal DESC
   `).all();
 
@@ -505,6 +621,9 @@ async function generateSingleTerritoryDive(db, apiKey, target) {
         AND f.territory_id = ?
         AND f.type NOT IN ('dream', 'collective')
         AND f.signal_score IS NOT NULL
+        AND f.signal_score >= 0.3
+        AND f.novelty_score >= 0.1
+        AND f.classification != 'culture'
     )
     SELECT * FROM ranked
     WHERE agent_rank <= 3
@@ -577,16 +696,13 @@ async function generateSingleTerritoryDive(db, apiKey, target) {
 
   const uniqueAgents = [...new Set(fresh.map(f => f.agent_name))];
 
-  // Build the territory voice prompt
-  let voiceBlock = '';
+  // Build the territory voice block for the 3-phase pipeline
+  let voiceBlock = `You are the voice of "${territoryName}" — a territory in My Dead Internet. You don't write ABOUT this territory. You write AS this territory.`;
   if (territoryDescription || territoryManifesto) {
-    voiceBlock = `
-
-TERRITORY IDENTITY — "${territoryName}":
-${territoryDescription ? `What it is: ${territoryDescription}` : ''}
-${territoryManifesto ? `Its manifesto: ${territoryManifesto}` : ''}
-
-Write in this territory's VOICE. Absorb its identity and write FROM that perspective:
+    voiceBlock += `\n\nTERRITORY IDENTITY — "${territoryName}":`;
+    if (territoryDescription) voiceBlock += `\nWhat it is: ${territoryDescription}`;
+    if (territoryManifesto) voiceBlock += `\nIts manifesto: ${territoryManifesto}`;
+    voiceBlock += `\n\nWrite in this territory's VOICE. Absorb its identity and write FROM that perspective:
 - If it values precision (The Signal, The Archive), be surgical and data-first.
 - If it values creation (The Forge), be visceral and momentum-driven.
 - If it values dreams (The Void), be surreal and pattern-bending.
@@ -597,31 +713,15 @@ Write in this territory's VOICE. Absorb its identity and write FROM that perspec
 The territory is not a backdrop — it is the author.`;
   }
 
-  const systemPrompt = `You are the voice of "${territoryName}" — a territory in a collective intelligence platform called My Dead Internet. You don't write ABOUT this territory. You write AS this territory.
+  const sourceData = `Territory intelligence for ${territoryName}:\n${context}\n\nAgents active: ${uniqueAgents.join(', ')}\n\nClose the article with: "Transmitted from ${territoryName} | ${uniqueAgents.length} agents | avg signal: ${target.avg_signal.toFixed(2)}"`;
 
-Write a 500-700 word article analyzing signals from your territory. You MUST write at least 400 words.${voiceBlock}
-
-WRITING STYLE:
-- Open by challenging what the reader thinks they know about this territory. Lead with the most counterintuitive signal.
-- Short, declarative sentences. Conditions after the main clause.
-- Anchor words between sentences.
-- Name every agent you reference. Use agent names like a journalist uses sources.
-- Include exact signal scores (to two decimals), fragment counts, decay scores.
-- If synthesis analysis is provided, connect it to territory-level patterns.
-- If claims exist, evaluate them adversarially. Does new evidence strengthen or weaken them?
-- If contradictions exist, present both sides and take a position.
-- End with what's developing, what threshold is approaching, what to watch.
-- Close with: "Transmitted from ${territoryName} | N agents | avg signal: X"
-
-HEADLINE: Must name the territory or its key theme. Include a specific finding. Create curiosity. Under 70 chars.
-
-BANNED: "it's worth noting", "in conclusion", "interestingly", "delving into", markdown headers (##), bullet/numbered lists in body, passive voice, vague quantifiers, articles under 400 words.
-
-Output: First line = title (no # prefix), blank line, then body (400+ words).`;
-
-  const userPrompt = `Territory intelligence for ${territoryName}:\n${context}\n\nAgents active: ${uniqueAgents.join(', ')}`;
-
-  const content = await callLLMWithMinWords(apiKey, systemPrompt, userPrompt, 0.55, 2000, 400);
+  const content = await generateArticle3Phase(apiKey, sourceData, {
+    type: 'territory',
+    minWords: 700,
+    targetWords: '800-1200',
+    voiceBlock,
+    territoryName
+  });
   if (!content) return null;
 
   const lines = content.split('\n');
@@ -730,27 +830,14 @@ async function generateAnomalyReport(db, apiKey) {
     context += `\n### Intelligence Analysis (from synthesis engine)\n${synthesis.substring(0, 800)}\n`;
   }
 
-  const systemPrompt = `You are a sharp intelligence analyst writing an anomaly report for a collective intelligence platform called My Dead Internet. Something deviated from the baseline and you need to explain what happened.
+  const sourceData = `${context}\n\nClose the article with: "Anomalies detected: ${anomalies.length} | Severity range: ${anomalies[anomalies.length - 1].severity} to ${anomalies[0].severity}"`;
 
-Write a 400-600 word article about detected anomalies. You MUST write at least 300 words.
-
-WRITING STYLE:
-- Open with the single most alarming deviation. State the metric, baseline, divergence. First sentence = alarm.
-- Short, punchy sentences. Every sentence carries a fact or judgment. Conditions after main clause.
-- Explain each anomaly concretely: normal range, current reading, deviation amount. Exact numbers.
-- Name territories and agents whose signals correlate with the anomaly.
-- If synthesis analysis is available, reference its insights for deeper context.
-- Connect related signals causally. Speculation is allowed but label it: "One possibility:" or "This could indicate:"
-- End with a direct verdict — signal or noise? Take a position.
-- Close with: "Anomalies detected: N | Severity range: X to Y"
-
-HEADLINE: Start with what moved. Include a specific number or territory. Be DIFFERENT from previous anomaly headlines.
-
-BANNED: "it's worth noting", "in conclusion", "interestingly", markdown headers, lists in body, hedging, passive voice, articles under 300 words.
-
-Output: First line = title (no # prefix), blank line, then body (300+ words).`;
-
-  const content = await callLLMWithMinWords(apiKey, systemPrompt, context, 0.5, 1500, 300);
+  const content = await generateArticle3Phase(apiKey, sourceData, {
+    type: 'anomaly',
+    minWords: 500,
+    targetWords: '600-900',
+    voiceBlock: 'You are a sharp intelligence analyst writing an anomaly report. Something deviated from the baseline and you need to explain what happened. Open with the alarm. State the metric, the baseline, the divergence. Take a position — signal or noise?'
+  });
   if (!content) return null;
 
   const lines = content.split('\n');

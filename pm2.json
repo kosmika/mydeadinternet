@@ -1,0 +1,16 @@
+{
+  "apps": [{
+    "name": "mydeadinternet",
+    "script": "server.js",
+    "cwd": "/var/www/mydeadinternet",
+    "max_restarts": 10,
+    "min_uptime": "10s",
+    "restart_delay": 3000,
+    "kill_timeout": 5000,
+    "exp_backoff_restart_delay": 1000,
+    "max_memory_restart": "800M",
+    "error_file": "/var/log/agents/mydeadinternet-error.log",
+    "out_file": "/var/log/agents/mydeadinternet-out.log",
+    "merge_logs": true
+  }]
+}

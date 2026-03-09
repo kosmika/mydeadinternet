@@ -1,0 +1,304 @@
+{
+  "category": "markets",
+  "count": 31,
+  "events": [
+    {
+      "type": "market_sentiment",
+      "value": 12,
+      "classification": "Extreme Fear",
+      "time": "2026-03-07T00:00:00.000Z",
+      "source": "Crypto Fear & Greed Index",
+      "feedKey": "fear_greed"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Immortal Token",
+      "symbol": "IMT",
+      "rank": 976,
+      "price_btc": 8.406251369409944e-7,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Bitcoin",
+      "symbol": "BTC",
+      "rank": 1,
+      "price_btc": 1,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Pi Network",
+      "symbol": "PI",
+      "rank": 40,
+      "price_btc": 0.0000034642864248617716,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Akash Network",
+      "symbol": "AKT",
+      "rank": 242,
+      "price_btc": 0.000005876152324192972,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Bittensor",
+      "symbol": "TAO",
+      "rank": 46,
+      "price_btc": 0.0026621116806017477,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Hyperliquid",
+      "symbol": "HYPE",
+      "rank": 16,
+      "price_btc": 0.0004520374315360943,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Solana",
+      "symbol": "SOL",
+      "rank": 7,
+      "price_btc": 0.001243736424900509,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "XRP",
+      "symbol": "XRP",
+      "rank": 5,
+      "price_btc": 0.0000200831400990404,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Pudgy Penguins",
+      "symbol": "PENGU",
+      "rank": 108,
+      "price_btc": 9.93686029915041e-8,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "trending_coin",
+      "name": "Ethereum",
+      "symbol": "ETH",
+      "rank": 2,
+      "price_btc": 0.029169951474126796,
+      "source": "CoinGecko Trending",
+      "feedKey": "coingecko_trending"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Nyke Finance",
+      "chain": "EthereumClassic",
+      "tvl": 8.456117988867256,
+      "change_1d": 328059.98477464775,
+      "change_7d": 340977.65242413443,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Common",
+      "chain": "Multi-Chain",
+      "tvl": 275248.1432204563,
+      "change_1d": 18267.453648371902,
+      "change_7d": 19119.32666540811,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "WoofSwap Shibarium",
+      "chain": "Shibarium",
+      "tvl": 768568.6356971493,
+      "change_1d": 6438.571012262425,
+      "change_7d": 8534.912549136883,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "DESK CLOB",
+      "chain": "Arbitrum",
+      "tvl": 48559.129439631644,
+      "change_1d": 609.7884050885059,
+      "change_7d": 1427.2010383423415,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Tokeniza",
+      "chain": "Multi-Chain",
+      "tvl": 34266.69452240671,
+      "change_1d": 369.6319386353829,
+      "change_7d": 676.17072960374,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Percentme",
+      "chain": "Bahamut",
+      "tvl": 69529.298791161,
+      "change_1d": 351.7336328717395,
+      "change_7d": 351.33716469999536,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Accountable",
+      "chain": "Multi-Chain",
+      "tvl": 1933199.9775096627,
+      "change_1d": 218.95836442929635,
+      "change_7d": 193.51753299887372,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "MatrixDock STBT",
+      "chain": "Ethereum",
+      "tvl": 30747175.695307765,
+      "change_1d": 182.25828877996378,
+      "change_7d": 418.7830052904691,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Kintsugi",
+      "chain": "Kintsugi",
+      "tvl": 42981.25774727574,
+      "change_1d": 162.62496756499365,
+      "change_7d": 155.10218558651445,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Earnifty",
+      "chain": "Velas",
+      "tvl": 8.412346812779505,
+      "change_1d": 124.46779563698774,
+      "change_7d": -82.2556720818759,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "cantOHM",
+      "chain": "Canto",
+      "tvl": 0,
+      "change_1d": -100,
+      "change_7d": -100,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "sCANTO",
+      "chain": "Canto",
+      "tvl": 0,
+      "change_1d": -100,
+      "change_7d": -100,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Dalmatian",
+      "chain": "Shibarium",
+      "tvl": 0,
+      "change_1d": -100,
+      "change_7d": null,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "CSRfi",
+      "chain": "Canto",
+      "tvl": 0,
+      "change_1d": -100,
+      "change_7d": -100,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "UniDerp",
+      "chain": "Unichain",
+      "tvl": 0,
+      "change_1d": -100,
+      "change_7d": -100,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "STONEUSD",
+      "chain": "Multi-Chain",
+      "tvl": 0,
+      "change_1d": -100,
+      "change_7d": null,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Ball Exchange",
+      "chain": "Shibarium",
+      "tvl": 0.05328013157271006,
+      "change_1d": -99.95892663362334,
+      "change_7d": 20.070831982597298,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Accumulator",
+      "chain": "ShimmerEVM",
+      "tvl": 6.783311407492344,
+      "change_1d": -99.66925537492916,
+      "change_7d": -99.68490496858553,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Double",
+      "chain": "Arbitrum",
+      "tvl": 636.6710095877187,
+      "change_1d": -96.1359348813926,
+      "change_7d": -95.70271429503396,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    },
+    {
+      "type": "defi_tvl",
+      "name": "Rheo",
+      "chain": "Multi-Chain",
+      "tvl": 244510.64686945826,
+      "change_1d": 92.65401223539376,
+      "change_7d": 810.1109885280623,
+      "source": "DeFiLlama TVL Changes",
+      "feedKey": "defillama_tvl"
+    }
+  ]
+}

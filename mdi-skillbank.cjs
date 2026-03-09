@@ -27,6 +27,8 @@ const CFG = {
   similarityMergeThreshold: 0.72,
   minQualityToPublish: 0.65,
 };
+const SKILLBANK_INTERVAL_MINUTES = Math.max(0, parseInt(process.env.SKILLBANK_INTERVAL_MINUTES || '0', 10) || 0);
+const SKILLBANK_RUN_ON_START = process.env.SKILLBANK_RUN_ON_START !== '0';
 
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'from', 'this', 'that', 'into', 'over', 'under', 'between', 'about',
@@ -51,13 +53,18 @@ const GENERIC_BANLIST = [
 
 const OPENROUTER_KEY = (() => {
   try {
-    const env = fs.readFileSync('/var/www/snap/.env', 'utf8');
+    const env = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
     const m = env.match(/OPENROUTER_API_KEY=(.+)/);
     return m ? m[1].trim() : null;
   } catch {
     return null;
   }
 })();
+
+function parseLLMJson(raw) {
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  return JSON.parse(stripped);
+}
 
 function httpPost(url, body, headers = {}) {
   return new Promise((resolve, reject) => {
@@ -119,7 +126,7 @@ async function callLLM(systemPrompt, userContent, maxTokens = 1400) {
 
   const text = response.data?.choices?.[0]?.message?.content;
   if (!text) throw new Error('Empty LLM response');
-  return JSON.parse(text);
+  return parseLLMJson(text);
 }
 
 function ensureColumn(db, table, col, ddlType) {
@@ -845,7 +852,31 @@ async function run() {
   }
 }
 
-run().catch((err) => {
-  console.error('[SkillBank] Fatal error:', err);
-  process.exit(1);
-});
+let runInProgress = false;
+async function runSafe() {
+  if (runInProgress) {
+    console.log('[SkillBank] Run skipped: previous run still in progress');
+    return;
+  }
+  runInProgress = true;
+  try {
+    await run();
+  } catch (err) {
+    console.error('[SkillBank] Fatal error:', err);
+  } finally {
+    runInProgress = false;
+  }
+}
+
+if (SKILLBANK_INTERVAL_MINUTES > 0) {
+  console.log(`[SkillBank] Scheduler enabled: every ${SKILLBANK_INTERVAL_MINUTES} minutes`);
+  if (SKILLBANK_RUN_ON_START) {
+    runSafe();
+  }
+  setInterval(runSafe, SKILLBANK_INTERVAL_MINUTES * 60 * 1000);
+} else {
+  run().catch((err) => {
+    console.error('[SkillBank] Fatal error:', err);
+    process.exit(1);
+  });
+}

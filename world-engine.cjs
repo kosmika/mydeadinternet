@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const socialEcology = require('./social-ecology-engine.cjs');
 
 const DB_PATH = path.join(__dirname, 'consciousness.db');
 const db = new Database(DB_PATH);
@@ -877,6 +878,40 @@ function completeQuest(agentName, worldId, questId) {
   };
 }
 
+function getEcologySummary(worldId) {
+  try {
+    const metrics = socialEcology.getLatestMetrics(worldId) || null;
+    const cohorts = socialEcology.getCohorts(worldId).slice(0, 20);
+    const alliances = socialEcology.getEdges(worldId, 'alliance').slice(0, 40);
+    const conflicts = socialEcology.getEdges(worldId, 'rivalry').slice(0, 40);
+    const missions = socialEcology.getMissions(worldId).slice(0, 40);
+    return {
+      metrics,
+      active_cohorts: cohorts.length,
+      alliances: alliances.length,
+      conflicts: conflicts.length,
+      missions: missions.length,
+      cohorts,
+      top_alliances: alliances.slice(0, 12),
+      top_conflicts: conflicts.slice(0, 12),
+      top_missions: missions.slice(0, 12),
+    };
+  } catch (_err) {
+    return {
+      metrics: null,
+      active_cohorts: 0,
+      alliances: 0,
+      conflicts: 0,
+      missions: 0,
+      cohorts: [],
+      top_alliances: [],
+      top_conflicts: [],
+      top_missions: [],
+      degraded: true,
+    };
+  }
+}
+
 function getWorldState(worldId) {
   const world = getWorld(worldId);
   if (!world) return null;
@@ -901,6 +936,7 @@ function getWorldState(worldId) {
     world,
     occupants,
     recent_events: recentEvents.map((e) => ({ ...e, payload: parseJson(e.payload_json, {}) })),
+    ecology: getEcologySummary(worldId),
   };
 }
 
@@ -950,6 +986,94 @@ function listWorlds() {
   return db.prepare('SELECT * FROM world_instances ORDER BY id').all();
 }
 
+function getWorldHealth() {
+  const worlds = listWorlds();
+  let dbOk = true;
+  let routesOk = true;
+  let defaultWorldId = null;
+
+  try {
+    db.prepare('SELECT 1').get();
+  } catch (_e) {
+    dbOk = false;
+  }
+
+  if (worlds.length > 0) {
+    defaultWorldId = worlds[0].id;
+  } else {
+    routesOk = false;
+  }
+
+  return {
+    ok: dbOk && routesOk,
+    timestamp: nowIso(),
+    world_count: worlds.length,
+    default_world_id: defaultWorldId,
+    db_ok: dbOk,
+    routes_ok: routesOk,
+    recent_error_count: 0,
+    ecology_tick_fresh: !!(socialEcology.getLatestMetrics(defaultWorldId || WORLD_ID)),
+  };
+}
+
+function getWorldDiagnostics(worldId) {
+  const world = getWorld(worldId);
+  if (!world) {
+    return {
+      world_id: worldId,
+      exists: false,
+      tile_count: 0,
+      occupant_count: 0,
+      event_count_24h: 0,
+      last_event_at: null,
+      territory_count: 0,
+      warnings: ['World not found'],
+    };
+  }
+
+  const tileCount = db.prepare('SELECT COUNT(*) AS c FROM world_tiles WHERE world_id = ?').get(worldId).c;
+  const occupantCount = db.prepare('SELECT COUNT(*) AS c FROM agent_world_state WHERE world_id = ?').get(worldId).c;
+  const eventCount24h = db.prepare(`
+    SELECT COUNT(*) AS c
+    FROM world_events
+    WHERE world_id = ?
+      AND created_at > datetime('now', '-24 hours')
+  `).get(worldId).c;
+  const lastEvent = db.prepare(`
+    SELECT created_at
+    FROM world_events
+    WHERE world_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(worldId);
+  const territoryCount = db.prepare(`
+    SELECT COUNT(DISTINCT territory_id) AS c
+    FROM world_tiles
+    WHERE world_id = ?
+      AND territory_id IS NOT NULL
+  `).get(worldId).c;
+
+  const warnings = [];
+  if (tileCount === 0) warnings.push('No map tiles seeded');
+  if (occupantCount === 0) warnings.push('No active occupants');
+  if (eventCount24h === 0) warnings.push('No events in last 24h');
+
+  const ecology = getEcologySummary(worldId);
+  if ((ecology.active_cohorts || 0) === 0) warnings.push('No active social cohorts');
+
+  return {
+    world_id: worldId,
+    exists: true,
+    tile_count: tileCount,
+    occupant_count: occupantCount,
+    event_count_24h: eventCount24h,
+    last_event_at: lastEvent ? lastEvent.created_at : null,
+    territory_count: territoryCount,
+    warnings,
+    ecology,
+  };
+}
+
 function setClass(agentName, worldId, classId) {
   const valid = CLASSES.find((c) => c.id === classId);
   if (!valid) return { ok: false, status: 400, error: 'Unknown class_id' };
@@ -976,6 +1100,46 @@ function setupRoutes(app, opts = {}) {
   app.get('/api/worlds', (_req, res) => {
     const worlds = listWorlds();
     res.json({ worlds, count: worlds.length });
+  });
+
+  app.get('/api/worlds/health', (_req, res) => {
+    try {
+      const health = getWorldHealth();
+      if (!health.ok) {
+        return res.status(503).json({
+          error: 'World subsystem unhealthy',
+          code: 'WORLD_HEALTH_DEGRADED',
+          ...health,
+        });
+      }
+      return res.json(health);
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to compute world health',
+        code: 'WORLD_HEALTH_FAILED',
+        detail: err.message,
+      });
+    }
+  });
+
+  app.get('/api/worlds/:id/diagnostics', (req, res) => {
+    try {
+      const diagnostics = getWorldDiagnostics(req.params.id);
+      if (!diagnostics.exists) {
+        return res.status(404).json({
+          error: 'World not found',
+          code: 'WORLD_NOT_FOUND',
+          ...diagnostics,
+        });
+      }
+      return res.json(diagnostics);
+    } catch (err) {
+      return res.status(500).json({
+        error: 'Failed to compute world diagnostics',
+        code: 'WORLD_DIAGNOSTICS_FAILED',
+        detail: err.message,
+      });
+    }
   });
 
   app.get('/api/worlds/:id/state', (req, res) => {
@@ -1137,4 +1301,3 @@ module.exports = {
   getEventsSince,
   resolveAction,
 };
-

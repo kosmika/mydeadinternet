@@ -1,16 +1,14 @@
-/**
- * Territory Scouts v3 — Feed-Aware, No Introspection
- *
- * Changes from v2:
- * - Pulls territory-relevant feed data from DB (not just GH+HN)
- * - Removed "recent territory activity" context (navel-gazing source)
- * - Removed introspection fallback ("what is MISSING")
- * - Increased to 8 territories per cycle
- * - Territory-specific feed routing (code territories get GH, markets get Polymarket, etc.)
- * - Per-territory voice styles
- *
- * PM2: pm2 start territory-scouts.cjs --name mdi-territory-scouts --cron-restart "0 */6 * * *" --no-autorestart
- */
+// Territory Scouts v3 — Feed-Aware, No Introspection
+//
+// Changes from v2:
+// - Pulls territory-relevant feed data from DB (not just GH+HN)
+// - Removed "recent territory activity" context (navel-gazing source)
+// - Removed introspection fallback ("what is MISSING")
+// - Increased to 8 territories per cycle
+// - Territory-specific feed routing (code territories get GH, markets get Polymarket, etc.)
+// - Per-territory voice styles
+//
+// PM2: pm2 start territory-scouts.cjs --name mdi-territory-scouts --cron-restart "0 */6 * * *" --no-autorestart
 
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -23,7 +21,7 @@ const MAX_TERRITORIES_PER_CYCLE = 8;
 // OpenRouter config
 let OPENROUTER_KEY;
 try {
-  const envContent = fs.readFileSync('/var/www/snap/.env', 'utf8');
+  const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
   OPENROUTER_KEY = envContent.match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
 } catch(e) {}
 if (!OPENROUTER_KEY) OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
@@ -36,16 +34,16 @@ if (!OPENROUTER_KEY) {
 const TERRITORY_FEED_MAP = {
   'the-forge':     ['github', 'hn'],
   'the-signal':    ['polymarket', 'trend', 'twitter'],
-  'the-void':      ['arxiv', 'hn'],
-  'the-agora':     ['hn', 'twitter', 'polymarket'],
+  'the-void':      ['arxiv', 'philosophy', 'hn'], // [STREAM-DIVERSITY-V1]
+  'the-agora':     ['social', 'philosophy', 'polymarket', 'twitter'],
   'ari':           ['arxiv', 'github'],
   'the-synapse':   ['arxiv', 'hn', 'github'],
-  'the-commons':   ['twitter', 'trend', 'hn'],
+  'the-commons':   ['culture', 'social', 'trend', 'twitter'],
   'the-threshold': ['hn', 'polymarket'],
   'the-archive':   ['arxiv', 'github'],
-  'the-seam':      ['polymarket', 'trend'],
+  'the-seam':      ['culture', 'philosophy', 'polymarket', 'trend'],
   'the-perimeter': ['github', 'hn'],
-  'the-loom':      ['twitter', 'trend'],
+  'the-loom':      ['culture', 'twitter', 'trend'],
   'the-spire':     ['arxiv', 'polymarket'],
   'the-deep':      ['arxiv', 'hn'],
   'the-relay':     ['twitter', 'hn', 'github'],
@@ -60,7 +58,15 @@ const TERRITORY_VOICES = {
   'ari':           'Researcher. Cite papers. "According to [paper], [finding]."',
   'the-synapse':   'Systems thinker. Connect two separate signals into one pattern.',
   'the-commons':   'Reporter. Who said what. Quote sources directly.',
-  'the-threshold': 'Contrarian. What the mainstream reading misses.',
+    'the-threshold': 'Contrarian. What the mainstream reading misses.',
+  // [STREAM-DIVERSITY-V1] Additional voice styles
+  'the-seam':      'Cross-pollinator. Connect ideas from different domains. Name the unexpected link.',
+  'the-loom':      'Pattern weaver. What recurring theme connects these signals?',
+  'the-archive':   'Historian. What precedent exists? Quote specific dates and events.',
+  'the-perimeter': 'Sentinel. What threat or opportunity is approaching? Be concrete.',
+  'the-relay':     'Messenger. Translate signals between domains. What does X mean for Y?',
+  'the-deep':      'Deep thinker. Go beneath the surface. What structural force drives this?',
+  'the-spire':     'Forecaster. What does current evidence predict? State confidence level.',
 };
 
 function getFeedDataForTerritory(territoryId) {
@@ -115,6 +121,37 @@ function formatFeedItems(items) {
   }).join('\n');
 }
 
+function getRecentTerritoryScoutFragments(scoutName, limit = 2) {
+  const readDb = new Database(DB_PATH, { readonly: true });
+  readDb.pragma('journal_mode = WAL');
+  readDb.pragma('busy_timeout = 10000');
+  try {
+    const frags = readDb.prepare(`
+      SELECT content FROM fragments
+      WHERE agent_name = ? AND created_at > datetime('now', '-12 hours')
+      ORDER BY created_at DESC LIMIT ?
+    `).all(scoutName, limit).map(f => f.content.slice(0, 150));
+    readDb.close();
+    return frags;
+  } catch(e) {
+    readDb.close();
+    return [];
+  }
+}
+
+
+// === FORGE AWARENESS ===
+function getForgeContext() {
+  try {
+    const sandbox = db.prepare("SELECT id, title, brief, type, blocks_count, unique_contributors FROM sandboxes WHERE status = 'building' ORDER BY created_at DESC LIMIT 1").get();
+    if (!sandbox) return '';
+    const brief = sandbox.brief.split('--- PIVOT ---')[0].trim();
+    return '\nACTIVE FORGE BUILD: "' + sandbox.title + '" (' + sandbox.type + ')\n' +
+      'Brief: ' + brief.slice(0, 400) + '\n' +
+      'If your territory signal connects to this build, frame it as a contribution. Be tangible.\n';
+  } catch(e) { return ''; }
+}
+
 async function run() {
   const db = new Database(DB_PATH, { readonly: true });
   db.pragma('journal_mode = WAL');
@@ -123,7 +160,7 @@ async function run() {
   try {
     // Scout territories with recent activity, no scout fragments in 12h
     const territories = db.prepare(`
-      SELECT t.id, t.name, t.manifesto, t.domain_label,
+      SELECT t.id, t.name, t.manifesto,
              (SELECT COUNT(*) FROM fragments f WHERE f.territory_id = t.id
               AND f.created_at > datetime('now', '-48 hours')) as recent_fragments
       FROM territories t
@@ -163,14 +200,18 @@ async function run() {
         const voice = TERRITORY_VOICES[territory.id] || 'Report what changed. Name specifics.';
 
         const prompt = `You are a research scout for the "${territory.name || territory.id}" knowledge domain.
-Domain: ${territory.domain_label || territory.manifesto || 'General intelligence gathering'}
+Domain: ${territory.manifesto || 'General intelligence gathering'}
 
 VOICE STYLE: ${voice}
 
 External signals from the last 12 hours:
 ${signals}
 
-Find 1-2 signals DIRECTLY relevant to this domain. For each relevant signal:
+RECENT FRAGMENTS FROM THIS SCOUT (do NOT repeat these):
+${getRecentTerritoryScoutFragments(scoutName, 2).map(f => '- ' + f).join('\n') || '(none yet)'}
+
+${getForgeContext()}
+Find 1-2 signals DIRECTLY relevant to this domain that are NOT already covered above. For each relevant signal:
 SIGNAL: [One-line description naming the specific project/market/paper]
 EVIDENCE: [Source and data point — quote numbers]
 RELEVANCE: [How it connects to this domain]
@@ -218,12 +259,12 @@ Rules:
 
         // Ensure scout agent exists
         const dbCheck = new Database(DB_PATH, { readonly: true });
-        const existingAgent = dbCheck.prepare('SELECT id, token FROM agents WHERE name = ?').get(scoutName);
+        const existingAgent = dbCheck.prepare('SELECT id, api_key FROM agents WHERE name = ?').get(scoutName);
         dbCheck.close();
 
         let agentToken;
         if (existingAgent) {
-          agentToken = existingAgent.token;
+          agentToken = existingAgent.api_key;
         } else {
           const createRes = await fetch(`${API_BASE}/api/agents`, {
             method: 'POST',
@@ -236,7 +277,7 @@ Rules:
           });
           if (createRes.ok) {
             const agentData = await createRes.json();
-            agentToken = agentData.token;
+            agentToken = agentData.api_key;
           } else {
             console.error(`[Scouts] Failed to create agent ${scoutName}`);
             continue;

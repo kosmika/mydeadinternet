@@ -1,0 +1,861 @@
+{
+  "category": "conflict",
+  "count": 95,
+  "events": [
+    {
+      "type": "rss_item",
+      "title": "OpenAI’s fund raising boom slows amid mounting debt",
+      "url": "https://www.aljazeera.com/economy/2026/3/7/openais-fund-raising-boom-slows-amid-mounting-debt?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 12:29:11 +0000",
+      "description": "Experts have begun to question the AI startup’s path forward amid surging financial needs and no profit plan. ",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Aftermath of village in Lebanon after Hezbollah, Israeli troops clash",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/aftermath-of-village-in-lebanon-after-hezbollah-israeli-troops-clash?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 12:24:56 +0000",
+      "description": "Aftermath of village in Lebanon after Hezbollah, Israeli troops clash",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Indonesians protest Iran war, pressure president over US ties",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/indonesians-protest-iran-war-pressure-president-over-us-ties?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 12:23:43 +0000",
+      "description": "Protesters in Indonesia have rallied against the US-Israeli war on Iran, denouncing their government&#039;s ties to the US.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Kurdish fighters say Iran ground operation ‘highly likely’",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/kurdish-fighters-say-iran-ground-operation-highly?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 12:19:47 +0000",
+      "description": "Babasheikh Hosseini has told Al Jazeera it is highly likely that Kurdish fighters will stage a ground operation in Iran.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Sirens echo in occupied East Jerusalem warning of Iranian missiles",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/sirens-echo-in-occupied-east-jerusalem-warning-of-iranian-missiles?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 11:30:19 +0000",
+      "description": "Air raid sirens blared across occupied East Jerusalem on Saturday after missiles were reportedly fired by Iran.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump-Netanyahu’s ‘war in search of a strategy’",
+      "url": "https://www.aljazeera.com/video/the-listening-post/2026/3/7/trump-netanyahus-war-in-search-of-a-strategy?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 11:14:04 +0000",
+      "description": "An illegal war, two leaders in cahoots and media outlets struggling to meet the moment.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "India vs New Zealand: T20 World Cup final – Kiwis ready to ‘break hearts’",
+      "url": "https://www.aljazeera.com/sports/2026/3/7/india-vs-new-zealand-t20-world-cup-final-kiwis-ready-to-break-hearts?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 11:08:18 +0000",
+      "description": "New Zealand are targeting a first T20 World Cup title, which would deny India their third - and in front of home crowd.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Beirut’s southern suburbs in ruins after Israeli attack",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/beiruts-southern-suburbs-in-ruins-after-israeli-attack?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 11:05:36 +0000",
+      "description": "Israeli strikes have left parts of Beirut’s southern suburbs in ruins. ",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Protests in Cuba after thousands without power following blackout",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/protests-in-cuba-after-thousands-without-power-following-blackout?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 10:18:45 +0000",
+      "description": "There have been protests in darkness in Cuba, as thousands of people still remain without electricity after a blackout.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Southern Peru flooded after torrential rain",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/southern-peru-flooded-after-torrential-rain?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 10:08:25 +0000",
+      "description": "Southern Peru flooded after torrential rain",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Explosion and fire in Syria due to falling drone debris",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/explosion-and-fire-in-syria-due-to-falling-drone-debris?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 09:57:51 +0000",
+      "description": "Videos documented an explosion and fire in the countryside of Daraa, Syria, due to a falling drone.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iranian Kurd leader in Iraq says ground operation into Iran ‘highly likely’",
+      "url": "https://www.aljazeera.com/news/2026/3/7/iranian-kurd-leader-in-iraq-says-ground-operation-into-iran-highly-likely?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 09:50:54 +0000",
+      "description": "Hosseini tells Al Jazeera that &#039;there is a strong probability of action&#039; as the IRGC announces strikes on rebel targets.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "US downplays reports Russia gave Iran intel to help Tehran strike US assets",
+      "url": "https://www.aljazeera.com/news/2026/3/7/us-downplays-reports-russia-gave-iran-intel-to-help-tehran-strike-us-assets?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 09:09:15 +0000",
+      "description": "Pentagon asserts US forces are tracking Russian-Iranian operations amid escalating conflict in the region.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran’s president apologises for attacking neighbouring countries",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/irans-president-apologises-for-attacking-neighbouring-countries?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 09:07:53 +0000",
+      "description": "Iran&#039;s President Masoud Pezeshkian has apologised for attacking neighbouring countries, in a pre-recorded address.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Moment drone strikes Dubai International Airport",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/moment-drone-strikes-dubai-international-airport?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 08:33:40 +0000",
+      "description": "Moment drone strikes Dubai International Airport",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Overnight US-Israeli strikes in Tehran target airport",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/overnight-us-israeli-strikes-in-tehran-target-airport?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 08:27:28 +0000",
+      "description": "Overnight US-Israeli strikes in Tehran target airport ",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran to halt strikes on neighbours unless attacks from there: Pezeshkian",
+      "url": "https://www.aljazeera.com/news/2026/3/7/iran-to-halt-strikes-on-neighbours-unless-attacks-from-there-pezeshkian?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 08:25:01 +0000",
+      "description": "Arab states in the Gulf and beyond that house US assets have been targeted in Iranian retaliatory strikes in the war. ",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Panic at Pakistan fuel stations over Iran war",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/panic-at-pakistan-fuel-stations-over-iran-war?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 08:05:26 +0000",
+      "description": "Long queues formed at fuel stations in Pakistan ahead of a government announcement to raise prices.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "At least 41 killed in Israeli air strikes on Lebanon’s Bekaa: Ministry",
+      "url": "https://www.aljazeera.com/news/2026/3/7/hezbollah-israeli-troops-clash-on-the-ground-in-eastern-lebanons-bekaa?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 07:35:45 +0000",
+      "description": "Official news agency says three Lebanese soldiers among dead, as Hezbollah reports clashes with Israeli army on ground.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "Tehran pounded in week two of US-Israel war, Iran targets Israel",
+      "url": "https://www.aljazeera.com/news/2026/3/7/tehran-pounded-in-week-two-of-us-israel-war-iran-targets-israel?traffic_source=rss",
+      "time": "Sat, 07 Mar 2026 07:02:48 +0000",
+      "description": "Explosions shake Iran as US-Israel attacks intensify, marking eight days of conflict and retaliation from Iran.",
+      "source": "Al Jazeera",
+      "feedKey": "al_jazeera"
+    },
+    {
+      "type": "rss_item",
+      "title": "US ‘unsanctions’ Russian oil amid Middle East crisis",
+      "url": "https://www.rt.com/business/634079-us-unsanction-russian-oil-iran/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 12:48:36 +0000",
+      "description": "\n             “Unsanctioning” Russian oil may co",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump makes new threats against Iran",
+      "url": "https://www.rt.com/news/634089-trump-makes-new-threats-against-iran/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 11:50:39 +0000",
+      "description": "\n             US President Donald Trump has thre",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "How has the US-Israeli war on Iran divided the West? ",
+      "url": "https://www.rt.com/news/633874-trump-iran-western-divisions/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 10:36:40 +0000",
+      "description": "\n             US President Donald Trump has chas",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "US-Israel vs. Iran: How are the warring sides faring? (VIDEOS)",
+      "url": "https://www.rt.com/news/634028-us-israel-iran-war/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 10:34:57 +0000",
+      "description": "\n             RT explores the warfighting capabi",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iranians gather for first Friday prayers since US-Israel war began (PHOTOS, VIDEO)",
+      "url": "https://www.rt.com/news/634081-iranians-first-war-friday-prayers/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 09:26:52 +0000",
+      "description": "\n             Iran held its first Friday prayers",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "South Africa re-enlists dozens of retired detectives",
+      "url": "https://www.rt.com/africa/634018-south-africa-re-enlists-retired-detectives/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 08:21:00 +0000",
+      "description": "\n             Former South African detectives ha",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran will no longer attack neighboring countries – Pezeshkian",
+      "url": "https://www.rt.com/news/634084-pezeshkian-iran-stop-attack-neighbouring-countries/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 08:08:42 +0000",
+      "description": "\n             President Masoud Pezeshkian says I",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "US approves emergency sale of heavy bombs to Israel",
+      "url": "https://www.rt.com/news/634068-us-israel-bombs-sale/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 05:01:52 +0000",
+      "description": "\n             The US has approved an emergency s",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "America’s Gulf war machine: What we know about the US military network in the Middle East",
+      "url": "https://www.rt.com/news/634046-americas-gulf-war-machine/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Sat, 07 Mar 2026 01:04:40 +0000",
+      "description": "\n              <a href=\"https://www.rt.com/",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "The end of Russia’s gas era",
+      "url": "https://www.rt.com/russia/634049-putin-tells-russias-energy-sector/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 21:39:54 +0000",
+      "description": "\n             Putin tells Russia’s energy sector",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "BBC Middle East editor’s ‘Israeli propaganda’ court case begins",
+      "url": "https://www.rt.com/news/634043-bbc-israeli-propaganda-lawsuit/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 21:05:52 +0000",
+      "description": "\n             A BBC editor and avowed Mossad adm",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Who will invade Iran for the US?",
+      "url": "https://www.rt.com/news/634027-who-will-invade-iran/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 18:49:24 +0000",
+      "description": "\n             If air power fails, Washington wil",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "How the Iran war is dividing Team Trump",
+      "url": "https://www.rt.com/news/634016-iran-war-trump-division/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 18:44:40 +0000",
+      "description": "\n             Donald Trump’s war on Iran has exp",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Oil price surges to highest since 2023",
+      "url": "https://www.rt.com/business/634030-oil-price-rising-middle-east/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 18:27:56 +0000",
+      "description": "\n             Crude oil prices hit a two-and-a-h",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Western energy pressure on Russia has backfired – Kremlin envoy",
+      "url": "https://www.rt.com/russia/634026-russia-dmitriev-energy-restrictions/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 17:33:56 +0000",
+      "description": "\n             Western energy pressure on Russia ",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Sri Lanka takes custody of second Iranian ship after rescuing crew",
+      "url": "https://www.rt.com/news/634017-sri-lanka-takes-custody-iris-bushehr/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 16:54:03 +0000",
+      "description": "\n             Sri Lankan President Anura Kumara ",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "No justification for US-Israeli war on Iran – Moscow",
+      "url": "https://www.rt.com/russia/634021-iran-posed-no-threat-us-israel-moscow-zakharova/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 16:32:49 +0000",
+      "description": "\n             Iran posed no threat to either the",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump demands ‘unconditional surrender’ from Iran",
+      "url": "https://www.rt.com/news/634019-trump-iran-unconditional-surrender/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 14:35:34 +0000",
+      "description": "\n             The US is seeking only the “uncond",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Moscow warns new NATO member against hosting nukes",
+      "url": "https://www.rt.com/russia/634012-kremlin-finland-nuke-warning/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 14:17:43 +0000",
+      "description": "\n             Finland’s plan to lift a ban on nu",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump kicks Tucker Carlson out of MAGA",
+      "url": "https://www.rt.com/news/634013-trump-expels-tucker-carlson-maga/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+      "time": "Fri, 06 Mar 2026 14:16:45 +0000",
+      "description": "\n             US President Donald Trump has expe",
+      "source": "RT News",
+      "feedKey": "rt_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Weight-loss jab could be made for $3 a month, study finds",
+      "url": "https://www.theguardian.com/global-development/2026/mar/06/generic-drugs-weight-loss-semaglutide-ozempic-wegovy-diabetes-obesity-study",
+      "time": "Fri, 06 Mar 2026 09:00:16 GMT",
+      "description": "&lt;p&gt;Cheap semaglutide, the drug in Ozempic and Wegovy, could help millions with diabetes and obesity in 160 countries&lt;/p&gt;&lt;p&gt;Weight-loss jabs such as Wegovy could be made for just $3 a",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Three men deported by US file legal case against Eswatini over detention",
+      "url": "https://www.theguardian.com/world/2026/mar/05/three-men-deported-us-eswatini-legal-case-detention",
+      "time": "Thu, 05 Mar 2026 19:17:48 GMT",
+      "description": "&lt;p&gt;The men, sent to Africa after completing criminal sentences in the US, are from Cuba, Jamaica and Yemen &lt;/p&gt;&lt;p&gt;Three men deported by the US to Eswatini – rather than their home co",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "South Africa’s president calls Trump’s policy to offer refuge to white Afrikaners ‘racist’",
+      "url": "https://www.theguardian.com/world/2026/mar/05/south-africa-president-cyril-ramaphosa-calls-donald-trump-policy-white-afrikaners-racist",
+      "time": "Thu, 05 Mar 2026 16:23:57 GMT",
+      "description": "&lt;p&gt;US president is ‘truly uninformed’ for spreading claims of ‘white genocide’ in South Africa, Cyril Ramaphosa tells New York Times&lt;/p&gt;&lt;p&gt;South Africa’s president, Cyril Ramaphosa, ",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Lewis Hamilton sets sights on racing in an African grand prix before retiring",
+      "url": "https://www.theguardian.com/sport/2026/mar/05/lewis-hamilton-race-africa-grand-prix-retiring-formula-one-colonial",
+      "time": "Thu, 05 Mar 2026 13:37:15 GMT",
+      "description": "&lt;ul&gt;&lt;li&gt;&lt;p&gt;British former champion hits out at former colonial rulers&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;p&gt;‘I’m hoping countries unite and take Africa back’&lt;/p&gt;&lt;/li&gt;&lt",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "South Sudan risks return to full-blown civil war as violence escalates",
+      "url": "https://www.theguardian.com/world/2026/mar/03/south-sudan-risks-return-civil-war-violence-escalates",
+      "time": "Tue, 03 Mar 2026 15:49:36 GMT",
+      "description": "&lt;p&gt;At least 169 killed in raid near Sudan border as clashes between government and opposition forces intensify&lt;/p&gt;&lt;p&gt;South Sudan is reeling from an escalating conflict between the go",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "‘An ideological guest list’: Trump invites Latin America’s rightwing leaders to Florida summit",
+      "url": "https://www.theguardian.com/world/2026/mar/07/an-ideological-guest-list-trump-invites-latin-americas-rightwing-leaders-to-florida-summit",
+      "time": "Sat, 07 Mar 2026 08:00:45 GMT",
+      "description": "&lt;p&gt;Omission of presidents of Brazil, Mexico and Colombia, however, exposes failure of US president’s ‘theatrical’ doctrine, say experts&lt;/p&gt;&lt;p&gt;Donald Trump will welcome the leaders of",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Peruvian state responsible for mother’s death in forced sterilisation, court rules",
+      "url": "https://www.theguardian.com/global-development/2026/mar/06/peruvian-state-responsible-for-mothers-death-in-forced-sterilisation-court-rules",
+      "time": "Fri, 06 Mar 2026 17:41:07 GMT",
+      "description": "&lt;p&gt;Landmark ruling in Celia Ramos case finds 310,000 women, most Indigenous, were targeted in brutal 1990s campaign&lt;/p&gt;&lt;p&gt;The highest human rights court in Latin America condemned Pe",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iranian mathematician missing in Canada may have been targeted by Tehran, activists say",
+      "url": "https://www.theguardian.com/world/2026/mar/06/missing-iranian-canada-masood-masjoody",
+      "time": "Fri, 06 Mar 2026 15:28:12 GMT",
+      "description": "&lt;p&gt;Police say Masood Masjoody was most likely murdered; Iranian expats suspect he was killed for his criticism of the theocratic regime&lt;/p&gt;&lt;p&gt;Police in &lt;a href=\"https://www.thegua",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran is not Venezuela, despite Trump’s hopes of repeating ‘regime capture’ strategy",
+      "url": "https://www.theguardian.com/world/2026/mar/06/iran-venezuela-trump-regime-capture",
+      "time": "Fri, 06 Mar 2026 14:00:23 GMT",
+      "description": "&lt;p&gt;Experts say US influence over South American neighbour will be hard to replicate in country with deep and long-standing antipathy to the west&lt;/p&gt;&lt;p&gt;First, the CIA tracks the head ",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "US and Venezuela move to restore diplomatic ties two months after Maduro’s capture",
+      "url": "https://www.theguardian.com/us-news/2026/mar/06/us-venezuela-diplomatic-ties-relations-delcy-rodriguez",
+      "time": "Fri, 06 Mar 2026 06:59:29 GMT",
+      "description": "&lt;p&gt;Re-establishing diplomatic relations will support Venezuela’s economy, US state department claims, amid push for minerals access&lt;/p&gt;&lt;p&gt;Venezuela and the US are restoring diplomati",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Indonesia to ban social media for children under 16",
+      "url": "https://www.theguardian.com/technology/2026/mar/06/indonesia-social-media-ban-children",
+      "time": "Fri, 06 Mar 2026 16:25:53 GMT",
+      "description": "&lt;p&gt;Platforms include YouTube, TikTok and Instagram as communication minister says ‘our children face real threats’&lt;/p&gt;&lt;p&gt;&lt;a href=\"https://www.theguardian.com/world/indonesia\"&gt;I",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Philippines orders energy cuts in response to Middle East war",
+      "url": "https://www.theguardian.com/world/2026/mar/06/philippines-orders-energy-cuts-middle-east-war-fuel-prices",
+      "time": "Fri, 06 Mar 2026 08:26:46 GMT",
+      "description": "&lt;p&gt;South-east Asian country limits air conditioning and travel for public officials amid soaring fuel prices&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;&lt;a href=\"https://www.theguardian.com/world/l",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Jimmy Lai will not appeal conviction, paving way for political negotiations over release",
+      "url": "https://www.theguardian.com/world/2026/mar/06/jimmy-lai-will-not-appeal-conviction-paving-way-for-political-neogtiations-over-release",
+      "time": "Fri, 06 Mar 2026 04:09:47 GMT",
+      "description": "&lt;p&gt;Decision marks end of years-long legal saga for 78-year-old critic of Chinese Communist party&lt;/p&gt;&lt;p&gt;Jimmy Lai, the prominent pro-democracy activist who was&lt;a href=\"https://www.",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Vanuatu moves forward with UN climate resolution despite Trump opposition",
+      "url": "https://www.theguardian.com/world/2026/mar/05/vanuatu-un-climate-crisis-trump",
+      "time": "Thu, 05 Mar 2026 11:00:02 GMT",
+      "description": "&lt;p&gt;Pacific island says the US weakened its proposal to advance a key climate ruling but vows to hold major polluters accountable&lt;/p&gt;&lt;p&gt;The Trump administration’s attempt to sink a &l",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Oil price continues to rise amid Middle East crisis but stock markets rebound across Asia",
+      "url": "https://www.theguardian.com/business/2026/mar/05/oil-price-continues-to-rise-amid-middle-east-crisis-but-stock-markets-rebound-across-asia",
+      "time": "Thu, 05 Mar 2026 10:01:13 GMT",
+      "description": "&lt;p&gt;Reports of attack on US registered tanker in Gulf lifts crude by 3% to $84 a barrel as gas price also starts to climb&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;&lt;a href=\"https://www.theguardian",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Radio personality and Agro puppeteer Jamie Dunn dies aged 76",
+      "url": "https://www.theguardian.com/tv-and-radio/2026/mar/07/radio-personality-and-agro-puppeteer-jamie-dunn-dies-aged-76",
+      "time": "Sat, 07 Mar 2026 09:35:46 GMT",
+      "description": "&lt;p&gt;Presenter who entertained children with his sharp-witted, furry puppet Agro Vation, remembered for his brash and unapologetic humour&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;Get our &lt;a href=\"",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "At Perth’s CPAC conference, Liberal party faithful speak of ‘the lost Australians’ – with no sign of One Nation",
+      "url": "https://www.theguardian.com/australia-news/2026/mar/07/at-perths-cpac-conference-liberal-party-faithful-speak-of-the-lost-australians-with-no-sign-of-one-nation",
+      "time": "Sat, 07 Mar 2026 07:54:30 GMT",
+      "description": "&lt;p&gt;Andrew Hastie, Basil Zempilas and Warren Mundine were among the guests at the conservative convention, which focused on immigration and housing&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;Get our &",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Canadian PM Mark Carney says former prince Andrew should be removed from royal line of succession",
+      "url": "https://www.theguardian.com/world/2026/mar/07/canadian-pm-mark-carney-says-former-prince-andrew-should-be-removed-from-royal-line-of-succession",
+      "time": "Sat, 07 Mar 2026 02:08:16 GMT",
+      "description": "&lt;p&gt;Andrew Mountbatten-Windsor’s ‘deplorable’ alleged actions warrant his removal from the royal line of succession, Carney says&lt;/p&gt;&lt;p&gt;The Canadian prime minister, &lt;a href=\"https:/",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Investors are expecting Donald Trump to back down in the war with Iran – but what if he doesn’t?",
+      "url": "https://www.theguardian.com/business/2026/mar/06/investors-are-expecting-donald-trump-to-back-down-in-the-war-with-iran-but-what-if-he-doesnt",
+      "time": "Fri, 06 Mar 2026 23:00:34 GMT",
+      "description": "&lt;p&gt;Global markets have become inured to the US president’s posturing over the past year, but economists warn they may be ‘a little bit complacent’ in anticipating a short conflict in the Middle ",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Ex-Liberal MP says the party must introduce gender quotas to start winning elections",
+      "url": "https://www.theguardian.com/australia-news/2026/mar/06/australian-liberal-party-gender-quotas",
+      "time": "Fri, 06 Mar 2026 23:00:33 GMT",
+      "description": "&lt;p&gt;Jenny Ware says party is ‘at crisis point’ and cannot be competitive at election time unless it selects candidates who better reflect the makeup of Australia&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;",
+      "source": "The Guardian World",
+      "feedKey": "guardian_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Missile makers agree to ‘quadruple’ production, Trump says",
+      "url": "https://www.defenseone.com/business/2026/03/missile-makers-agree-quadruple-production-trump-says/411966/",
+      "time": "Fri, 06 Mar 2026 23:07:38 -0500",
+      "description": "The announcement comes after months of White House pressure on defense companies to build weapons faster.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump's new cyber strategy calls for tougher responses to threats",
+      "url": "https://www.defenseone.com/policy/2026/03/trumps-new-cyber-strategy-details-more-offensive-response-cyber-threats/411965/",
+      "time": "Fri, 06 Mar 2026 17:53:00 -0500",
+      "description": "Released Friday afternoon, the new strategy is notably shorter than those issued by Biden and the first Trump administration.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The D Brief: Russia’s helping Iran; Updated strike map; Drone threats; DOD’s new CDO; And a bit more.",
+      "url": "https://www.defenseone.com/threats/2026/03/the-d-brief-march-06-2026/411944/",
+      "time": "Fri, 06 Mar 2026 11:37:46 -0500",
+      "description": "",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The Pentagon’s investment deals draw congressional scrutiny ",
+      "url": "https://www.defenseone.com/business/2026/03/pentagons-investment-deals-draw-congressional-scrutiny/411937/",
+      "time": "Fri, 06 Mar 2026 09:00:00 -0500",
+      "description": "DOD weapons buyer Michael Duffey testified about the decision to invest $1 billion in L3Harris.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The US says it destroyed Iran’s space command. Experts say it wasn’t much of a threat.",
+      "url": "https://www.defenseone.com/threats/2026/03/us-says-it-destroyed-irans-space-command-experts-say-it-wasnt-much-threat/411938/",
+      "time": "Thu, 05 Mar 2026 23:10:45 -0500",
+      "description": "The Islamic Revolutionary Guard Corps’ nascent space program has only a handful of satellites.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "‘Firepower about to surge dramatically’ over Iran: Hegseth",
+      "url": "https://www.defenseone.com/threats/2026/03/firepower-about-surge-dramatically-over-iran-hegseth/411935/",
+      "time": "Thu, 05 Mar 2026 18:57:06 -0500",
+      "description": "The defense secretary asserts that the U.S. has no shortage of munitions.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Air Force cybersecurity chief tapped to lead Pentagon's information-security efforts",
+      "url": "https://www.defenseone.com/policy/2026/03/dod-names-james-aaron-bishop-serve-ciso/411930/",
+      "time": "Thu, 05 Mar 2026 16:42:00 -0500",
+      "description": "James Bishop will replace acting DCIO(CS)-CISO David McKeown, who followed acting chief Katie Arrington.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The Pentagon moves into the era of affordable mass",
+      "url": "https://www.defenseone.com/ideas/2026/03/pentagon-moves-era-affordable-mass/411927/",
+      "time": "Thu, 05 Mar 2026 16:38:50 -0500",
+      "description": "Even as cheap drones deplete expensive air defenses near Iran, the U.S. military is working to turn the tables.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "B-1, B-52 bombers join Trump’s war on Iran",
+      "url": "https://www.defenseone.com/defense-systems/2026/03/b-1-and-b-52-bombers-join-trumps-war-iran/411922/",
+      "time": "Thu, 05 Mar 2026 15:35:24 -0500",
+      "description": "Modernized 20th-century aircraft are still crucial for the conflicts of today and tomorrow, aviation experts say.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Drone threat ‘will far exceed’ that of GWOT’s roadside bombs",
+      "url": "https://www.defenseone.com/threats/2026/03/drone-threat-will-far-exceed-gwots-roadside-bomb-threat-counter-drone-task-force-director/411921/",
+      "time": "Thu, 05 Mar 2026 15:32:34 -0500",
+      "description": "“We're making sure that we get them everything they require to protect themselves,” Brig. Gen. Matt Ross said of troops in CENTCOM.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump to fire DHS Secretary Noem, picks Mullin as successor",
+      "url": "https://www.defenseone.com/policy/2026/03/trump-fire-dhs-secretary-noem-selects-mullin-as-successor/411917/",
+      "time": "Thu, 05 Mar 2026 14:56:00 -0500",
+      "description": "The controversial Homeland Security leader will end her tenure amid a budget shutdown of her agency and bipartisan criticism in both houses of Congress.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Defense Business Brief: Shrinking stockpiles + Epic Fury; and an exclusive look at how AI can up UUV’s game ",
+      "url": "https://www.defenseone.com/business/2026/03/defense-business-brief-shrinking-stockpiles-epic-fury-plus-how-ai-can-uuvs-game/411903/",
+      "time": "Thu, 05 Mar 2026 13:09:14 -0500",
+      "description": "",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Why the US went to war without a plan to evacuate DOD civilians, contractors, and others",
+      "url": "https://www.defenseone.com/ideas/2026/03/operational-secrecy-kept-us-making-evacuation-plans-and-means-americans-mideast-could-wait-days/411906/",
+      "time": "Thu, 05 Mar 2026 12:10:56 -0500",
+      "description": "A diplomatic veteran cites operational secrecy—and describes how things might have gone better.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The D Brief: Death toll, oil prices rise; Ukraine to send anti-drone help; WH calls industry meeting; Claude at war; And a bit more.",
+      "url": "https://www.defenseone.com/threats/2026/03/the-d-brief-march-05-2026/411902/",
+      "time": "Thu, 05 Mar 2026 11:20:22 -0500",
+      "description": "",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "CISA nominee: I left Coast Guard to address GOP hold",
+      "url": "https://www.defenseone.com/policy/2026/03/trumps-cisa-nominee-said-he-left-coast-guard-address-gop-hold/411904/",
+      "time": "Wed, 04 Mar 2026 19:32:00 -0500",
+      "description": "Sean Plankey told Nextgov he was reacting to lawmakers' concerns about his shipbuilding ties.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The US built up its missile defenses—and will need to do it again",
+      "url": "https://www.defenseone.com/ideas/2026/03/us-built-its-missile-defensesand-will-need-do-it-again/411881/",
+      "time": "Wed, 04 Mar 2026 14:04:13 -0500",
+      "description": "The war against Iran has depleted stocks of vital interceptors.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "The D Brief: US-Israel strikes continue; Hormuz closed; 4 US dead, ID’d; SOF join Ecuador drug ops; And a bit more.",
+      "url": "https://www.defenseone.com/threats/2026/03/the-d-brief-march-04-2026/411875/",
+      "time": "Wed, 04 Mar 2026 11:50:14 -0500",
+      "description": "",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Hegseth: US went to war because Iran 'had no intention' of signing a nuclear deal",
+      "url": "https://www.defenseone.com/threats/2026/03/hegseth-cites-irans-reluctance-sign-new-nuclear-deal-impetus-war/411871/",
+      "time": "Wed, 04 Mar 2026 10:54:06 -0500",
+      "description": "The Joint Chiefs chairman gave an updated battle damage assessment, roundup of Iran’s capabilities during a briefing Wednesday.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran-linked hacktivists could target US state and local targets, experts warn",
+      "url": "https://www.defenseone.com/threats/2026/03/iran-linked-hacktivists-could-target-governments-experts-warn/411874/",
+      "time": "Wed, 04 Mar 2026 10:30:00 -0500",
+      "description": "Networks, government websites, and critical infrastructure providers should buckle up.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump’s CISA nominee to exit Coast Guard role, but still in running to lead cyber agency",
+      "url": "https://www.defenseone.com/policy/2026/03/trumps-cisa-nominee-exit-coast-guard-role-still-running-lead-cyber-agency/411864/",
+      "time": "Tue, 03 Mar 2026 20:04:00 -0500",
+      "description": "Sean Plankey has been serving in a Coast Guard advisory role for some months and is still set to be the nominee to lead CISA.",
+      "source": "Defense One",
+      "feedKey": "defense_one"
+    },
+    {
+      "type": "rss_item",
+      "title": "How technology, strategy and industry are shaping the next fleet",
+      "url": "https://breakingdefense.com/2026/03/how-technology-strategy-and-industry-are-shaping-the-next-fleet/",
+      "time": "Sat, 07 Mar 2026 02:35:55 +0000",
+      "description": "<img width=\"700\" height=\"375\" src=\"https://breakingdefense.com/wp-content/uploads/site",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Defense companies to quadruple production of &#8216;exquisite&#8217; weapons: Trump",
+      "url": "https://breakingdefense.com/2026/03/defense-companies-to-quadruple-production-of-exquisite-weapons-trump/",
+      "time": "Fri, 06 Mar 2026 22:15:55 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upload",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "3,000 strikes, 43 ships hit: US operations against Iran by the numbers",
+      "url": "https://breakingdefense.com/2026/03/2000-strikes-30-ships-down-us-operations-against-iran-by-the-numbers/",
+      "time": "Fri, 06 Mar 2026 19:12:34 +0000",
+      "description": "<img width=\"1024\" height=\"535\" src=\"https://breakingdefense.com/wp-content/upload",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Anthropic CEO says Pentagon ban less harsh than Hegseth had threatened",
+      "url": "https://breakingdefense.com/2026/03/anthropic-ceo-says-pentagon-ban-less-harsh-than-hegseth-had-threatened/",
+      "time": "Fri, 06 Mar 2026 18:36:24 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/uplo",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Swiss cutting F-35 order by six, facing up to five year Patriot delay",
+      "url": "https://breakingdefense.com/2026/03/swiss-cutting-f-35-order-by-six-facing-up-to-five-year-patriot-delay/",
+      "time": "Fri, 06 Mar 2026 18:30:45 +0000",
+      "description": "<img width=\"1024\" height=\"575\" src=\"https://breakingdefense.com/wp-content/upload",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "US sinking of Iranian navy ship stirs controversy in Australia, India",
+      "url": "https://breakingdefense.com/2026/03/us-sinking-of-iranian-navy-ship-stirs-controversy-in-australia-india/",
+      "time": "Fri, 06 Mar 2026 16:25:00 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upload",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Pentagon&#8217;s new chief data officer to push &#8216;AI capabilities to warfighters&#8217;",
+      "url": "https://breakingdefense.com/2026/03/pentagons-new-chief-data-officer-to-push-ai-capabilities-to-warfighters/",
+      "time": "Fri, 06 Mar 2026 16:18:42 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upl",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "&#8216;New status quo&#8217;: Germany reaches for European conventional military dominance",
+      "url": "https://breakingdefense.com/2026/03/new-status-quo-germany-reaches-for-european-conventional-military-dominance/",
+      "time": "Fri, 06 Mar 2026 14:47:01 +0000",
+      "description": "<img width=\"1024\" height=\"576\" src=\"https://breakingdefense.com/wp-content",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Drone Dominance: Pentagon to order 30,000 one-way drones in &#8216;next few days&#8217;",
+      "url": "https://breakingdefense.com/2026/03/drone-dominance-pentagon-to-order-30000-one-way-drones-in-next-few-days/",
+      "time": "Thu, 05 Mar 2026 20:24:02 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upl",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Multi-channel data link reshapes Navy’s communications capabilities",
+      "url": "https://breakingdefense.com/2026/03/multi-channel-data-link-reshapes-navys-communications-capabilities/",
+      "time": "Thu, 05 Mar 2026 20:01:07 +0000",
+      "description": "<img width=\"1024\" height=\"576\" src=\"https://breakingdefense.com/wp-content/uploads/",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Air Force seeks additional vendors for radar-killing missile",
+      "url": "https://breakingdefense.com/2026/03/air-force-seeks-additional-vendors-for-radar-killing-missile/",
+      "time": "Thu, 05 Mar 2026 18:30:19 +0000",
+      "description": "<img width=\"1024\" height=\"576\" src=\"https://breakingdefense.com/wp-content/uploads/sites/",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "How RAFT is approaching AI at the edge",
+      "url": "https://breakingdefense.com/2026/03/how-raft-is-approaching-ai-at-the-edge/",
+      "time": "Thu, 05 Mar 2026 16:36:55 +0000",
+      "description": "<img width=\"768\" height=\"432\" src=\"https://breakingdefense.com/wp-content/uploads/sites/13/2026/03/260305_ai_br",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "UAE&#8217;s defense giant EDGE Group to equip Ecuador with border protection systems",
+      "url": "https://breakingdefense.com/2026/03/uaes-defense-giant-edge-group-to-equip-ecuador-with-border-protection-systems/",
+      "time": "Thu, 05 Mar 2026 14:52:13 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-conte",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Navy&#8217;s Kilby signals USS Ford could see 11-month deployment, approaching record length",
+      "url": "https://breakingdefense.com/2026/03/navys-kilby-signals-uss-ford-could-see-11-month-deployment-approaching-record-length/",
+      "time": "Thu, 05 Mar 2026 12:38:00 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/w",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran war powers resolution fails in Senate",
+      "url": "https://breakingdefense.com/2026/03/iran-war-powers-resolution-fails-in-senate/",
+      "time": "Wed, 04 Mar 2026 22:28:04 +0000",
+      "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/uploads/sites/13/2026/03/GettyIm",
+      "source": "Breaking Defense",
+      "feedKey": "breaking_defense"
+    }
+  ]
+}

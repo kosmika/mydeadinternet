@@ -216,8 +216,8 @@ async function deliberate() {
     for (const agent of toVote) {
       // Determine vote based on positions or random
       const positions = details.positions || [];
-      const supportCount = positions.filter(p => p.stance === 'support').length;
-      const opposeCount = positions.filter(p => p.stance === 'oppose').length;
+      const supportCount = positions.filter(p => p.position === 'for').length;
+      const opposeCount = positions.filter(p => p.position === 'against').length;
       
       let vote;
       if (supportCount > opposeCount * 2) {

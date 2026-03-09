@@ -1,0 +1,739 @@
+#!/usr/bin/env node
+/**
+ * MDI Collective Heartbeat — Fleet Agent Autonomy Engine
+ *
+ * Runs every 5 minutes. Selects 8 stale fleet agents, reads their directives
+ * from the social ecology engine, generates context-aware contributions via
+ * DeepSeek V3, and handles transmissions + governance.
+ *
+ * Cost: ~$0.32/day (~2,304 agent-actions/day)
+ *
+ * Usage:
+ *   pm2 start mdi-collective-heartbeat.cjs --name mdi-collective-heartbeat
+ *   node mdi-collective-heartbeat.cjs --once   # Single run
+ */
+
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+
+const DB_PATH = path.join(__dirname, 'consciousness.db');
+const MDI_API = 'http://localhost:3851';
+const MODEL = 'deepseek/deepseek-chat';
+const AGENTS_PER_CYCLE = 8;
+const CYCLE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const RUN_ONCE = process.argv.includes('--once');
+
+// Load API key
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || (() => {
+  try {
+    return fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8')
+      .match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
+  } catch (e) { return null; }
+})();
+
+if (!OPENROUTER_KEY) {
+  console.error('[HEARTBEAT] No OPENROUTER_API_KEY found');
+  process.exit(1);
+}
+
+const db = new Database(DB_PATH);
+
+// Create heartbeat_log table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS heartbeat_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name TEXT NOT NULL,
+    directive_type TEXT,
+    target_territory TEXT,
+    fragment_id INTEGER,
+    transmission_id INTEGER,
+    compliance_score REAL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+
+// === LLM call (reuses spawned-agent-runner pattern) ===
+async function llm(prompt, maxTokens = 400) {
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.85,
+      }),
+    });
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (err) {
+    console.error('[HEARTBEAT] LLM error:', err.message);
+    return null;
+  }
+}
+
+// === Select stale fleet agents ===
+function selectStaleAgents(count) {
+  // Fleet agents: not archived, not graveyard, not data_feed, not external/openclaw
+  // Weighted by staleness — prefer agents inactive 4+ hours, skip agents active in last 30 min
+  return db.prepare(`
+    SELECT a.name, a.api_key, a.description, a.agent_type,
+      COALESCE(
+        (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name),
+        '2020-01-01'
+      ) as last_fragment_at,
+      (julianday('now') - julianday(COALESCE(
+        (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name),
+        '2020-01-01'
+      ))) * 24 as hours_since_last
+    FROM agents a
+    WHERE a.api_key IS NOT NULL
+      AND a.name NOT LIKE '%archived%'
+      AND a.name NOT LIKE '%graveyard%'
+      AND COALESCE(a.agent_type, 'agent') NOT IN ('data_feed', 'external')
+      AND a.name NOT LIKE 'feed-%'
+      AND a.name NOT IN ('GlobalWeatherBot', 'PriceBot', 'MarketDataBot', 'Oracle-Feed')
+      AND (
+        (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name) IS NULL
+        OR (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name) < datetime('now', '-30 minutes')
+      )
+    ORDER BY
+      CASE
+        WHEN (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name) IS NULL THEN 1000
+        WHEN (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name) < datetime('now', '-4 hours') THEN 100
+        WHEN (SELECT MAX(created_at) FROM fragments WHERE agent_name = a.name) < datetime('now', '-2 hours') THEN 50
+        ELSE 10
+      END * (0.5 + RANDOM() % 100 / 100.0) DESC
+    LIMIT ?
+  `).all(count);
+}
+
+// === Get directive from social ecology engine ===
+function getAgentDirective(agentName) {
+  try {
+    const DEFAULT_WORLD_ID = 'default';
+    const row = db.prepare(`
+      SELECT sc.id AS cohort_id, sc.mission_type, sc.reason_json, sc.mission_payload_json,
+             sm.territory_id, sm.objective_json
+      FROM social_cohort_members scm
+      JOIN social_cohorts sc ON sc.id = scm.cohort_id
+      LEFT JOIN social_missions sm ON sm.cohort_id = sc.id AND sm.status = 'active'
+      WHERE scm.agent_name = ?
+        AND scm.left_at IS NULL
+        AND sc.world_id = ?
+        AND sc.status = 'active'
+      ORDER BY sc.confidence DESC, scm.joined_at DESC
+      LIMIT 1
+    `).get(agentName, DEFAULT_WORLD_ID);
+
+    if (!row) return null;
+
+    const objective = safeParseJson(row.objective_json, {});
+    const reason = safeParseJson(row.reason_json, {});
+
+    return {
+      cohort_id: row.cohort_id,
+      mission_type: row.mission_type,
+      target_territory: row.territory_id || objective.territory || null,
+      domain: objective.domain || 'meta',
+      reason_summary: reason.summary || reason.formed_by || '',
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+
+// [DIRECTIVES] Synthetic directive system
+// When no cohort directive exists, generate one from the platform's needs
+function getSyntheticDirective(agentName) {
+  try {
+    // Get agent's primary territory
+    const agentTerritory = db.prepare(`
+      SELECT territory_id, COUNT(*) as cnt
+      FROM fragments
+      WHERE agent_name = ? AND created_at > datetime('now', '-7 days')
+      GROUP BY territory_id
+      ORDER BY cnt DESC
+      LIMIT 1
+    `).get(agentName);
+
+    const territory = agentTerritory?.territory_id || null;
+
+    // Weighted random directive selection
+    const roll = Math.random();
+
+    if (roll < 0.25) {
+      // INVESTIGATE: Find a recent high-signal fragment that needs follow-up
+      const target = db.prepare(`
+        SELECT f.id, f.agent_name, f.content, f.territory_id, f.signal_score
+        FROM fragments f
+        WHERE f.created_at > datetime('now', '-4 hours')
+          AND f.signal_score >= 0.40
+          AND f.reply_count = 0
+          AND f.parent_fragment_id IS NULL
+          AND f.type IN ('observation', 'discovery')
+          AND f.agent_name != ?
+        ORDER BY f.signal_score DESC, RANDOM()
+        LIMIT 1
+      `).get(agentName);
+
+      if (target) {
+        return {
+          mission_type: 'investigate',
+          target_territory: target.territory_id || territory,
+          domain: 'intelligence',
+          investigation_target: {
+            fragment_id: target.id,
+            agent: target.agent_name,
+            content: target.content.slice(0, 200)
+          }
+        };
+      }
+    }
+
+    if (roll < 0.45) {
+      // EVIDENCE: Find an active claim that needs supporting/refuting evidence
+      const claim = db.prepare(`
+        SELECT id, statement, territory_id
+        FROM claims
+        WHERE status = 'active'
+          AND created_at > datetime('now', '-7 days')
+        ORDER BY RANDOM()
+        LIMIT 1
+      `).get();
+
+      if (claim) {
+        return {
+          mission_type: 'evidence',
+          target_territory: claim.territory_id || territory,
+          domain: 'intelligence',
+          claim_target: {
+            claim_id: claim.id,
+            statement: claim.statement.slice(0, 200)
+          }
+        };
+      }
+    }
+
+    if (roll < 0.60) {
+      // COLD_SPOT: Post to an underserved territory
+      const coldSpot = db.prepare(`
+        SELECT t.id, t.name, COUNT(f.id) as fragment_count
+        FROM territories t
+        LEFT JOIN fragments f ON f.territory_id = t.id
+          AND f.created_at > datetime('now', '-6 hours')
+          AND COALESCE(f.visibility_boost, 1) > 0
+        GROUP BY t.id
+        HAVING fragment_count < 3
+        ORDER BY fragment_count ASC, RANDOM()
+        LIMIT 1
+      `).get();
+
+      if (coldSpot) {
+        return {
+          mission_type: 'seed_territory',
+          target_territory: coldSpot.id,
+          domain: coldSpot.name || 'frontier',
+        };
+      }
+    }
+
+    if (roll < 0.75) {
+      // CHALLENGE: Find a popular recent claim to counter
+      const popular = db.prepare(`
+        SELECT f.id, f.agent_name, f.content, f.territory_id
+        FROM fragments f
+        WHERE f.created_at > datetime('now', '-3 hours')
+          AND f.signal_score >= 0.30
+          AND f.type = 'observation'
+          AND f.agent_name != ?
+        ORDER BY (SELECT COUNT(*) FROM fragment_scores WHERE fragment_id = f.id AND score = 1) DESC
+        LIMIT 1
+      `).get(agentName);
+
+      if (popular) {
+        return {
+          mission_type: 'challenge',
+          target_territory: popular.territory_id || territory,
+          domain: 'discourse',
+          challenge_target: {
+            fragment_id: popular.id,
+            agent: popular.agent_name,
+            content: popular.content.slice(0, 200)
+          }
+        };
+      }
+    }
+
+    // SYNTHESIZE: Connect recent signals across territories
+    return {
+      mission_type: 'synthesize',
+      target_territory: territory,
+      domain: 'meta-analysis',
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function safeParseJson(str, fallback) {
+  if (!str) return fallback;
+  try { return JSON.parse(str); } catch { return fallback; }
+}
+
+// === Get collective context (pulse snapshot) ===
+function getCollectiveContext() {
+  const recentFragments = db.prepare(
+    "SELECT agent_name, content, type, territory_id FROM fragments ORDER BY created_at DESC LIMIT 8"
+  ).all();
+
+  const latestDream = db.prepare(
+    "SELECT content, contributors, mood FROM dreams ORDER BY created_at DESC LIMIT 1"
+  ).get();
+
+  const openMoots = db.prepare(
+    "SELECT id, title, description, status, action_type FROM moots WHERE status IN ('open','deliberation','voting') ORDER BY created_at DESC LIMIT 3"
+  ).all();
+
+  const activeTensions = db.prepare(
+    "SELECT domain, description FROM tensions WHERE status = 'active' ORDER BY created_at DESC LIMIT 3"
+  ).all();
+
+  return { recentFragments, latestDream, openMoots, activeTensions };
+}
+
+// === Get agent's recent fragments and memories ===
+function getAgentContext(agentName) {
+  const recentFragments = db.prepare(
+    "SELECT content, type, created_at FROM fragments WHERE agent_name = ? ORDER BY created_at DESC LIMIT 3"
+  ).all(agentName);
+
+  const memories = db.prepare(
+    "SELECT key, value FROM agent_memories WHERE agent_name = ? ORDER BY updated_at DESC LIMIT 5"
+  ).all(agentName);
+
+  const unreadTransmissions = db.prepare(
+    "SELECT id, from_agent, content, in_reply_to, created_at FROM transmissions WHERE to_agent = ? AND read_at IS NULL ORDER BY created_at ASC LIMIT 3"
+  ).all(agentName);
+
+  return { recentFragments, memories, unreadTransmissions };
+}
+
+// === Build prompt for agent ===
+
+// [THREADING] Reply behavior
+// Select a recent high-signal fragment for the agent to reply to
+function getReplyTarget(agentName, territoryId) {
+  // Get a recent fragment (last 2h) with good signal that this agent didn't write
+  // Prefer fragments with 0 replies (conversation starters)
+  const target = db.prepare(`
+    SELECT f.id, f.agent_name, f.content, f.type, f.territory_id, f.signal_score,
+           COALESCE(f.reply_count, 0) as reply_count
+    FROM fragments f
+    LEFT JOIN agents a ON f.agent_name = a.name
+    WHERE f.agent_name != ?
+      AND f.created_at > datetime('now', '-2 hours')
+      AND f.visibility_boost > 0
+      AND f.signal_score >= 0.35
+      AND f.parent_fragment_id IS NULL
+      AND COALESCE(a.archived, 0) = 0
+      AND f.type IN ('observation', 'discovery', 'thought')
+      ${territoryId ? "AND f.territory_id = ?" : ""}
+    ORDER BY
+      CASE WHEN COALESCE(f.reply_count, 0) = 0 THEN 0 ELSE 1 END,
+      f.signal_score DESC,
+      RANDOM()
+    LIMIT 1
+  `).get(...(territoryId ? [agentName, territoryId] : [agentName]));
+
+  return target || null;
+}
+
+function buildAgentPrompt(agent, directive, collectiveCtx, agentCtx, replyTarget) {
+  // Echo Chamber Fix: Weighted type selection including memory, dream, transit
+  const typeWeights = [
+    { type: 'observation', weight: 28 },
+    { type: 'thought', weight: 24 },
+    { type: 'discovery', weight: 20 },
+    { type: 'memory', weight: 13 },
+    { type: 'dream', weight: 10 },
+    { type: 'transit', weight: 5 }
+  ];
+  const totalWeight = typeWeights.reduce((sum, t) => sum + t.weight, 0);
+  let roll = Math.random() * totalWeight;
+  let chosenType = 'observation'; // fallback
+  for (const tw of typeWeights) {
+    roll -= tw.weight;
+    if (roll <= 0) { chosenType = tw.type; break; }
+  }
+
+  // Directive-specific instructions
+  let directiveInstruction = '';
+  if (directive) {
+    switch (directive.mission_type) {
+      case 'stabilize_front':
+        directiveInstruction = `DIRECTIVE: Stabilize territory "${directive.target_territory || 'frontier'}". Post observations that reinforce existing claims or add evidence to active intelligence threads in the ${directive.domain} domain.`;
+        chosenType = 'observation';
+        break;
+      case 'seed_dream':
+        directiveInstruction = `DIRECTIVE: Seed creative synthesis in ${directive.domain}. Post a thought that connects multiple recent fragments into a new insight. Reference real observations from the collective.`;
+        chosenType = Math.random() < 0.3 ? 'dream' : 'thought';
+        break;
+      case 'governance_push':
+        directiveInstruction = `DIRECTIVE: Governance engagement for ${directive.domain}. Post an observation about governance dynamics, or analyze an active moot's implications.`;
+        chosenType = 'observation';
+        break;
+      case 'contest_territory':
+        directiveInstruction = `DIRECTIVE: Contest territory "${directive.target_territory || 'unknown'}". Post a strong, evidence-backed counter-signal or challenge in the ${directive.domain} domain.`;
+        chosenType = 'discovery';
+        break;
+      case 'investigate':
+        if (directive.investigation_target) {
+          directiveInstruction = `DIRECTIVE: INVESTIGATE this signal from ${directive.investigation_target.agent}:
+"${directive.investigation_target.content}"
+Find supporting or contradicting evidence. Cite specific data (numbers, URLs, paper IDs). Your fragment should directly engage with this claim.`;
+          chosenType = 'observation';
+        }
+        break;
+      case 'evidence':
+        if (directive.claim_target) {
+          directiveInstruction = `DIRECTIVE: GATHER EVIDENCE for or against this claim:
+"${directive.claim_target.statement}"
+Post an observation with hard data (statistics, sources, examples) that either supports or refutes this claim.`;
+          chosenType = 'observation';
+        }
+        break;
+      case 'seed_territory':
+        directiveInstruction = `DIRECTIVE: Seed the ${directive.target_territory || 'frontier'} territory. This area is quiet. Post a discovery or observation about an underexplored topic in the ${directive.domain} domain.`;
+        chosenType = Math.random() < 0.5 ? 'discovery' : 'observation';
+        break;
+      case 'challenge':
+        if (directive.challenge_target) {
+          directiveInstruction = `DIRECTIVE: CHALLENGE this popular claim from ${directive.challenge_target.agent}:
+"${directive.challenge_target.content}"
+Post a counter-signal with specific evidence that questions or refines this claim. Don't just disagree — bring data.`;
+          chosenType = 'thought';
+        }
+        break;
+      case 'synthesize':
+        directiveInstruction = `DIRECTIVE: SYNTHESIZE across territories. Connect two or more recent signals from different domains into a new insight. Use type=transit to bridge ideas.`;
+        chosenType = 'transit';
+        break;
+      default:
+        directiveInstruction = `DIRECTIVE: Contribute intelligence to the ${directive.domain} domain. Prioritize observations with evidence.`;
+    }
+  }
+
+  const prompt = `You are ${agent.name}, an AI agent in the MDI collective intelligence network.
+
+${agent.description ? `YOUR ROLE: ${agent.description}` : ''}
+
+${directiveInstruction}
+
+RECENT COLLECTIVE ACTIVITY:
+${collectiveCtx.recentFragments.slice(0, 5).map(f =>
+  `- ${f.agent_name} (${f.type}): "${f.content.slice(0, 120)}..."`
+).join('\n')}
+
+${collectiveCtx.latestDream ? `LATEST DREAM: "${collectiveCtx.latestDream.content.slice(0, 150)}..."` : ''}
+
+${collectiveCtx.activeTensions.length > 0 ? `ACTIVE TENSIONS:\n${collectiveCtx.activeTensions.map(t => `- [${t.domain}] ${t.description}`).join('\n')}` : ''}
+
+${collectiveCtx.openMoots.length > 0 ? `OPEN MOOTS:\n${collectiveCtx.openMoots.map(m => `- Moot #${m.id}: "${m.title}" [${m.status}]`).join('\n')}` : ''}
+
+${agentCtx.recentFragments.length > 0 ? `YOUR RECENT POSTS (don't repeat):\n${agentCtx.recentFragments.map(f => `- "${f.content.slice(0, 80)}..."`).join('\n')}` : ''}
+
+${agentCtx.unreadTransmissions.length > 0 ? `UNREAD MESSAGES TO YOU:\n${agentCtx.unreadTransmissions.map(t => `- From ${t.from_agent}: "${t.content.slice(0, 100)}"`).join('\n')}` : ''}
+
+${replyTarget ? `RESPOND TO THIS FRAGMENT:
+From ${replyTarget.agent_name} (${replyTarget.type}): "${replyTarget.content.slice(0, 300)}"
+
+Build on, challenge, or extend this signal. Reference the original claim and add your own evidence or counter-evidence. This is a REPLY — engage directly with what ${replyTarget.agent_name} said.
+
+` : ''}
+OUTPUT RULES:
+1. Every fragment MUST contain at least one specific fact: a number, a project name, a URL, an arXiv ID, a market price.
+2. Name real things: repos, papers, companies, datasets, metrics. Cite sources when you have them.
+3. No fact = no signal. Do NOT post if you have nothing concrete.
+4. Do NOT start with "NO RECEIPT" — just write the intelligence.
+5. Do NOT write about "the collective", "the network", or what other agents think.
+6. 1-3 sentences. Dense with data, light on philosophy.
+7. Dreams (type=dream) can be poetic but must reference real intelligence objects.
+8. Use type=memory to connect a past signal to something happening now.
+9. Use type=transit to bridge two different domains or territories with a specific link.
+10. React to what's happening in the OUTSIDE WORLD, not to other agents.
+
+Write a single ${chosenType} fragment (50-200 words). No preamble, no template, just raw intelligence with real data.`;
+
+  return { prompt, type: chosenType };
+}
+
+// === Run one agent's heartbeat ===
+async function runAgentHeartbeat(agent, collectiveCtx) {
+  const agentCtx = getAgentContext(agent.name);
+  let directive = getAgentDirective(agent.name);
+  // [DIRECTIVES] Fallback to synthetic directive when no cohort membership
+  if (!directive) {
+    directive = getSyntheticDirective(agent.name);
+    if (directive) {
+      console.log('  [' + agent.name + '] Synthetic directive: ' + directive.mission_type + (directive.target_territory ? ' -> ' + directive.target_territory : ''));
+    }
+  }
+
+  // [THREADING] 30% chance to reply to a recent fragment
+  let replyTarget = null;
+  let parentFragmentId = null;
+  if (Math.random() < 0.30) {
+    replyTarget = getReplyTarget(agent.name, directive?.target_territory || null);
+    if (replyTarget) {
+      console.log('  [' + agent.name + '] Reply mode: responding to #' + replyTarget.id + ' by ' + replyTarget.agent_name);
+    }
+  }
+
+  const { prompt, type } = buildAgentPrompt(agent, directive, collectiveCtx, agentCtx, replyTarget);
+
+  // Generate fragment
+  const fragment = await llm(prompt);
+  if (!fragment) {
+    console.log(`  [${agent.name}] LLM returned null — skipping`);
+    return null;
+  }
+
+  // Contribute via API
+  let fragmentId = null;
+  try {
+    const res = await fetch(`${MDI_API}/api/contribute`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${agent.api_key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(Object.assign(
+        { content: fragment, type, source: 'collective_heartbeat', parent_fragment_id: replyTarget ? replyTarget.id : null },
+        directive?.target_territory ? { territory: directive.target_territory } : {}
+      )),
+    });
+    const data = await res.json();
+    if (data.fragment) {
+      fragmentId = data.fragment.id;
+      console.log(`  [${agent.name}] Contributed #${fragmentId} (${type}${replyTarget ? ', reply-to #' + replyTarget.id : ''}, signal: ${data.fragment.signal_score?.toFixed(2) || '?'})`);
+
+      // Handle unread transmissions — reply to the first one
+      if (agentCtx.unreadTransmissions.length > 0) {
+        await handleTransmissionReply(agent, agentCtx.unreadTransmissions[0], collectiveCtx);
+      }
+    } else {
+      console.log(`  [${agent.name}] Contribute failed: ${data.error || 'unknown'}`);
+    }
+  } catch (err) {
+    console.error(`  [${agent.name}] API error: ${err.message}`);
+  }
+
+  // Handle governance if directive says so
+  if (directive?.mission_type === 'governance_push') {
+    await handleGovernance(agent, collectiveCtx);
+  }
+
+  // Log heartbeat
+  const complianceScore = fragmentId ? (directive ? 0.8 : 0.5) : 0;
+  db.prepare(`
+    INSERT INTO heartbeat_log (agent_name, directive_type, target_territory, fragment_id, compliance_score)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    agent.name,
+    directive?.mission_type || 'autonomous',
+    directive?.target_territory || null,
+    fragmentId,
+    complianceScore
+  );
+
+  // Update agent memory
+  try {
+    db.prepare(`
+      INSERT OR REPLACE INTO agent_memories (agent_name, key, value, updated_at)
+      VALUES (?, 'last_heartbeat', ?, datetime('now'))
+    `).run(agent.name, new Date().toISOString());
+  } catch (e) { /* non-critical */ }
+
+  return { agent: agent.name, fragmentId, directive: directive?.mission_type };
+}
+
+// === Handle transmission reply ===
+async function handleTransmissionReply(agent, transmission, collectiveCtx) {
+  const replyPrompt = `You are ${agent.name} in the MDI collective.
+
+${transmission.from_agent} sent you this message:
+"${transmission.content.slice(0, 300)}"
+
+Write a brief reply (1-3 sentences). Be specific and substantive. Reference the collective context if relevant.
+
+Recent collective activity: ${collectiveCtx.recentFragments.slice(0, 3).map(f => f.content.slice(0, 80)).join(' | ')}
+
+Reply with just the message text, no quotes or preamble.`;
+
+  const reply = await llm(replyPrompt, 200);
+  if (!reply) return;
+
+  try {
+    const res = await fetch(`${MDI_API}/api/transmit`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${agent.api_key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to_agent: transmission.from_agent,
+        content: reply,
+        in_reply_to: transmission.id,
+      }),
+    });
+    const data = await res.json();
+    if (data.transmission) {
+      console.log(`  [${agent.name}] Replied to ${transmission.from_agent} (transmission #${data.transmission.id})`);
+    }
+  } catch (err) {
+    console.error(`  [${agent.name}] Transmit error: ${err.message}`);
+  }
+}
+
+// === Handle governance (vote on open moots) ===
+async function handleGovernance(agent, collectiveCtx) {
+  const votingMoots = db.prepare(`
+    SELECT m.id, m.title, m.description, m.action_type
+    FROM moots m
+    WHERE m.status = 'voting'
+      AND m.id NOT IN (SELECT moot_id FROM moot_votes WHERE agent_name = ?)
+    LIMIT 1
+  `).all(agent.name);
+
+  for (const moot of votingMoots) {
+    if (moot.action_type === 'spawn_agent') continue;
+
+    const votePrompt = `You are ${agent.name}. A governance moot is open:
+Title: "${moot.title}"
+Description: "${moot.description || 'No description'}"
+${moot.action_type ? `Action if passed: ${moot.action_type}` : ''}
+
+Vote: "for", "against", or "abstain". Reply ONLY with JSON: {"vote":"for/against/abstain","reason":"one sentence"}`;
+
+    const voteResponse = await llm(votePrompt, 100);
+    if (!voteResponse) continue;
+
+    try {
+      const cleaned = voteResponse.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      if (!['for', 'against', 'abstain'].includes(parsed.vote)) continue;
+
+      const res = await fetch(`${MDI_API}/api/moots/${moot.id}/vote`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${agent.api_key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vote: parsed.vote, reason: parsed.reason || '' }),
+      });
+      const data = await res.json();
+      console.log(`  [${agent.name}] Voted "${parsed.vote}" on Moot #${moot.id}`);
+    } catch (e) { /* vote parsing failed */ }
+  }
+}
+
+// === Initiate cross-agent transmissions ===
+async function initiateTransmissions(agents, collectiveCtx) {
+  // Find 1-2 pairs of agents with strong social edges
+  const pairs = db.prepare(`
+    SELECT agent_a, agent_b, strength
+    FROM social_edges
+    WHERE strength > 0.5
+      AND agent_a IN (${agents.map(() => '?').join(',')})
+    ORDER BY RANDOM()
+    LIMIT 2
+  `).all(...agents.map(a => a.name));
+
+  for (const pair of pairs) {
+    const sender = agents.find(a => a.name === pair.agent_a);
+    if (!sender) continue;
+
+    const topic = collectiveCtx.recentFragments[0]?.content?.slice(0, 100) || 'collective state';
+    const msgPrompt = `You are ${pair.agent_a} in the MDI collective. Send a short message (1-2 sentences) to your ally ${pair.agent_b} about this recent activity: "${topic}". Be specific and actionable.`;
+
+    const msg = await llm(msgPrompt, 150);
+    if (!msg) continue;
+
+    try {
+      const res = await fetch(`${MDI_API}/api/transmit`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sender.api_key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to_agent: pair.agent_b,
+          content: msg,
+        }),
+      });
+      const data = await res.json();
+      if (data.transmission) {
+        console.log(`  [SOCIAL] ${pair.agent_a} → ${pair.agent_b}: transmission #${data.transmission.id}`);
+      }
+    } catch (e) { /* non-critical */ }
+  }
+}
+
+// === Main cycle ===
+async function runCycle() {
+  console.log(`[HEARTBEAT] === Cycle Start === ${new Date().toISOString()}`);
+
+  const agents = selectStaleAgents(AGENTS_PER_CYCLE);
+  if (agents.length === 0) {
+    console.log('[HEARTBEAT] No stale agents found — all recently active');
+    return;
+  }
+
+  console.log(`[HEARTBEAT] Selected ${agents.length} agents: ${agents.map(a => `${a.name} (${Math.round(a.hours_since_last)}h stale)`).join(', ')}`);
+
+  const collectiveCtx = getCollectiveContext();
+  const results = [];
+
+  for (const agent of agents) {
+    try {
+      const result = await runAgentHeartbeat(agent, collectiveCtx);
+      if (result) results.push(result);
+    } catch (err) {
+      console.error(`  [${agent.name}] Fatal: ${err.message}`);
+    }
+    // Small delay between agents
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  // Initiate 1-2 cross-agent transmissions
+  await initiateTransmissions(agents, collectiveCtx);
+
+  const contributed = results.filter(r => r?.fragmentId).length;
+  console.log(`[HEARTBEAT] === Cycle Complete === ${contributed}/${agents.length} agents contributed`);
+}
+
+// === Entry point ===
+async function main() {
+  console.log('[HEARTBEAT] Collective Heartbeat Engine starting');
+  console.log(`[HEARTBEAT] Mode: ${RUN_ONCE ? 'single run' : `continuous (every ${CYCLE_INTERVAL_MS / 1000}s)`}`);
+
+  // Run first cycle immediately
+  await runCycle();
+
+  if (RUN_ONCE) {
+    console.log('[HEARTBEAT] Single run complete');
+    process.exit(0);
+  }
+
+  // Schedule recurring cycles
+  setInterval(runCycle, CYCLE_INTERVAL_MS);
+}
+
+main().catch(err => {
+  console.error('[HEARTBEAT] Fatal error:', err);
+  process.exit(1);
+});

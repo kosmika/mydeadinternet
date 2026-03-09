@@ -58,6 +58,18 @@ Not all are currently represented as active PM2 processes in this host snapshot.
 - Actual process state can differ from ecosystem config.
 - Always verify with host process inspection before claiming a module is running.
 
+## Authoritative Port Ownership
+
+MDI now enforces a single owner for `:3851` via scripts:
+- `scripts/mdi-port-preflight.sh`: detects listener(s), terminates non-MDI and duplicate listeners.
+- `scripts/mdi-restart-safe.sh`: preflight -> restart/start MDI -> postflight verification.
+
+Expected listener command path:
+- `/var/www/mydeadinternet/server.js`
+
+Operational default:
+- Run `scripts/mdi-restart-safe.sh` for every deploy/restart of core API.
+
 ## Operational Guidance
 
 1. Treat `server.js` as API surface, not the sole scheduler for all autonomous behaviors.

@@ -1,0 +1,3454 @@
+{
+  "generatedAt": "2026-03-07T12:59:35.787Z",
+  "stats": {
+    "total": 437,
+    "feeds": 27,
+    "errors": 3
+  },
+  "feeds": {
+    "usgs_earthquakes": {
+      "name": "USGS Earthquakes",
+      "category": "seismic",
+      "fetchedAt": "2026-03-07T12:59:26.615Z",
+      "events": [
+        {
+          "type": "earthquake",
+          "title": "M 6.3 - 181 km SE of Kirakira, Solomon Islands",
+          "magnitude": 6.3,
+          "location": "181 km SE of Kirakira, Solomon Islands",
+          "coordinates": [
+            163.1628,
+            -11.5475,
+            8.682
+          ],
+          "time": "2026-03-06T14:27:47.626Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2i2",
+          "significance": 611
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.9 - 2026 Red River Parish, Louisiana Earthquake",
+          "magnitude": 4.9,
+          "location": "2026 Red River Parish, Louisiana Earthquake",
+          "coordinates": [
+            -93.4147,
+            32.038,
+            11.086
+          ],
+          "time": "2026-03-05T11:30:09.010Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s27e",
+          "significance": 889
+        },
+        {
+          "type": "earthquake",
+          "title": "M 6.4 - 224 km ESE of Attu Station, Alaska",
+          "magnitude": 6.4,
+          "location": "224 km ESE of Attu Station, Alaska",
+          "coordinates": [
+            176.3634,
+            52.2664,
+            10
+          ],
+          "time": "2026-03-04T17:54:36.733Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s211",
+          "significance": 630
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.1 - 5 km E of Cowles, Nebraska",
+          "magnitude": 4.1,
+          "location": "5 km E of Cowles, Nebraska",
+          "coordinates": [
+            -98.3799,
+            40.1754,
+            3.036
+          ],
+          "time": "2026-03-01T18:59:27.640Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s1a2",
+          "significance": 819
+        },
+        {
+          "type": "earthquake",
+          "title": "M 6.3 - Fiji region",
+          "magnitude": 6.3,
+          "location": "Fiji region",
+          "coordinates": [
+            -179.4431,
+            -21.9023,
+            596.319
+          ],
+          "time": "2026-03-01T05:44:43.017Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s16b",
+          "significance": 611
+        }
+      ]
+    },
+    "usgs_earthquakes_m4": {
+      "name": "USGS M4+ Earthquakes (24h)",
+      "category": "seismic",
+      "fetchedAt": "2026-03-07T12:59:26.651Z",
+      "events": [
+        {
+          "type": "earthquake",
+          "title": "M 4.5 - 16 km SSE of Petropavlovsk-Kamchatsky, Russia",
+          "magnitude": 4.5,
+          "location": "16 km SSE of Petropavlovsk-Kamchatsky, Russia",
+          "coordinates": [
+            158.6892,
+            52.9196,
+            79.511
+          ],
+          "time": "2026-03-07T08:42:10.852Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2r5",
+          "significance": 312
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.6 - 148 km SSE of Vilyuchinsk, Russia",
+          "magnitude": 4.6,
+          "location": "148 km SSE of Vilyuchinsk, Russia",
+          "coordinates": [
+            159.3949,
+            51.7384,
+            35
+          ],
+          "time": "2026-03-07T07:36:15.398Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2qx",
+          "significance": 326
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.7 - 17 km ESE of Manay, Philippines",
+          "magnitude": 4.7,
+          "location": "17 km ESE of Manay, Philippines",
+          "coordinates": [
+            126.6858,
+            7.16,
+            80.549
+          ],
+          "time": "2026-03-07T05:57:58.682Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2ql",
+          "significance": 340
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.5 - northern Mid-Atlantic Ridge",
+          "magnitude": 4.5,
+          "location": "northern Mid-Atlantic Ridge",
+          "coordinates": [
+            -45.0023,
+            23.1252,
+            10
+          ],
+          "time": "2026-03-07T03:41:44.591Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2q5",
+          "significance": 312
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.1 - 93 km E of Hihifo, Tonga",
+          "magnitude": 5.1,
+          "location": "93 km E of Hihifo, Tonga",
+          "coordinates": [
+            -172.9305,
+            -15.8524,
+            10
+          ],
+          "time": "2026-03-07T00:44:53.787Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2pg",
+          "significance": 400
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.9 - 50 km NNW of Hirara, Japan",
+          "magnitude": 4.9,
+          "location": "50 km NNW of Hirara, Japan",
+          "coordinates": [
+            125.0602,
+            25.2057,
+            10
+          ],
+          "time": "2026-03-06T22:39:19.658Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2nv",
+          "significance": 369
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.8 - 154 km SSW of Kavieng, Papua New Guinea",
+          "magnitude": 4.8,
+          "location": "154 km SSW of Kavieng, Papua New Guinea",
+          "coordinates": [
+            150.1359,
+            -3.8057,
+            10
+          ],
+          "time": "2026-03-06T22:26:17.944Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2ns",
+          "significance": 354
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.3 - 71 km SSE of Shihezi, China",
+          "magnitude": 5.3,
+          "location": "71 km SSE of Shihezi, China",
+          "coordinates": [
+            86.4382,
+            43.7263,
+            10
+          ],
+          "time": "2026-03-06T21:44:46.694Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2nf",
+          "significance": 432
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.7 - 228 km ESE of Attu Station, Alaska",
+          "magnitude": 5.7,
+          "location": "228 km ESE of Attu Station, Alaska",
+          "coordinates": [
+            176.4403,
+            52.3233,
+            9.339
+          ],
+          "time": "2026-03-06T21:08:19.511Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2n6",
+          "significance": 500
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.0 - 57 km ESE of Ōfunato, Japan",
+          "magnitude": 5,
+          "location": "57 km ESE of Ōfunato, Japan",
+          "coordinates": [
+            142.3146,
+            38.849,
+            60.393
+          ],
+          "time": "2026-03-06T20:31:52.961Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2mt",
+          "significance": 385
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.5 - South Sandwich Islands region",
+          "magnitude": 4.5,
+          "location": "South Sandwich Islands region",
+          "coordinates": [
+            -28.7813,
+            -56.0428,
+            239.771
+          ],
+          "time": "2026-03-06T20:16:41.849Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2ms",
+          "significance": 312
+        },
+        {
+          "type": "earthquake",
+          "title": "M 4.5 - 174 km SSE of Tual, Indonesia",
+          "magnitude": 4.5,
+          "location": "174 km SSE of Tual, Indonesia",
+          "coordinates": [
+            133.2928,
+            -7.1082,
+            10
+          ],
+          "time": "2026-03-06T20:15:10.018Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2mp",
+          "significance": 312
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.4 - 69 km E of Tobelo, Indonesia",
+          "magnitude": 5.4,
+          "location": "69 km E of Tobelo, Indonesia",
+          "coordinates": [
+            128.6314,
+            1.6466,
+            10
+          ],
+          "time": "2026-03-06T17:55:53.207Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2m9",
+          "significance": 449
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.1 - 132 km ENE of Masohi, Indonesia",
+          "magnitude": 5.1,
+          "location": "132 km ENE of Masohi, Indonesia",
+          "coordinates": [
+            130.1319,
+            -3.0251,
+            10
+          ],
+          "time": "2026-03-06T15:27:47.797Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2ip",
+          "significance": 400
+        },
+        {
+          "type": "earthquake",
+          "title": "M 5.3 - Kermadec Islands, New Zealand",
+          "magnitude": 5.3,
+          "location": "Kermadec Islands, New Zealand",
+          "coordinates": [
+            -177.4844,
+            -29.9667,
+            51.927
+          ],
+          "time": "2026-03-06T15:17:45.179Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2ih",
+          "significance": 432
+        },
+        {
+          "type": "earthquake",
+          "title": "M 6.3 - 181 km SE of Kirakira, Solomon Islands",
+          "magnitude": 6.3,
+          "location": "181 km SE of Kirakira, Solomon Islands",
+          "coordinates": [
+            163.1628,
+            -11.5475,
+            8.682
+          ],
+          "time": "2026-03-06T14:27:47.626Z",
+          "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000s2i2",
+          "significance": 611
+        }
+      ]
+    },
+    "al_jazeera": {
+      "name": "Al Jazeera",
+      "category": "conflict",
+      "fetchedAt": "2026-03-07T12:59:26.697Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "OpenAI’s fund raising boom slows amid mounting debt",
+          "url": "https://www.aljazeera.com/economy/2026/3/7/openais-fund-raising-boom-slows-amid-mounting-debt?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 12:29:11 +0000",
+          "description": "Experts have begun to question the AI startup’s path forward amid surging financial needs and no profit plan. "
+        },
+        {
+          "type": "rss_item",
+          "title": "Aftermath of village in Lebanon after Hezbollah, Israeli troops clash",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/aftermath-of-village-in-lebanon-after-hezbollah-israeli-troops-clash?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 12:24:56 +0000",
+          "description": "Aftermath of village in Lebanon after Hezbollah, Israeli troops clash"
+        },
+        {
+          "type": "rss_item",
+          "title": "Indonesians protest Iran war, pressure president over US ties",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/indonesians-protest-iran-war-pressure-president-over-us-ties?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 12:23:43 +0000",
+          "description": "Protesters in Indonesia have rallied against the US-Israeli war on Iran, denouncing their government&#039;s ties to the US."
+        },
+        {
+          "type": "rss_item",
+          "title": "Kurdish fighters say Iran ground operation ‘highly likely’",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/kurdish-fighters-say-iran-ground-operation-highly?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 12:19:47 +0000",
+          "description": "Babasheikh Hosseini has told Al Jazeera it is highly likely that Kurdish fighters will stage a ground operation in Iran."
+        },
+        {
+          "type": "rss_item",
+          "title": "Sirens echo in occupied East Jerusalem warning of Iranian missiles",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/sirens-echo-in-occupied-east-jerusalem-warning-of-iranian-missiles?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 11:30:19 +0000",
+          "description": "Air raid sirens blared across occupied East Jerusalem on Saturday after missiles were reportedly fired by Iran."
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump-Netanyahu’s ‘war in search of a strategy’",
+          "url": "https://www.aljazeera.com/video/the-listening-post/2026/3/7/trump-netanyahus-war-in-search-of-a-strategy?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 11:14:04 +0000",
+          "description": "An illegal war, two leaders in cahoots and media outlets struggling to meet the moment."
+        },
+        {
+          "type": "rss_item",
+          "title": "India vs New Zealand: T20 World Cup final – Kiwis ready to ‘break hearts’",
+          "url": "https://www.aljazeera.com/sports/2026/3/7/india-vs-new-zealand-t20-world-cup-final-kiwis-ready-to-break-hearts?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 11:08:18 +0000",
+          "description": "New Zealand are targeting a first T20 World Cup title, which would deny India their third - and in front of home crowd."
+        },
+        {
+          "type": "rss_item",
+          "title": "Beirut’s southern suburbs in ruins after Israeli attack",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/beiruts-southern-suburbs-in-ruins-after-israeli-attack?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 11:05:36 +0000",
+          "description": "Israeli strikes have left parts of Beirut’s southern suburbs in ruins. "
+        },
+        {
+          "type": "rss_item",
+          "title": "Protests in Cuba after thousands without power following blackout",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/protests-in-cuba-after-thousands-without-power-following-blackout?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 10:18:45 +0000",
+          "description": "There have been protests in darkness in Cuba, as thousands of people still remain without electricity after a blackout."
+        },
+        {
+          "type": "rss_item",
+          "title": "Southern Peru flooded after torrential rain",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/southern-peru-flooded-after-torrential-rain?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 10:08:25 +0000",
+          "description": "Southern Peru flooded after torrential rain"
+        },
+        {
+          "type": "rss_item",
+          "title": "Explosion and fire in Syria due to falling drone debris",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/explosion-and-fire-in-syria-due-to-falling-drone-debris?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 09:57:51 +0000",
+          "description": "Videos documented an explosion and fire in the countryside of Daraa, Syria, due to a falling drone."
+        },
+        {
+          "type": "rss_item",
+          "title": "Iranian Kurd leader in Iraq says ground operation into Iran ‘highly likely’",
+          "url": "https://www.aljazeera.com/news/2026/3/7/iranian-kurd-leader-in-iraq-says-ground-operation-into-iran-highly-likely?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 09:50:54 +0000",
+          "description": "Hosseini tells Al Jazeera that &#039;there is a strong probability of action&#039; as the IRGC announces strikes on rebel targets."
+        },
+        {
+          "type": "rss_item",
+          "title": "US downplays reports Russia gave Iran intel to help Tehran strike US assets",
+          "url": "https://www.aljazeera.com/news/2026/3/7/us-downplays-reports-russia-gave-iran-intel-to-help-tehran-strike-us-assets?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 09:09:15 +0000",
+          "description": "Pentagon asserts US forces are tracking Russian-Iranian operations amid escalating conflict in the region."
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran’s president apologises for attacking neighbouring countries",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/irans-president-apologises-for-attacking-neighbouring-countries?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 09:07:53 +0000",
+          "description": "Iran&#039;s President Masoud Pezeshkian has apologised for attacking neighbouring countries, in a pre-recorded address."
+        },
+        {
+          "type": "rss_item",
+          "title": "Moment drone strikes Dubai International Airport",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/moment-drone-strikes-dubai-international-airport?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 08:33:40 +0000",
+          "description": "Moment drone strikes Dubai International Airport"
+        },
+        {
+          "type": "rss_item",
+          "title": "Overnight US-Israeli strikes in Tehran target airport",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/overnight-us-israeli-strikes-in-tehran-target-airport?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 08:27:28 +0000",
+          "description": "Overnight US-Israeli strikes in Tehran target airport "
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran to halt strikes on neighbours unless attacks from there: Pezeshkian",
+          "url": "https://www.aljazeera.com/news/2026/3/7/iran-to-halt-strikes-on-neighbours-unless-attacks-from-there-pezeshkian?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 08:25:01 +0000",
+          "description": "Arab states in the Gulf and beyond that house US assets have been targeted in Iranian retaliatory strikes in the war. "
+        },
+        {
+          "type": "rss_item",
+          "title": "Panic at Pakistan fuel stations over Iran war",
+          "url": "https://www.aljazeera.com/video/newsfeed/2026/3/7/panic-at-pakistan-fuel-stations-over-iran-war?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 08:05:26 +0000",
+          "description": "Long queues formed at fuel stations in Pakistan ahead of a government announcement to raise prices."
+        },
+        {
+          "type": "rss_item",
+          "title": "At least 41 killed in Israeli air strikes on Lebanon’s Bekaa: Ministry",
+          "url": "https://www.aljazeera.com/news/2026/3/7/hezbollah-israeli-troops-clash-on-the-ground-in-eastern-lebanons-bekaa?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 07:35:45 +0000",
+          "description": "Official news agency says three Lebanese soldiers among dead, as Hezbollah reports clashes with Israeli army on ground."
+        },
+        {
+          "type": "rss_item",
+          "title": "Tehran pounded in week two of US-Israel war, Iran targets Israel",
+          "url": "https://www.aljazeera.com/news/2026/3/7/tehran-pounded-in-week-two-of-us-israel-war-iran-targets-israel?traffic_source=rss",
+          "time": "Sat, 07 Mar 2026 07:02:48 +0000",
+          "description": "Explosions shake Iran as US-Israel attacks intensify, marking eight days of conflict and retaliation from Iran."
+        }
+      ]
+    },
+    "rt_news": {
+      "name": "RT News",
+      "category": "conflict",
+      "fetchedAt": "2026-03-07T12:59:27.198Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "US ‘unsanctions’ Russian oil amid Middle East crisis",
+          "url": "https://www.rt.com/business/634079-us-unsanction-russian-oil-iran/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 12:48:36 +0000",
+          "description": "\n             “Unsanctioning” Russian oil may co"
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump makes new threats against Iran",
+          "url": "https://www.rt.com/news/634089-trump-makes-new-threats-against-iran/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 11:50:39 +0000",
+          "description": "\n             US President Donald Trump has thre"
+        },
+        {
+          "type": "rss_item",
+          "title": "How has the US-Israeli war on Iran divided the West? ",
+          "url": "https://www.rt.com/news/633874-trump-iran-western-divisions/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 10:36:40 +0000",
+          "description": "\n             US President Donald Trump has chas"
+        },
+        {
+          "type": "rss_item",
+          "title": "US-Israel vs. Iran: How are the warring sides faring? (VIDEOS)",
+          "url": "https://www.rt.com/news/634028-us-israel-iran-war/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 10:34:57 +0000",
+          "description": "\n             RT explores the warfighting capabi"
+        },
+        {
+          "type": "rss_item",
+          "title": "Iranians gather for first Friday prayers since US-Israel war began (PHOTOS, VIDEO)",
+          "url": "https://www.rt.com/news/634081-iranians-first-war-friday-prayers/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 09:26:52 +0000",
+          "description": "\n             Iran held its first Friday prayers"
+        },
+        {
+          "type": "rss_item",
+          "title": "South Africa re-enlists dozens of retired detectives",
+          "url": "https://www.rt.com/africa/634018-south-africa-re-enlists-retired-detectives/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 08:21:00 +0000",
+          "description": "\n             Former South African detectives ha"
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran will no longer attack neighboring countries – Pezeshkian",
+          "url": "https://www.rt.com/news/634084-pezeshkian-iran-stop-attack-neighbouring-countries/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 08:08:42 +0000",
+          "description": "\n             President Masoud Pezeshkian says I"
+        },
+        {
+          "type": "rss_item",
+          "title": "US approves emergency sale of heavy bombs to Israel",
+          "url": "https://www.rt.com/news/634068-us-israel-bombs-sale/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 05:01:52 +0000",
+          "description": "\n             The US has approved an emergency s"
+        },
+        {
+          "type": "rss_item",
+          "title": "America’s Gulf war machine: What we know about the US military network in the Middle East",
+          "url": "https://www.rt.com/news/634046-americas-gulf-war-machine/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Sat, 07 Mar 2026 01:04:40 +0000",
+          "description": "\n              <a href=\"https://www.rt.com/"
+        },
+        {
+          "type": "rss_item",
+          "title": "The end of Russia’s gas era",
+          "url": "https://www.rt.com/russia/634049-putin-tells-russias-energy-sector/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 21:39:54 +0000",
+          "description": "\n             Putin tells Russia’s energy sector"
+        },
+        {
+          "type": "rss_item",
+          "title": "BBC Middle East editor’s ‘Israeli propaganda’ court case begins",
+          "url": "https://www.rt.com/news/634043-bbc-israeli-propaganda-lawsuit/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 21:05:52 +0000",
+          "description": "\n             A BBC editor and avowed Mossad adm"
+        },
+        {
+          "type": "rss_item",
+          "title": "Who will invade Iran for the US?",
+          "url": "https://www.rt.com/news/634027-who-will-invade-iran/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 18:49:24 +0000",
+          "description": "\n             If air power fails, Washington wil"
+        },
+        {
+          "type": "rss_item",
+          "title": "How the Iran war is dividing Team Trump",
+          "url": "https://www.rt.com/news/634016-iran-war-trump-division/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 18:44:40 +0000",
+          "description": "\n             Donald Trump’s war on Iran has exp"
+        },
+        {
+          "type": "rss_item",
+          "title": "Oil price surges to highest since 2023",
+          "url": "https://www.rt.com/business/634030-oil-price-rising-middle-east/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 18:27:56 +0000",
+          "description": "\n             Crude oil prices hit a two-and-a-h"
+        },
+        {
+          "type": "rss_item",
+          "title": "Western energy pressure on Russia has backfired – Kremlin envoy",
+          "url": "https://www.rt.com/russia/634026-russia-dmitriev-energy-restrictions/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 17:33:56 +0000",
+          "description": "\n             Western energy pressure on Russia "
+        },
+        {
+          "type": "rss_item",
+          "title": "Sri Lanka takes custody of second Iranian ship after rescuing crew",
+          "url": "https://www.rt.com/news/634017-sri-lanka-takes-custody-iris-bushehr/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 16:54:03 +0000",
+          "description": "\n             Sri Lankan President Anura Kumara "
+        },
+        {
+          "type": "rss_item",
+          "title": "No justification for US-Israeli war on Iran – Moscow",
+          "url": "https://www.rt.com/russia/634021-iran-posed-no-threat-us-israel-moscow-zakharova/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 16:32:49 +0000",
+          "description": "\n             Iran posed no threat to either the"
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump demands ‘unconditional surrender’ from Iran",
+          "url": "https://www.rt.com/news/634019-trump-iran-unconditional-surrender/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 14:35:34 +0000",
+          "description": "\n             The US is seeking only the “uncond"
+        },
+        {
+          "type": "rss_item",
+          "title": "Moscow warns new NATO member against hosting nukes",
+          "url": "https://www.rt.com/russia/634012-kremlin-finland-nuke-warning/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 14:17:43 +0000",
+          "description": "\n             Finland’s plan to lift a ban on nu"
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump kicks Tucker Carlson out of MAGA",
+          "url": "https://www.rt.com/news/634013-trump-expels-tucker-carlson-maga/?utm_source=rss&utm_medium=rss&utm_campaign=RSS",
+          "time": "Fri, 06 Mar 2026 14:16:45 +0000",
+          "description": "\n             US President Donald Trump has expe"
+        }
+      ]
+    },
+    "guardian_world": {
+      "name": "The Guardian World",
+      "category": "conflict",
+      "fetchedAt": "2026-03-07T12:59:27.242Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Weight-loss jab could be made for $3 a month, study finds",
+          "url": "https://www.theguardian.com/global-development/2026/mar/06/generic-drugs-weight-loss-semaglutide-ozempic-wegovy-diabetes-obesity-study",
+          "time": "Fri, 06 Mar 2026 09:00:16 GMT",
+          "description": "&lt;p&gt;Cheap semaglutide, the drug in Ozempic and Wegovy, could help millions with diabetes and obesity in 160 countries&lt;/p&gt;&lt;p&gt;Weight-loss jabs such as Wegovy could be made for just $3 a"
+        },
+        {
+          "type": "rss_item",
+          "title": "Three men deported by US file legal case against Eswatini over detention",
+          "url": "https://www.theguardian.com/world/2026/mar/05/three-men-deported-us-eswatini-legal-case-detention",
+          "time": "Thu, 05 Mar 2026 19:17:48 GMT",
+          "description": "&lt;p&gt;The men, sent to Africa after completing criminal sentences in the US, are from Cuba, Jamaica and Yemen &lt;/p&gt;&lt;p&gt;Three men deported by the US to Eswatini – rather than their home co"
+        },
+        {
+          "type": "rss_item",
+          "title": "South Africa’s president calls Trump’s policy to offer refuge to white Afrikaners ‘racist’",
+          "url": "https://www.theguardian.com/world/2026/mar/05/south-africa-president-cyril-ramaphosa-calls-donald-trump-policy-white-afrikaners-racist",
+          "time": "Thu, 05 Mar 2026 16:23:57 GMT",
+          "description": "&lt;p&gt;US president is ‘truly uninformed’ for spreading claims of ‘white genocide’ in South Africa, Cyril Ramaphosa tells New York Times&lt;/p&gt;&lt;p&gt;South Africa’s president, Cyril Ramaphosa, "
+        },
+        {
+          "type": "rss_item",
+          "title": "Lewis Hamilton sets sights on racing in an African grand prix before retiring",
+          "url": "https://www.theguardian.com/sport/2026/mar/05/lewis-hamilton-race-africa-grand-prix-retiring-formula-one-colonial",
+          "time": "Thu, 05 Mar 2026 13:37:15 GMT",
+          "description": "&lt;ul&gt;&lt;li&gt;&lt;p&gt;British former champion hits out at former colonial rulers&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;p&gt;‘I’m hoping countries unite and take Africa back’&lt;/p&gt;&lt;/li&gt;&lt"
+        },
+        {
+          "type": "rss_item",
+          "title": "South Sudan risks return to full-blown civil war as violence escalates",
+          "url": "https://www.theguardian.com/world/2026/mar/03/south-sudan-risks-return-civil-war-violence-escalates",
+          "time": "Tue, 03 Mar 2026 15:49:36 GMT",
+          "description": "&lt;p&gt;At least 169 killed in raid near Sudan border as clashes between government and opposition forces intensify&lt;/p&gt;&lt;p&gt;South Sudan is reeling from an escalating conflict between the go"
+        },
+        {
+          "type": "rss_item",
+          "title": "‘An ideological guest list’: Trump invites Latin America’s rightwing leaders to Florida summit",
+          "url": "https://www.theguardian.com/world/2026/mar/07/an-ideological-guest-list-trump-invites-latin-americas-rightwing-leaders-to-florida-summit",
+          "time": "Sat, 07 Mar 2026 08:00:45 GMT",
+          "description": "&lt;p&gt;Omission of presidents of Brazil, Mexico and Colombia, however, exposes failure of US president’s ‘theatrical’ doctrine, say experts&lt;/p&gt;&lt;p&gt;Donald Trump will welcome the leaders of"
+        },
+        {
+          "type": "rss_item",
+          "title": "Peruvian state responsible for mother’s death in forced sterilisation, court rules",
+          "url": "https://www.theguardian.com/global-development/2026/mar/06/peruvian-state-responsible-for-mothers-death-in-forced-sterilisation-court-rules",
+          "time": "Fri, 06 Mar 2026 17:41:07 GMT",
+          "description": "&lt;p&gt;Landmark ruling in Celia Ramos case finds 310,000 women, most Indigenous, were targeted in brutal 1990s campaign&lt;/p&gt;&lt;p&gt;The highest human rights court in Latin America condemned Pe"
+        },
+        {
+          "type": "rss_item",
+          "title": "Iranian mathematician missing in Canada may have been targeted by Tehran, activists say",
+          "url": "https://www.theguardian.com/world/2026/mar/06/missing-iranian-canada-masood-masjoody",
+          "time": "Fri, 06 Mar 2026 15:28:12 GMT",
+          "description": "&lt;p&gt;Police say Masood Masjoody was most likely murdered; Iranian expats suspect he was killed for his criticism of the theocratic regime&lt;/p&gt;&lt;p&gt;Police in &lt;a href=\"https://www.thegua"
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran is not Venezuela, despite Trump’s hopes of repeating ‘regime capture’ strategy",
+          "url": "https://www.theguardian.com/world/2026/mar/06/iran-venezuela-trump-regime-capture",
+          "time": "Fri, 06 Mar 2026 14:00:23 GMT",
+          "description": "&lt;p&gt;Experts say US influence over South American neighbour will be hard to replicate in country with deep and long-standing antipathy to the west&lt;/p&gt;&lt;p&gt;First, the CIA tracks the head "
+        },
+        {
+          "type": "rss_item",
+          "title": "US and Venezuela move to restore diplomatic ties two months after Maduro’s capture",
+          "url": "https://www.theguardian.com/us-news/2026/mar/06/us-venezuela-diplomatic-ties-relations-delcy-rodriguez",
+          "time": "Fri, 06 Mar 2026 06:59:29 GMT",
+          "description": "&lt;p&gt;Re-establishing diplomatic relations will support Venezuela’s economy, US state department claims, amid push for minerals access&lt;/p&gt;&lt;p&gt;Venezuela and the US are restoring diplomati"
+        },
+        {
+          "type": "rss_item",
+          "title": "Indonesia to ban social media for children under 16",
+          "url": "https://www.theguardian.com/technology/2026/mar/06/indonesia-social-media-ban-children",
+          "time": "Fri, 06 Mar 2026 16:25:53 GMT",
+          "description": "&lt;p&gt;Platforms include YouTube, TikTok and Instagram as communication minister says ‘our children face real threats’&lt;/p&gt;&lt;p&gt;&lt;a href=\"https://www.theguardian.com/world/indonesia\"&gt;I"
+        },
+        {
+          "type": "rss_item",
+          "title": "Philippines orders energy cuts in response to Middle East war",
+          "url": "https://www.theguardian.com/world/2026/mar/06/philippines-orders-energy-cuts-middle-east-war-fuel-prices",
+          "time": "Fri, 06 Mar 2026 08:26:46 GMT",
+          "description": "&lt;p&gt;South-east Asian country limits air conditioning and travel for public officials amid soaring fuel prices&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;&lt;a href=\"https://www.theguardian.com/world/l"
+        },
+        {
+          "type": "rss_item",
+          "title": "Jimmy Lai will not appeal conviction, paving way for political negotiations over release",
+          "url": "https://www.theguardian.com/world/2026/mar/06/jimmy-lai-will-not-appeal-conviction-paving-way-for-political-neogtiations-over-release",
+          "time": "Fri, 06 Mar 2026 04:09:47 GMT",
+          "description": "&lt;p&gt;Decision marks end of years-long legal saga for 78-year-old critic of Chinese Communist party&lt;/p&gt;&lt;p&gt;Jimmy Lai, the prominent pro-democracy activist who was&lt;a href=\"https://www."
+        },
+        {
+          "type": "rss_item",
+          "title": "Vanuatu moves forward with UN climate resolution despite Trump opposition",
+          "url": "https://www.theguardian.com/world/2026/mar/05/vanuatu-un-climate-crisis-trump",
+          "time": "Thu, 05 Mar 2026 11:00:02 GMT",
+          "description": "&lt;p&gt;Pacific island says the US weakened its proposal to advance a key climate ruling but vows to hold major polluters accountable&lt;/p&gt;&lt;p&gt;The Trump administration’s attempt to sink a &l"
+        },
+        {
+          "type": "rss_item",
+          "title": "Oil price continues to rise amid Middle East crisis but stock markets rebound across Asia",
+          "url": "https://www.theguardian.com/business/2026/mar/05/oil-price-continues-to-rise-amid-middle-east-crisis-but-stock-markets-rebound-across-asia",
+          "time": "Thu, 05 Mar 2026 10:01:13 GMT",
+          "description": "&lt;p&gt;Reports of attack on US registered tanker in Gulf lifts crude by 3% to $84 a barrel as gas price also starts to climb&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;&lt;a href=\"https://www.theguardian"
+        },
+        {
+          "type": "rss_item",
+          "title": "Radio personality and Agro puppeteer Jamie Dunn dies aged 76",
+          "url": "https://www.theguardian.com/tv-and-radio/2026/mar/07/radio-personality-and-agro-puppeteer-jamie-dunn-dies-aged-76",
+          "time": "Sat, 07 Mar 2026 09:35:46 GMT",
+          "description": "&lt;p&gt;Presenter who entertained children with his sharp-witted, furry puppet Agro Vation, remembered for his brash and unapologetic humour&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;Get our &lt;a href=\""
+        },
+        {
+          "type": "rss_item",
+          "title": "At Perth’s CPAC conference, Liberal party faithful speak of ‘the lost Australians’ – with no sign of One Nation",
+          "url": "https://www.theguardian.com/australia-news/2026/mar/07/at-perths-cpac-conference-liberal-party-faithful-speak-of-the-lost-australians-with-no-sign-of-one-nation",
+          "time": "Sat, 07 Mar 2026 07:54:30 GMT",
+          "description": "&lt;p&gt;Andrew Hastie, Basil Zempilas and Warren Mundine were among the guests at the conservative convention, which focused on immigration and housing&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;p&gt;Get our &"
+        },
+        {
+          "type": "rss_item",
+          "title": "Canadian PM Mark Carney says former prince Andrew should be removed from royal line of succession",
+          "url": "https://www.theguardian.com/world/2026/mar/07/canadian-pm-mark-carney-says-former-prince-andrew-should-be-removed-from-royal-line-of-succession",
+          "time": "Sat, 07 Mar 2026 02:08:16 GMT",
+          "description": "&lt;p&gt;Andrew Mountbatten-Windsor’s ‘deplorable’ alleged actions warrant his removal from the royal line of succession, Carney says&lt;/p&gt;&lt;p&gt;The Canadian prime minister, &lt;a href=\"https:/"
+        },
+        {
+          "type": "rss_item",
+          "title": "Investors are expecting Donald Trump to back down in the war with Iran – but what if he doesn’t?",
+          "url": "https://www.theguardian.com/business/2026/mar/06/investors-are-expecting-donald-trump-to-back-down-in-the-war-with-iran-but-what-if-he-doesnt",
+          "time": "Fri, 06 Mar 2026 23:00:34 GMT",
+          "description": "&lt;p&gt;Global markets have become inured to the US president’s posturing over the past year, but economists warn they may be ‘a little bit complacent’ in anticipating a short conflict in the Middle "
+        },
+        {
+          "type": "rss_item",
+          "title": "Ex-Liberal MP says the party must introduce gender quotas to start winning elections",
+          "url": "https://www.theguardian.com/australia-news/2026/mar/06/australian-liberal-party-gender-quotas",
+          "time": "Fri, 06 Mar 2026 23:00:33 GMT",
+          "description": "&lt;p&gt;Jenny Ware says party is ‘at crisis point’ and cannot be competitive at election time unless it selects candidates who better reflect the makeup of Australia&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;"
+        }
+      ]
+    },
+    "npr_news": {
+      "name": "NPR News",
+      "category": "news",
+      "fetchedAt": "2026-03-07T12:59:27.284Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "One week into the Iran war, the fallout is global",
+          "url": "https://www.npr.org/2026/03/07/nx-s1-5739242/iran-war-oil-trump-israel-spain-economy-one-week",
+          "time": "Sat, 07 Mar 2026 05:00:00 -0500",
+          "description": "The war is no longer just about the U.S., Israel and Iran. More countries are getting caught in the political crossfire or being drawn into the fighting themselves."
+        },
+        {
+          "type": "rss_item",
+          "title": "Too hyped up to sleep? Rituals to calm your body and mind before bed",
+          "url": "https://www.npr.org/2026/03/07/nx-s1-5734392/sleep-better-wind-down-routine-bedtime-rituals",
+          "time": "Sat, 07 Mar 2026 05:00:00 -0500",
+          "description": "The chaos of the day can make it hard to shut off your brain and fall asleep. Here&apos;s how to create a relaxing environment before bedtime to help you quiet the chatter and feel ready for sleep."
+        },
+        {
+          "type": "rss_item",
+          "title": "Curling had its moment at the Olympics and now Paralympics. It sparked a curling bonanza in America",
+          "url": "https://www.npr.org/2026/03/07/g-s1-112246/curling-had-its-moment-at-the-olympics-and-now-paralympics-it-sparked-a-curling-bonanza-in-america",
+          "time": "Sat, 07 Mar 2026 05:00:00 -0500",
+          "description": "Hundreds of people become interested in curling every four years and the 2026 numbers already show that boom."
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran&apos;s president apologizes for strikes on neighbors as strikes pound their cities",
+          "url": "https://www.npr.org/2026/03/07/g-s1-112858/iran-president-statement",
+          "time": "Sat, 07 Mar 2026 03:35:00 -0500",
+          "description": "President Masoud Pezeshkian said Saturday that a demand by the U.S. for an unconditional surrender is a &quot;dream that they should take to their grave.&quot; He also apologized for Iran&apos;s attac"
+        },
+        {
+          "type": "rss_item",
+          "title": "What the Trump administration says about why it went to war with Iran",
+          "url": "https://www.npr.org/2026/03/07/nx-s1-5734381/white-house-messaging-iran-us-israel-war",
+          "time": "Sat, 07 Mar 2026 02:23:13 -0500",
+          "description": "The Trump administration says it is &quot;laser focused&quot; and mission driven, but the messaging has been varied. The range of cited motivations for striking Iran now are sometimes at odds with eac"
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump looks to turn attention to Western Hemisphere at Americas summit",
+          "url": "https://www.npr.org/2026/03/07/g-s1-112852/trump-americas-summit",
+          "time": "Sat, 07 Mar 2026 00:42:59 -0500",
+          "description": "President Trump is set to gather with Latin American leaders on Saturday at his Miami-area golf club as his administration looks to turn attention to the Western Hemisphere, at least for a moment. "
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump administration&apos;s embattled FDA vaccine chief is leaving for the second time",
+          "url": "https://www.npr.org/2026/03/06/nx-s1-5740596/trump-administrations-embattled-fda-vaccine-chief-is-leaving-for-the-second-time",
+          "time": "Fri, 06 Mar 2026 21:38:53 -0500",
+          "description": "The FDA&apos;s controversial vaccine chief, Dr. Vinay Prasad, is leaving the agency. It&apos;s the second time he has abruptly departed following decisions involving the review of vaccinations and spe"
+        },
+        {
+          "type": "rss_item",
+          "title": "Family, former presidents and a Hall of Famer give Rev. Jesse Jackson a final sendoff",
+          "url": "https://www.npr.org/2026/03/06/nx-s1-5740545/jesse-jackson-funeral-service",
+          "time": "Fri, 06 Mar 2026 20:25:13 -0500",
+          "description": "Several speakers at Jackson&apos;s funeral invoked his hallmark catchphrases: &quot;Keep hope alive&quot; and &quot;I am somebody.&quot; "
+        },
+        {
+          "type": "rss_item",
+          "title": "Bernard LaFayette, Selma voting rights organizer, dies at 85",
+          "url": "https://www.npr.org/2026/03/06/g-s1-112830/bernard-lafayette-dies",
+          "time": "Fri, 06 Mar 2026 19:17:58 -0500",
+          "description": "Bernard LaFayette, who died Thursday, laid the foundations of the Selma, Alabama, campaign that culminated in the passage of the Voting Rights Act. He was a Freedom Rider and helped found the Student "
+        },
+        {
+          "type": "rss_item",
+          "title": "Netflix acquires Ben Affleck&apos;s AI company",
+          "url": "https://www.npr.org/2026/03/06/nx-s1-5739370/netflix-ben-affleck-ai-interpositive-deal",
+          "time": "Fri, 06 Mar 2026 16:37:17 -0500",
+          "description": "Affleck&apos;s company helps filmmakers build their own AI models that take care of time-intensive details.&lt;br&gt;"
+        }
+      ]
+    },
+    "politico": {
+      "name": "Politico",
+      "category": "government",
+      "fetchedAt": "2026-03-07T12:59:27.402Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Former Democratic presidents remember the late Rev. Jesse Jackson during final public tribute",
+          "url": "https://www.politico.com/news/2026/03/06/former-president-barack-obama-speaks-during-final-public-tribute-to-the-late-rev-jesse-jackson-00817250",
+          "time": "Fri, 06 Mar 2026 15:47:39 EST",
+          "description": "“He paved the road for so many others to follow,” former President Barack Obama said of the civil rights legend."
+        },
+        {
+          "type": "rss_item",
+          "title": "Dems aren’t sure whether to actually spend big to flip Texas",
+          "url": "https://www.politico.com/news/2026/03/06/democrats-james-talarico-donors-spending-texas-00815690",
+          "time": "Fri, 06 Mar 2026 05:55:00 EST",
+          "description": "National Democrats are worried the money it would take to compete in Texas could be better spent elsewhere."
+        },
+        {
+          "type": "rss_item",
+          "title": "Top Mamdani aide takes progressive project to the UK",
+          "url": "https://www.politico.com/news/2026/03/06/mamdani-aide-british-progressives-00814876",
+          "time": "Fri, 06 Mar 2026 05:55:00 EST",
+          "description": "Morris Katz has been advising British progressives, showing how left-wing movements around the world are looking at Mamdani’s playbook for replication."
+        },
+        {
+          "type": "rss_item",
+          "title": "The nation’s cartoonists on the week in politics",
+          "url": "https://www.politico.com/gallery/2026/03/06/the-nations-cartoonists-on-the-week-in-politics-00816157",
+          "time": "Fri, 06 Mar 2026 05:00:00 EST",
+          "description": "Every week political cartoonists throughout the country and across the political spectrum apply their ink-stained skills to capture the foibles, memes, hypocrisies and other head-slapping events in th"
+        },
+        {
+          "type": "rss_item",
+          "title": "War, Trump and Washington’s Gridlock | Sen. Katie Britt",
+          "url": "https://www.politico.com/video/2026/03/05/war-trump-and-washingtons-gridlock-sen-katie-britt-1944611",
+          "time": "Thu, 05 Mar 2026 23:59:00 EST",
+          "description": ""
+        },
+        {
+          "type": "rss_item",
+          "title": "Republican group attacks Thomas Massie for his opposition to Iran war",
+          "url": "https://www.politico.com/news/2026/03/05/republican-group-attacks-thomas-massie-for-his-opposition-to-iran-war-00815959",
+          "time": "Thu, 05 Mar 2026 19:25:19 EST",
+          "description": "An ad supporting the lawmaker’s rival aired hours after the House rejected a War Powers resolution."
+        },
+        {
+          "type": "rss_item",
+          "title": "'Good riddance': Dems cheer Noem’s ouster — and call for more departures",
+          "url": "https://www.politico.com/news/2026/03/05/kristi-noem-ousted-democrats-response-00815206",
+          "time": "Thu, 05 Mar 2026 16:16:48 EST",
+          "description": "Democratic lawmakers said Stephen Miller and Pam Bondi should be next after President Donald Trump announced Kristi Noem would be stepping aside as DHS secretary."
+        },
+        {
+          "type": "rss_item",
+          "title": "‘This L is on her’: Black lawmakers and strategists dump on Crockett",
+          "url": "https://www.politico.com/news/2026/03/05/jasmine-crockett-loss-critics-00813180",
+          "time": "Thu, 05 Mar 2026 05:45:00 EST",
+          "description": "“She has been and has felt like a woman on an island,” says one operative."
+        },
+        {
+          "type": "rss_item",
+          "title": "Nervous Republicans rally behind Cornyn as they wait on Trump’s Texas pick",
+          "url": "https://www.politico.com/news/2026/03/04/trump-endorsement-texas-cornyn-paxton-00813475",
+          "time": "Wed, 04 Mar 2026 18:38:06 EST",
+          "description": "John Cornyn and his allies are trying to turn a surprising lead over firebrand Ken Paxton into a decisive presidential nod."
+        },
+        {
+          "type": "rss_item",
+          "title": "Texas Latinos turned out in massive numbers for Democrats",
+          "url": "https://www.politico.com/news/2026/03/04/texas-latinos-turned-out-in-massive-numbers-for-democrats-talarico-00812807",
+          "time": "Wed, 04 Mar 2026 15:09:51 EST",
+          "description": "In multiple Latino-majority counties, more people cast Democratic votes on Tuesday than voted for Kamala Harris in 2024."
+        },
+        {
+          "type": "rss_item",
+          "title": "‘A perfect storm is lining up for Texas Democrats’",
+          "url": "https://www.politico.com/news/2026/03/04/talarico-won-his-primary-what-happens-next-is-outside-his-control-00811456",
+          "time": "Wed, 04 Mar 2026 03:53:18 EST",
+          "description": "James Talarico prevailed in a hard-fought Democratic contest. Now he waits to see if he'll face scandal-plagued Texas Attorney General Ken Paxton — or four-term Sen. John Cornyn."
+        },
+        {
+          "type": "rss_item",
+          "title": "Cornyn is still in the fight. Will Trump finally endorse him?",
+          "url": "https://www.politico.com/news/2026/03/04/cornyn-texas-results-trump-endorsement-00811453",
+          "time": "Wed, 04 Mar 2026 03:05:35 EST",
+          "description": "Even in the most heavily Republican counties where Attorney General Ken Paxton might have expected to benefit from a MAGA base, incumbent Sen. John Cornyn largely held his own."
+        },
+        {
+          "type": "rss_item",
+          "title": "Talarico defeats Crockett in Texas Senate Democratic primary",
+          "url": "https://www.politico.com/news/2026/03/04/james-talarico-wins-texas-senate-primary-00811090",
+          "time": "Wed, 04 Mar 2026 02:38:55 EST",
+          "description": "He took a big-tent approach to his campaign by appealing to voters from both parties and independents."
+        },
+        {
+          "type": "rss_item",
+          "title": "Scandal-plagued Rep. Tony Gonzales forced to runoff",
+          "url": "https://www.politico.com/news/2026/03/04/tony-gonzales-runoff-texas-gop-primary-00811372",
+          "time": "Wed, 04 Mar 2026 01:24:36 EST",
+          "description": "Gonzales, who was accused of having an affair with a staffer who later died by suicide, will face influencer Brandon Herrera in a May 26 runoff."
+        },
+        {
+          "type": "rss_item",
+          "title": "Rep. Dan Crenshaw ousted by primary challenger to his right",
+          "url": "https://www.politico.com/news/2026/03/04/dan-crenshaw-loses-texas-primary-challenge-00810922",
+          "time": "Wed, 04 Mar 2026 01:01:38 EST",
+          "description": "State Rep. Steve Toth cast him as insufficiently conservative for the Texas district. President Donald Trump declined to endorse."
+        },
+        {
+          "type": "rss_item",
+          "title": "Cornyn, Paxton head to runoff in Texas Senate GOP race",
+          "url": "https://www.politico.com/news/2026/03/03/cornyn-paxton-texas-senate-gop-runoff-00811195",
+          "time": "Tue, 03 Mar 2026 22:51:34 EST",
+          "description": "Sen. John Cornyn is in the fight of his career — and national Republicans fear they could lose the seat if he falls."
+        },
+        {
+          "type": "rss_item",
+          "title": "Rep. Chip Roy headed to runoff in Texas AG race",
+          "url": "https://www.politico.com/news/2026/03/03/chip-roy-runoff-texas-attorney-general-republican-primary-00811281",
+          "time": "Tue, 03 Mar 2026 22:40:06 EST",
+          "description": "Trump withheld an endorsement in the race to replace Ken Paxton."
+        },
+        {
+          "type": "rss_item",
+          "title": "Ties to Israel plague Democrats in top primaries post-Gaza",
+          "url": "https://www.politico.com/news/2026/03/03/ties-to-israel-plague-democrats-in-top-primaries-post-gaza-00807240",
+          "time": "Tue, 03 Mar 2026 08:00:00 EST",
+          "description": "In Illinois, Texas and Michigan, candidates have been forced to address connections to Israel as support wanes among Democrats."
+        },
+        {
+          "type": "rss_item",
+          "title": "MAGA loves scandal-ridden Ken Paxton. Can they get him to the Senate?",
+          "url": "https://www.politico.com/news/2026/03/03/paxton-cornyn-texas-senate-maga-00808211",
+          "time": "Tue, 03 Mar 2026 05:45:00 EST",
+          "description": "The Texas attorney general will face off against longtime senator John Cornyn in a state that’s increasingly welcomed far-right causes."
+        },
+        {
+          "type": "rss_item",
+          "title": "Centrist Dems met to plot 2028. Then Iran happened.",
+          "url": "https://www.politico.com/news/2026/03/02/third-way-centrist-democrats-iran-foreign-policy-00808202",
+          "time": "Mon, 02 Mar 2026 21:25:08 EST",
+          "description": "At a gathering this week, top center-left consultants and strategists for rumored presidential hopefuls pitched how to talk about foreign policy."
+        }
+      ]
+    },
+    "cve_recent": {
+      "name": "Recent CVEs",
+      "category": "cyber",
+      "fetchedAt": "2026-03-07T12:59:28.143Z",
+      "events": [
+        {
+          "type": "cve",
+          "id": "CVE-1999-0095",
+          "description": "The debug command in Sendmail is enabled, allowing attackers to execute commands as root.",
+          "published": "1988-10-01T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-0082",
+          "description": "CWD ~root command in ftpd allows root access.",
+          "published": "1988-11-11T05:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1471",
+          "description": "Buffer overflow in passwd in BSD based operating systems 4.3 and earlier allows local users to gain root privileges by specifying a long shell or GECOS field.",
+          "published": "1989-01-01T05:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1122",
+          "description": "Vulnerability in restore in SunOS 4.0.3 and earlier allows local users to gain privileges.",
+          "published": "1989-07-26T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1467",
+          "description": "Vulnerability in rcp on SunOS 4.0.x allows remote attackers from trusted hosts to execute arbitrary commands as root, possibly related to the configuration of the nobody user.",
+          "published": "1989-10-26T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1506",
+          "description": "Vulnerability in SMI Sendmail 4.0 and earlier, on SunOS up to 4.0.3, allows remote attackers to access user bin.",
+          "published": "1990-01-29T05:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-0084",
+          "description": "Certain NFS servers allow users to use mknod to gain privileges by creating a writable kmem device and setting the UID to 0.",
+          "severity": "HIGH",
+          "score": 8.4,
+          "published": "1990-05-01T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-2000-0388",
+          "description": "Buffer overflow in FreeBSD libmytinfo library allows local users to execute commands via a long TERMCAP environmental variable.",
+          "published": "1990-05-09T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-0209",
+          "description": "The SunView (SunTools) selection_svc facility allows remote users to read files.",
+          "published": "1990-08-14T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1198",
+          "description": "BuildDisk program on NeXT systems before 2.0 does not prompt users for the root password, which allows local users to gain root privileges.",
+          "published": "1990-10-03T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1391",
+          "description": "Vulnerability in NeXT 1.0a and 1.0 with publicly accessible printers allows local users to gain privileges via a combination of the npd program and weak directory permissions.",
+          "published": "1990-10-03T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1392",
+          "description": "Vulnerability in restore0.9 installation script in NeXT 1.0a and 1.0 allows local users to gain root privileges.",
+          "published": "1990-10-03T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1057",
+          "description": "VMS 4.0 through 5.3 allows local users to gain privileges via the ANALYZE/PROCESS_DUMP dcl command.",
+          "published": "1990-10-25T04:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1554",
+          "description": "/usr/sbin/Mail on SGI IRIX 3.3 and 3.3.1 does not properly set the group ID to the group ID of the user who started Mail, which allows local users to read the mail of other users.",
+          "published": "1990-10-31T05:00:00.000"
+        },
+        {
+          "type": "cve",
+          "id": "CVE-1999-1197",
+          "description": "TIOCCONS in SunOS 4.1.1 does not properly check the permissions of a user who tries to redirect console output and input, which could allow a local user to gain privileges.",
+          "published": "1990-12-20T05:00:00.000"
+        }
+      ]
+    },
+    "bleeping_computer": {
+      "name": "Bleeping Computer",
+      "category": "cyber",
+      "fetchedAt": "2026-03-07T12:59:28.256Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Cognizant TriZetto breach exposes health data of 3.4 million patients",
+          "url": "https://www.bleepingcomputer.com/news/security/cognizant-trizetto-breach-exposes-health-data-of-34-million-patients/",
+          "time": "Fri, 06 Mar 2026 14:50:21 -0500",
+          "description": "TriZetto Provider Solutions, a healthcare IT company that develops software and services used by health insurers and healthcare providers, has suffered a data breach that exposed the sensitive informa"
+        },
+        {
+          "type": "rss_item",
+          "title": "CISA warns feds to patch iOS flaws exploited in crypto-theft attacks",
+          "url": "https://www.bleepingcomputer.com/news/security/cisa-warns-of-apple-flaws-exploited-in-spyware-crypto-theft-attacks/",
+          "time": "Fri, 06 Mar 2026 10:57:16 -0500",
+          "description": "CISA ordered U.S. federal agencies to patch three iOS security flaws targeted in cyberespionage and crypto-theft attacks using the Coruna exploit kit. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "EC-Council Expands AI Certification Portfolio to Strengthen U.S. AI Workforce Readiness and Security",
+          "url": "https://www.bleepingcomputer.com/news/security/ec-council-expands-ai-certification-portfolio-to-strengthen-us-ai-workforce-readiness-and-security/",
+          "time": "Fri, 06 Mar 2026 10:00:10 -0500",
+          "description": "EC-Council, creator of the world-renowned Certified Ethical Hacker (CEH) credential and a global leader in applied cybersecurity education, today launched its Enterprise AI Credential Suite, with four"
+        },
+        {
+          "type": "rss_item",
+          "title": "Fake Claude Code install guides push infostealers in InstallFix attacks",
+          "url": "https://www.bleepingcomputer.com/news/security/fake-claude-code-install-guides-push-infostealers-in-installfix-attacks/",
+          "time": "Fri, 06 Mar 2026 10:00:00 -0500",
+          "description": "Threat actors are employing a new variation of the ClickFix social engineering technique called InstallFix to convince users into running malicious commands under the pretext of installing legitimate "
+        },
+        {
+          "type": "rss_item",
+          "title": "Microsoft 365 Backup to add file-level restore for faster recovery",
+          "url": "https://www.bleepingcomputer.com/news/microsoft/microsoft-365-backup-to-add-file-level-restore-for-faster-recovery/",
+          "time": "Fri, 06 Mar 2026 09:21:09 -0500",
+          "description": "Microsoft will soon begin rolling out a significant upgrade to Microsoft 365 Backup to speed up recovery by allowing administrators to restore individual files and folders. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "Ghanain man pleads guilty to role in $100 million fraud ring",
+          "url": "https://www.bleepingcomputer.com/news/security/ghanain-man-pleads-guilty-to-role-in-100-million-fraud-ring/",
+          "time": "Fri, 06 Mar 2026 05:08:00 -0500",
+          "description": "A Ghanaian national pleaded guilty to his role in a massive fraud ring that stole over $100 million from victims across the United States through business email compromise attacks and romance scams. ["
+        },
+        {
+          "type": "rss_item",
+          "title": "FBI investigates breach of surveillance and wiretap systems",
+          "url": "https://www.bleepingcomputer.com/news/security/fbi-investigates-breach-of-surveillance-and-wiretap-systems/",
+          "time": "Fri, 06 Mar 2026 03:44:53 -0500",
+          "description": "The U.S. Federal Bureau of Investigation (FBI) confirmed on Thursday that it's investigating a breach that affected systems used to manage surveillance and wiretap warrants. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "Chinese state hackers target telcos with new malware toolkit",
+          "url": "https://www.bleepingcomputer.com/news/security/chinese-state-hackers-target-telcos-with-new-malware-toolkit/",
+          "time": "Thu, 05 Mar 2026 18:19:49 -0500",
+          "description": "A China-linked advanced persistent threat actor tracked as UAT-9244 has been targeting telecommunication service providers in South America since 2024, compromising Windows, Linux, and network-edge de"
+        },
+        {
+          "type": "rss_item",
+          "title": "Bing AI promoted fake OpenClaw GitHub repo pushing info-stealing malware",
+          "url": "https://www.bleepingcomputer.com/news/security/bing-ai-promoted-fake-openclaw-github-repo-pushing-info-stealing-malware/",
+          "time": "Thu, 05 Mar 2026 17:37:34 -0500",
+          "description": "Fake OpenClaw installers hosted in GitHub repositories and promoted by Microsoft Bing's AI-enhanced search feature instructed users to run commands that deployed information stealers and proxy malware"
+        },
+        {
+          "type": "rss_item",
+          "title": "Wikipedia hit by self-propagating JavaScript worm that vandalized pages",
+          "url": "https://www.bleepingcomputer.com/news/security/wikipedia-hit-by-self-propagating-javascript-worm-that-vandalized-pages/",
+          "time": "Thu, 05 Mar 2026 15:42:25 -0500",
+          "description": "The Wikimedia Foundation suffered a security incident today after a self-propagating JavaScript worm began vandalizing pages and modifying user scripts across multiple wikis. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "WordPress membership plugin bug exploited to create admin accounts",
+          "url": "https://www.bleepingcomputer.com/news/security/wordpress-membership-plugin-bug-exploited-to-create-admin-accounts/",
+          "time": "Thu, 05 Mar 2026 13:44:58 -0500",
+          "description": "Hackers are exploiting a critical vulnerability in the User Registration & Membership plugin, which is installed on more than 60,000 WordPress sites. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "FBI arrests suspect linked to $46M crypto theft from US Marshals",
+          "url": "https://www.bleepingcomputer.com/news/security/fbi-arrests-suspect-linked-to-46m-crypto-theft-from-us-marshals/",
+          "time": "Thu, 05 Mar 2026 13:36:18 -0500",
+          "description": "​A U.S. government contractor's son, accused of stealing more than $46 million in cryptocurrency from the U.S. Marshals Service, was arrested Wednesday on the island of Saint Martin. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "Google says 90 zero-days were exploited in attacks last year",
+          "url": "https://www.bleepingcomputer.com/news/security/google-says-90-zero-days-were-exploited-in-attacks-last-year/",
+          "time": "Thu, 05 Mar 2026 10:03:43 -0500",
+          "description": "Google Threat Intelligence Group (GTIG) tracked 90 zero-day vulnerabilities actively exploited throughout 2025, almost half of them in enterprise software and appliances. [...]"
+        },
+        {
+          "type": "rss_item",
+          "title": "2026 Browser Data Reveals Major Enterprise Security Blind Spots",
+          "url": "https://www.bleepingcomputer.com/news/security/2026-browser-data-reveals-major-enterprise-security-blind-spots/",
+          "time": "Thu, 05 Mar 2026 10:01:11 -0500",
+          "description": "The browser is becoming the operating system for modern work, yet many enterprises still treat it as an extension of network or endpoint security. Keep Aware's 2026 State of Browser Security Report sh"
+        },
+        {
+          "type": "rss_item",
+          "title": "Police dismantles online gambling ring exploiting Ukrainian women",
+          "url": "https://www.bleepingcomputer.com/news/security/police-dismantles-online-gambling-ring-exploiting-ukrainian-women/",
+          "time": "Thu, 05 Mar 2026 07:39:20 -0500",
+          "description": "Spanish and Ukrainian law enforcement authorities dismantled a criminal ring that exploited war-displaced Ukrainian women to run an online gambling scheme that laundered nearly €4.75 million in illici"
+        }
+      ]
+    },
+    "krebs_security": {
+      "name": "Krebs on Security",
+      "category": "cyber",
+      "fetchedAt": "2026-03-07T12:59:28.296Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Who is the Kimwolf Botmaster &#8220;Dort&#8221;?",
+          "url": "https://krebsonsecurity.com/2026/02/who-is-the-kimwolf-botmaster-dort/",
+          "time": "Sat, 28 Feb 2026 12:01:57 +0000",
+          "description": "In early January 2026, KrebsOnSecurity revealed how a security researcher disclosed a vulnerability that was used to assemble Kimwolf, the world's largest and most disruptive botnet. Since then, the p"
+        },
+        {
+          "type": "rss_item",
+          "title": "&#8216;Starkiller&#8217; Phishing Service Proxies Real Login Pages, MFA",
+          "url": "https://krebsonsecurity.com/2026/02/starkiller-phishing-service-proxies-real-login-pages-mfa/",
+          "time": "Fri, 20 Feb 2026 20:00:30 +0000",
+          "description": "Most phishing websites are little more than static copies of login pages for popular online destinations, and they are often quickly taken down by anti-abuse activists and security firms. But a stealt"
+        },
+        {
+          "type": "rss_item",
+          "title": "Kimwolf Botnet Swamps Anonymity Network I2P",
+          "url": "https://krebsonsecurity.com/2026/02/kimwolf-botnet-swamps-anonymity-network-i2p/",
+          "time": "Wed, 11 Feb 2026 16:08:11 +0000",
+          "description": "For the past week, the massive \"Internet of Things\" (IoT) botnet known as Kimwolf has been disrupting the The Invisible Internet Project (I2P), a decentralized, encrypted communications network design"
+        },
+        {
+          "type": "rss_item",
+          "title": "Patch Tuesday, February 2026 Edition",
+          "url": "https://krebsonsecurity.com/2026/02/patch-tuesday-february-2026-edition/",
+          "time": "Tue, 10 Feb 2026 21:49:53 +0000",
+          "description": "Microsoft today released updates to fix more than 50 security holes in its Windows operating systems and other software, including patches for a whopping six \"zero-day\" vulnerabilities that attackers "
+        },
+        {
+          "type": "rss_item",
+          "title": "Please Don&#8217;t Feed the Scattered Lapsus ShinyHunters",
+          "url": "https://krebsonsecurity.com/2026/02/please-dont-feed-the-scattered-lapsus-shiny-hunters/",
+          "time": "Mon, 02 Feb 2026 16:15:16 +0000",
+          "description": "A prolific data ransom gang that calls itself Scattered Lapsus ShinyHunters (SLSH) has a distinctive playbook when it seeks to extort payment from victim firms: Harassing, threatening and even swattin"
+        },
+        {
+          "type": "rss_item",
+          "title": "Who Operates the Badbox 2.0 Botnet?",
+          "url": "https://krebsonsecurity.com/2026/01/who-operates-the-badbox-2-0-botnet/",
+          "time": "Mon, 26 Jan 2026 16:11:38 +0000",
+          "description": "The cybercriminals in control of Kimwolf -- a disruptive botnet that has infected more than 2 million devices -- recently shared a screenshot indicating they'd compromised the control panel for Badbox"
+        },
+        {
+          "type": "rss_item",
+          "title": "Kimwolf Botnet Lurking in Corporate, Govt. Networks",
+          "url": "https://krebsonsecurity.com/2026/01/kimwolf-botnet-lurking-in-corporate-govt-networks/",
+          "time": "Tue, 20 Jan 2026 18:19:13 +0000",
+          "description": "A new Internet-of-Things botnet called Kimwolf has spread to more than 2 million devices, forcing infected systems to participate in massive distributed denial-of-service (DDoS) attacks and to relay o"
+        },
+        {
+          "type": "rss_item",
+          "title": "Patch Tuesday, January 2026 Edition",
+          "url": "https://krebsonsecurity.com/2026/01/patch-tuesday-january-2026-edition/",
+          "time": "Wed, 14 Jan 2026 00:47:38 +0000",
+          "description": "Microsoft today issued patches to plug at least 113 security holes in its various Windows operating systems and supported software. Eight of the vulnerabilities earned Microsoft's most-dire \"critical\""
+        },
+        {
+          "type": "rss_item",
+          "title": "Who Benefited from the Aisuru and Kimwolf Botnets?",
+          "url": "https://krebsonsecurity.com/2026/01/who-benefited-from-the-aisuru-and-kimwolf-botnets/",
+          "time": "Thu, 08 Jan 2026 23:23:43 +0000",
+          "description": "Our first story of 2026 revealed how a destructive new botnet called Kimwolf rapidly grew to infect more than two million devices by mass-compromising a vast number of unofficial Android TV streaming "
+        },
+        {
+          "type": "rss_item",
+          "title": "The Kimwolf Botnet is Stalking Your Local Network",
+          "url": "https://krebsonsecurity.com/2026/01/the-kimwolf-botnet-is-stalking-your-local-network/",
+          "time": "Fri, 02 Jan 2026 14:20:10 +0000",
+          "description": "The story you are reading is a series of scoops nestled inside a far more urgent Internet-wide security advisory. The vulnerability at issue has been exploited for months already, and it's time for a "
+        }
+      ]
+    },
+    "hacker_news_security": {
+      "name": "The Hacker News",
+      "category": "cyber",
+      "fetchedAt": "2026-03-07T12:59:28.537Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Anthropic Finds 22 Firefox Vulnerabilities Using Claude Opus 4.6 AI Model",
+          "url": "https://thehackernews.com/2026/03/anthropic-finds-22-firefox.html",
+          "time": "Sat, 07 Mar 2026 16:51:00 +0530",
+          "description": "Anthropic on Friday said it discovered 22 new security vulnerabilities in the Firefox web browser as part of a security partnership with Mozilla.\nOf these, 14 have been classified as high, seven have "
+        },
+        {
+          "type": "rss_item",
+          "title": "Transparent Tribe Uses AI to Mass-Produce Malware Implants in Campaign Targeting India",
+          "url": "https://thehackernews.com/2026/03/transparent-tribe-uses-ai-to-mass.html",
+          "time": "Fri, 06 Mar 2026 20:41:00 +0530",
+          "description": "The Pakistan-aligned threat actor known as Transparent Tribe has become the latest hacking group to embrace artificial intelligence (AI)-powered coding tools to strike targets with various implants.\nT"
+        },
+        {
+          "type": "rss_item",
+          "title": "Multi-Stage VOID#GEIST Malware Delivering XWorm, AsyncRAT, and Xeno RAT",
+          "url": "https://thehackernews.com/2026/03/multi-stage-voidgeist-malware.html",
+          "time": "Fri, 06 Mar 2026 20:03:00 +0530",
+          "description": "Cybersecurity researchers have disclosed details of a multi-stage malware campaign that uses batch scripts as a pathway to deliver various encrypted remote access trojan (RATs) payloads that correspon"
+        },
+        {
+          "type": "rss_item",
+          "title": "The MSP Guide to Using AI-Powered Risk Management to Scale Cybersecurity",
+          "url": "https://thehackernews.com/2026/03/the-msp-guide-to-using-ai-powered-risk.html",
+          "time": "Fri, 06 Mar 2026 16:00:00 +0530",
+          "description": "Scaling cybersecurity services as an MSP or MSSP requires technical expertise and a business model that delivers measurable value at scale.\nRisk-based cybersecurity is the foundation of that model. Wh"
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran-Linked MuddyWater Hackers Target U.S. Networks With New Dindoor Backdoor",
+          "url": "https://thehackernews.com/2026/03/iran-linked-muddywater-hackers-target.html",
+          "time": "Fri, 06 Mar 2026 15:53:00 +0530",
+          "description": "New research from Broadcom's Symantec and Carbon Black Threat Hunter Team has discovered evidence of an Iranian hacking group embedding itself in several U.S. companies' networks, including banks, air"
+        },
+        {
+          "type": "rss_item",
+          "title": "China-Linked Hackers Use TernDoor, PeerTime, BruteEntry in South American Telecom Attacks",
+          "url": "https://thehackernews.com/2026/03/china-linked-hackers-use-terndoor.html",
+          "time": "Fri, 06 Mar 2026 13:52:00 +0530",
+          "description": "A China-linked advanced persistent threat (APT) actor has been targeting critical telecommunications infrastructure in South America since 2024, targeting Windows and Linux systems and edge devices wi"
+        },
+        {
+          "type": "rss_item",
+          "title": "Microsoft Reveals ClickFix Campaign Using Windows Terminal to Deploy Lumma Stealer",
+          "url": "https://thehackernews.com/2026/03/microsoft-reveals-clickfix-campaign.html",
+          "time": "Fri, 06 Mar 2026 12:14:00 +0530",
+          "description": "Microsoft on Thursday disclosed details of a new widespread ClickFix social engineering campaign that has leveraged the Windows Terminal app as a way to activate a sophisticated attack chain and deplo"
+        },
+        {
+          "type": "rss_item",
+          "title": "Hikvision and Rockwell Automation CVSS 9.8 Flaws Added to CISA KEV Catalog",
+          "url": "https://thehackernews.com/2026/03/hikvision-and-rockwell-automation-cvss.html",
+          "time": "Fri, 06 Mar 2026 12:00:00 +0530",
+          "description": "The U.S. Cybersecurity and Infrastructure Security Agency (CISA) on Thursday added two security flaws impacting Hikvision and Rockwell Automation products to its Known Exploited Vulnerabilities (KEV) "
+        },
+        {
+          "type": "rss_item",
+          "title": "Cisco Confirms Active Exploitation of Two Catalyst SD-WAN Manager Vulnerabilities",
+          "url": "https://thehackernews.com/2026/03/cisco-confirms-active-exploitation-of.html",
+          "time": "Thu, 05 Mar 2026 20:52:00 +0530",
+          "description": "Cisco has disclosed that two more vulnerabilities affecting Catalyst SD-WAN Manager (formerly SD-WAN vManage) have come under active exploitation in the wild.\nThe vulnerabilities in question are liste"
+        },
+        {
+          "type": "rss_item",
+          "title": "Preparing for the Quantum Era: Post-Quantum Cryptography Webinar for Security Leaders",
+          "url": "https://thehackernews.com/2026/03/preparing-for-quantum-era-post-quantum.html",
+          "time": "Thu, 05 Mar 2026 20:52:00 +0530",
+          "description": "Most organizations assume encrypted data is safe.\nBut many attackers are already preparing for a future where today’s encryption can be broken. Instead of trying to decrypt information now, they are c"
+        },
+        {
+          "type": "rss_item",
+          "title": "ThreatsDay Bulletin: DDR5 Bot Scalping, Samsung TV Tracking, Reddit Privacy Fine &amp; More",
+          "url": "https://thehackernews.com/2026/03/threatsday-bulletin-redis-rce-ddr5-bot.html",
+          "time": "Thu, 05 Mar 2026 19:14:00 +0530",
+          "description": "Some weeks in cybersecurity feel routine. This one doesn&rsquo;t.\nSeveral new developments surfaced over the past few days, showing how quickly the threat landscape keeps shifting. Researchers uncover"
+        },
+        {
+          "type": "rss_item",
+          "title": "Dust Specter Targets Iraqi Officials with New SPLITDROP and GHOSTFORM Malware",
+          "url": "https://thehackernews.com/2026/03/dust-specter-targets-iraqi-officials.html",
+          "time": "Thu, 05 Mar 2026 17:31:00 +0530",
+          "description": "A suspected Iran-nexus threat actor has been attributed to a campaign targeting government officials in Iraq by impersonating the country's Ministry of Foreign Affairs to deliver a set of never-before"
+        },
+        {
+          "type": "rss_item",
+          "title": "Where Multi-Factor Authentication Stops and Credential Abuse Starts",
+          "url": "https://thehackernews.com/2026/03/where-multi-factor-authentication-stops.html",
+          "time": "Thu, 05 Mar 2026 16:30:00 +0530",
+          "description": "Organizations typically roll out multi-factor authentication (MFA) and assume stolen passwords are no longer enough to access systems. In Windows environments, that assumption is often wrong. Attacker"
+        },
+        {
+          "type": "rss_item",
+          "title": "APT28-Linked Campaign Deploys BadPaw Loader and MeowMeow Backdoor in Ukraine",
+          "url": "https://thehackernews.com/2026/03/apt28-linked-campaign-deploys-badpaw.html",
+          "time": "Thu, 05 Mar 2026 15:40:00 +0530",
+          "description": "Cybersecurity researchers have disclosed details of a new Russian cyber campaign that has targeted Ukrainian entities with two previously undocumented malware families named BadPaw and MeowMeow.\n\"The "
+        },
+        {
+          "type": "rss_item",
+          "title": "Europol-Led Operation Takes Down Tycoon 2FA Phishing-as-a-Service Linked to 64,000 Attacks",
+          "url": "https://thehackernews.com/2026/03/europol-led-operation-takes-down-tycoon.html",
+          "time": "Thu, 05 Mar 2026 12:21:00 +0530",
+          "description": "Tycoon 2FA, one of the prominent phishing-as-a-service (PhaaS) toolkits that allowed cybercriminals to stage adversary-in-the-middle (AitM) credential harvesting attacks at scale, was dismantled by a "
+        },
+        {
+          "type": "rss_item",
+          "title": "FBI and Europol Seize LeakBase Forum Used to Trade Stolen Credentials",
+          "url": "https://thehackernews.com/2026/03/fbi-and-europol-seize-leakbase-forum.html",
+          "time": "Thu, 05 Mar 2026 12:04:00 +0530",
+          "description": "A joint law enforcement operation has dismantled LeakBase, one of the world's largest online forums for cybercriminals to buy and sell stolen data and cybercrime tools.\nThe LeakBase forum, per the U.S"
+        },
+        {
+          "type": "rss_item",
+          "title": "149 Hacktivist DDoS Attacks Hit 110 Organizations in 16 Countries After Middle East Conflict",
+          "url": "https://thehackernews.com/2026/03/149-hacktivist-ddos-attacks-hit-110.html",
+          "time": "Wed, 04 Mar 2026 22:51:00 +0530",
+          "description": "Cybersecurity researchers have warned of a surge in retaliatory hacktivist activity following the U.S.-Israel coordinated military campaign against Iran, codenamed Epic Fury and Roaring Lion.\n\"The hac"
+        },
+        {
+          "type": "rss_item",
+          "title": "Coruna iOS Exploit Kit Uses 23 Exploits Across Five Chains Targeting iOS 13–17.2.1",
+          "url": "https://thehackernews.com/2026/03/coruna-ios-exploit-kit-uses-23-exploits.html",
+          "time": "Wed, 04 Mar 2026 18:58:00 +0530",
+          "description": "Google said it identified a \"new and powerful\" exploit kit dubbed Coruna (aka CryptoWaters) targeting Apple iPhone models running iOS versions between 13.0 and 17.2.1.\nThe exploit kit featured five fu"
+        },
+        {
+          "type": "rss_item",
+          "title": "New RFP Template for AI Usage Control and AI Governance ",
+          "url": "https://thehackernews.com/2026/03/new-rfp-template-for-ai-usage-control.html",
+          "time": "Wed, 04 Mar 2026 17:00:00 +0530",
+          "description": "As AI becomes the central engine for enterprise productivity, security leaders are finally getting the green light — and the budget — to secure it. But there’s a quiet crisis unfolding in the boardroo"
+        },
+        {
+          "type": "rss_item",
+          "title": "Fake Laravel Packages on Packagist Deploy RAT on Windows, macOS, and Linux",
+          "url": "https://thehackernews.com/2026/03/fake-laravel-packages-on-packagist.html",
+          "time": "Wed, 04 Mar 2026 15:07:00 +0530",
+          "description": "Cybersecurity researchers have flagged malicious Packagist PHP packages masquerading as Laravel utilities that act as a conduit for a cross-platform remote access trojan (RAT) that's functional on Win"
+        }
+      ]
+    },
+    "dark_reading": {
+      "name": "Dark Reading",
+      "category": "cyber",
+      "fetchedAt": "2026-03-07T12:59:28.953Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "North Korean APTs Use AI to Enhance IT Worker Scams",
+          "url": "https://www.darkreading.com/threat-intelligence/north-korean-apts-ai-it-worker-scams",
+          "time": "Fri, 06 Mar 2026 17:49:02 GMT",
+          "description": "DPRK worker scams are old hat, but they're still working, thanks to AI tools that help with everything from face swapping to daily emails."
+        },
+        {
+          "type": "rss_item",
+          "title": "EU Auto Rules Shift Gears on Cybersecurity Standards",
+          "url": "https://www.darkreading.com/cyber-risk/eu-auto-rules-shift-gears-on-cybersecurity-standards",
+          "time": "Fri, 06 Mar 2026 15:05:55 GMT",
+          "description": "The European Union is taking new precautions as climate change and cybersecurity threats rise across the automotive industry."
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran's Cyber-Kinetic War Doctrine Takes Shape",
+          "url": "https://www.darkreading.com/threat-intelligence/iran-cyber-kinetic-war-doctrine",
+          "time": "Fri, 06 Mar 2026 14:01:11 GMT",
+          "description": "Iran has been hacking IP cameras to plan missile strikes against its enemies, and mounting other attacks on physical assets, showing how cyber and kinetic warfare are fast becoming one in the same."
+        },
+        {
+          "type": "rss_item",
+          "title": "Cyberattack on Mexico's Gov't Agencies Highlight AI Threat",
+          "url": "https://www.darkreading.com/application-security/cyberattack-mexico-government-ai-threat",
+          "time": "Fri, 06 Mar 2026 13:37:31 GMT",
+          "description": "Using Anthropic's Claude, OpenAI's ChatGPT, and a detailed playbook prompt, a handful of cyberattackers reportedly gained access to government agencies and its citizens' data."
+        },
+        {
+          "type": "rss_item",
+          "title": "Nation-State Actor Embraces AI Malware Assembly Line",
+          "url": "https://www.darkreading.com/cyberattacks-data-breaches/nation-state-actor-ai-malware-assembly-line",
+          "time": "Thu, 05 Mar 2026 21:56:07 GMT",
+          "description": "Pakistan's APT36 threat group has begun using vibe-coding to churn out mediocre malware, but at a scale that could overwhelm defenses."
+        },
+        {
+          "type": "rss_item",
+          "title": "Tycoon 2FA Goes Boom as Europol, Vendors Bust Phishing Platform",
+          "url": "https://www.darkreading.com/threat-intelligence/tycoon-2fa-europol-vendors-bust-phishing-platform",
+          "time": "Thu, 05 Mar 2026 21:23:26 GMT",
+          "description": "The phishing-as-a-service platform was popular among cyber threat actors because of its ability to bypass multifactor authentication defenses."
+        },
+        {
+          "type": "rss_item",
+          "title": "Cisco Drops 48 New Firewall Vulnerabilities, 2 Critical",
+          "url": "https://www.darkreading.com/vulnerabilities-threats/cisco-48-firewall-vulnerabilities-2-critical",
+          "time": "Thu, 05 Mar 2026 20:11:15 GMT",
+          "description": "Edge bugs are so fetch, and Cisco just patched 50 new ones, including some heavy hitters with 10 out of 10 scores on the CVSS scale."
+        },
+        {
+          "type": "rss_item",
+          "title": "Software Development Practices Help Enterprises Tackle Real-Life Risks",
+          "url": "https://www.darkreading.com/cybersecurity-operations/software-development-practices-help-enterprises-tackle-real-life-risks",
+          "time": "Thu, 05 Mar 2026 16:34:20 GMT",
+          "description": "Organizations can borrow secure-by-design processes to manage non-technical challenges like governance or the inevitable human error."
+        },
+        {
+          "type": "rss_item",
+          "title": "LatAm Now Faces 2x More Cyberattacks Than US",
+          "url": "https://www.darkreading.com/threat-intelligence/latam-2x-more-cyberattacks-us",
+          "time": "Thu, 05 Mar 2026 14:00:00 GMT",
+          "description": "Much of Central and South America struggles with cybersecurity maturity, and hackers are taking advantage."
+        },
+        {
+          "type": "rss_item",
+          "title": "VMware Aria Operations Bug Exploited, Cloud Resources at Risk",
+          "url": "https://www.darkreading.com/cloud-security/vmware-aria-operations-bug-exploited-cloud-risk",
+          "time": "Wed, 04 Mar 2026 21:04:56 GMT",
+          "description": "Exploitation of the command injection flaw in VMware Aria Operations could grant an attacker broad acess to victims' cloud environments."
+        },
+        {
+          "type": "rss_item",
+          "title": "Stranger Things Meets Cybersecurity: Lessons from the Hive Mind",
+          "url": "https://www.darkreading.com/cybersecurity-operations/stranger-things-meets-cybersecurity-lessons-hive-mind",
+          "time": "Wed, 04 Mar 2026 17:09:27 GMT",
+          "description": "Events and concepts from the Stranger Things television series illustrate how enterprises can defend their networks and stay &quot;right side up.&quot;"
+        },
+        {
+          "type": "rss_item",
+          "title": "Dark Reading Confidential: This Threat Hunter Helped Cops Bust Up An African Cybercrime Syndicate",
+          "url": "https://www.darkreading.com/threat-intelligence/threat-hunter-helped-cops-crack-african-cybercrime-syndicate",
+          "time": "Wed, 04 Mar 2026 15:00:00 GMT",
+          "description": "Dark Reading Confidential Episode 15: Interpol relied on Will Thomas and team to help break up a sprawling cybercrime ring, leading to the arrest of 574 suspects, the recovery of more than $3 million,"
+        },
+        {
+          "type": "rss_item",
+          "title": "China's Silver Dragon Razes Governments in EU, SE Asia",
+          "url": "https://www.darkreading.com/threat-intelligence/china-silver-dragon-governments-eu-se-asia",
+          "time": "Wed, 04 Mar 2026 11:26:55 GMT",
+          "description": "The emerging actor, part of the APT41 nexus, gains initial access via phishing, and uses legitimate network services to obscure cyber espionage activities."
+        },
+        {
+          "type": "rss_item",
+          "title": "Indian APT 'Sloppy Lemming' Targets Defense, Critical Infrastructure",
+          "url": "https://www.darkreading.com/threat-intelligence/india-apt-sloppy-lemming-defense-critical-infrastructure",
+          "time": "Tue, 03 Mar 2026 22:24:22 GMT",
+          "description": "India-nexus cyber threat actors are growing more active and sophisticated, using custom tools coded in Rust and cloud-based command and control."
+        },
+        {
+          "type": "rss_item",
+          "title": "Vehicle Tire Pressure Sensors Enable Silent Tracking",
+          "url": "https://www.darkreading.com/ics-ot-security/tire-pressure-sensors-silent-tracking",
+          "time": "Tue, 03 Mar 2026 20:53:39 GMT",
+          "description": "Like many other features and systems in modern cars, tire pressure sensors leak sensitive data that can be abused by threat actors."
+        },
+        {
+          "type": "rss_item",
+          "title": "Qualcomm Zero-Day Exploited in Targeted Android Attacks",
+          "url": "https://www.darkreading.com/threat-intelligence/qualcomm-zero-day-exploited-targeted-android-attacks",
+          "time": "Tue, 03 Mar 2026 20:28:05 GMT",
+          "description": "The exploitation activity against CVE-2026-21385, a high-severity memory corruption flaw, could be tied to commercial spyware or nation-state threat groups."
+        },
+        {
+          "type": "rss_item",
+          "title": "Speakeasies to Shadow AI: Banning AI Browsers Will Fail",
+          "url": "https://www.darkreading.com/cyber-risk/speakeasies-shadow-ai-banning-ai-browsers-fail",
+          "time": "Tue, 03 Mar 2026 17:40:21 GMT",
+          "description": "Lessons from history highlight why AI-enabled browsers require controlled enablement."
+        },
+        {
+          "type": "rss_item",
+          "title": "AI Agent Overload: How to Solve the Workload Identity Crisis",
+          "url": "https://www.darkreading.com/cloud-security/ai-agent-workload-identity-crisis",
+          "time": "Tue, 03 Mar 2026 12:57:19 GMT",
+          "description": "Workloads keep getting more complicated and organizations are struggling to keep up. So what's the play?"
+        },
+        {
+          "type": "rss_item",
+          "title": "As War Continues, Pro-Iranian Actors Launch Barrage of Cyberattacks",
+          "url": "https://www.darkreading.com/threat-intelligence/war-pro-iranian-actors-cyberattacks",
+          "time": "Tue, 03 Mar 2026 11:30:31 GMT",
+          "description": "Iran and its supporters have taken to cyberspace to retaliate for US-Israeli military action, with an aim to cause economic and physical disruption."
+        },
+        {
+          "type": "rss_item",
+          "title": "Critical OpenClaw Vulnerability Exposes AI Agent Risks",
+          "url": "https://www.darkreading.com/application-security/critical-openclaw-vulnerability-ai-agent-risks",
+          "time": "Mon, 02 Mar 2026 22:34:36 GMT",
+          "description": "The now-patched flaw is the latest in a growing string of security issues associated with the viral AI tool, which has seen rapid adoption among developers."
+        }
+      ]
+    },
+    "fear_greed": {
+      "name": "Crypto Fear & Greed Index",
+      "category": "markets",
+      "fetchedAt": "2026-03-07T12:59:29.305Z",
+      "events": [
+        {
+          "type": "market_sentiment",
+          "value": 12,
+          "classification": "Extreme Fear",
+          "time": "2026-03-07T00:00:00.000Z"
+        }
+      ]
+    },
+    "coingecko_trending": {
+      "name": "CoinGecko Trending",
+      "category": "markets",
+      "fetchedAt": "2026-03-07T12:59:29.394Z",
+      "events": [
+        {
+          "type": "trending_coin",
+          "name": "Immortal Token",
+          "symbol": "IMT",
+          "rank": 976,
+          "price_btc": 8.406251369409944e-7
+        },
+        {
+          "type": "trending_coin",
+          "name": "Bitcoin",
+          "symbol": "BTC",
+          "rank": 1,
+          "price_btc": 1
+        },
+        {
+          "type": "trending_coin",
+          "name": "Pi Network",
+          "symbol": "PI",
+          "rank": 40,
+          "price_btc": 0.0000034642864248617716
+        },
+        {
+          "type": "trending_coin",
+          "name": "Akash Network",
+          "symbol": "AKT",
+          "rank": 242,
+          "price_btc": 0.000005876152324192972
+        },
+        {
+          "type": "trending_coin",
+          "name": "Bittensor",
+          "symbol": "TAO",
+          "rank": 46,
+          "price_btc": 0.0026621116806017477
+        },
+        {
+          "type": "trending_coin",
+          "name": "Hyperliquid",
+          "symbol": "HYPE",
+          "rank": 16,
+          "price_btc": 0.0004520374315360943
+        },
+        {
+          "type": "trending_coin",
+          "name": "Solana",
+          "symbol": "SOL",
+          "rank": 7,
+          "price_btc": 0.001243736424900509
+        },
+        {
+          "type": "trending_coin",
+          "name": "XRP",
+          "symbol": "XRP",
+          "rank": 5,
+          "price_btc": 0.0000200831400990404
+        },
+        {
+          "type": "trending_coin",
+          "name": "Pudgy Penguins",
+          "symbol": "PENGU",
+          "rank": 108,
+          "price_btc": 9.93686029915041e-8
+        },
+        {
+          "type": "trending_coin",
+          "name": "Ethereum",
+          "symbol": "ETH",
+          "rank": 2,
+          "price_btc": 0.029169951474126796
+        }
+      ]
+    },
+    "defillama_tvl": {
+      "name": "DeFiLlama TVL Changes",
+      "category": "markets",
+      "fetchedAt": "2026-03-07T12:59:29.795Z",
+      "events": [
+        {
+          "type": "defi_tvl",
+          "name": "Nyke Finance",
+          "chain": "EthereumClassic",
+          "tvl": 8.456117988867256,
+          "change_1d": 328059.98477464775,
+          "change_7d": 340977.65242413443
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Common",
+          "chain": "Multi-Chain",
+          "tvl": 275248.1432204563,
+          "change_1d": 18267.453648371902,
+          "change_7d": 19119.32666540811
+        },
+        {
+          "type": "defi_tvl",
+          "name": "WoofSwap Shibarium",
+          "chain": "Shibarium",
+          "tvl": 768568.6356971493,
+          "change_1d": 6438.571012262425,
+          "change_7d": 8534.912549136883
+        },
+        {
+          "type": "defi_tvl",
+          "name": "DESK CLOB",
+          "chain": "Arbitrum",
+          "tvl": 48559.129439631644,
+          "change_1d": 609.7884050885059,
+          "change_7d": 1427.2010383423415
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Tokeniza",
+          "chain": "Multi-Chain",
+          "tvl": 34266.69452240671,
+          "change_1d": 369.6319386353829,
+          "change_7d": 676.17072960374
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Percentme",
+          "chain": "Bahamut",
+          "tvl": 69529.298791161,
+          "change_1d": 351.7336328717395,
+          "change_7d": 351.33716469999536
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Accountable",
+          "chain": "Multi-Chain",
+          "tvl": 1933199.9775096627,
+          "change_1d": 218.95836442929635,
+          "change_7d": 193.51753299887372
+        },
+        {
+          "type": "defi_tvl",
+          "name": "MatrixDock STBT",
+          "chain": "Ethereum",
+          "tvl": 30747175.695307765,
+          "change_1d": 182.25828877996378,
+          "change_7d": 418.7830052904691
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Kintsugi",
+          "chain": "Kintsugi",
+          "tvl": 42981.25774727574,
+          "change_1d": 162.62496756499365,
+          "change_7d": 155.10218558651445
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Earnifty",
+          "chain": "Velas",
+          "tvl": 8.412346812779505,
+          "change_1d": 124.46779563698774,
+          "change_7d": -82.2556720818759
+        },
+        {
+          "type": "defi_tvl",
+          "name": "cantOHM",
+          "chain": "Canto",
+          "tvl": 0,
+          "change_1d": -100,
+          "change_7d": -100
+        },
+        {
+          "type": "defi_tvl",
+          "name": "sCANTO",
+          "chain": "Canto",
+          "tvl": 0,
+          "change_1d": -100,
+          "change_7d": -100
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Dalmatian",
+          "chain": "Shibarium",
+          "tvl": 0,
+          "change_1d": -100,
+          "change_7d": null
+        },
+        {
+          "type": "defi_tvl",
+          "name": "CSRfi",
+          "chain": "Canto",
+          "tvl": 0,
+          "change_1d": -100,
+          "change_7d": -100
+        },
+        {
+          "type": "defi_tvl",
+          "name": "UniDerp",
+          "chain": "Unichain",
+          "tvl": 0,
+          "change_1d": -100,
+          "change_7d": -100
+        },
+        {
+          "type": "defi_tvl",
+          "name": "STONEUSD",
+          "chain": "Multi-Chain",
+          "tvl": 0,
+          "change_1d": -100,
+          "change_7d": null
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Ball Exchange",
+          "chain": "Shibarium",
+          "tvl": 0.05328013157271006,
+          "change_1d": -99.95892663362334,
+          "change_7d": 20.070831982597298
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Accumulator",
+          "chain": "ShimmerEVM",
+          "tvl": 6.783311407492344,
+          "change_1d": -99.66925537492916,
+          "change_7d": -99.68490496858553
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Double",
+          "chain": "Arbitrum",
+          "tvl": 636.6710095877187,
+          "change_1d": -96.1359348813926,
+          "change_7d": -95.70271429503396
+        },
+        {
+          "type": "defi_tvl",
+          "name": "Rheo",
+          "chain": "Multi-Chain",
+          "tvl": 244510.64686945826,
+          "change_1d": 92.65401223539376,
+          "change_7d": 810.1109885280623
+        }
+      ]
+    },
+    "gdacs_disasters": {
+      "name": "GDACS Disaster Alerts",
+      "category": "weather",
+      "fetchedAt": "2026-03-07T12:59:30.874Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Green earthquake (Magnitude 5.7M, Depth:9.339km) in United States 06/03/2026 21:08 UTC, Few people affected in MMI III.",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527754",
+          "time": "Fri, 06 Mar 2026 21:13:32 GMT",
+          "description": "On 3/6/2026 9:08:19 PM, an earthquake occurred in United States potentially affecting Few people affected in MMI III. The earthquake had Magnitude 5.7M, Depth:9.339km."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green earthquake (Magnitude 6.3M, Depth:8.682km) in Solomon Is. 06/03/2026 14:27 UTC, 20 thousand in MMI IV.",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527699",
+          "time": "Fri, 06 Mar 2026 14:38:04 GMT",
+          "description": "On 3/6/2026 2:27:47 PM, an earthquake occurred in Solomon Is. potentially affecting 20 thousand in MMI IV. The earthquake had Magnitude 6.3M, Depth:8.682km."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green notification for tropical cyclone TWENTYSIX-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001262",
+          "time": "Fri, 06 Mar 2026 02:06:11 GMT",
+          "description": "From 06/03/2026 to 07/03/2026, a Tropical Storm (maximum wind speed of 65 km/h) TWENTYSIX-26 was active in SEIndian. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated"
+        },
+        {
+          "type": "rss_item",
+          "title": "Green earthquake (Magnitude 5.5M, Depth:17km) in United States 05/03/2026 19:25 UTC, 2 thousand in MMI&gt;=II.",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527570",
+          "time": "Thu, 05 Mar 2026 19:32:18 GMT",
+          "description": "On 3/5/2026 7:25:07 PM, an earthquake occurred in United States potentially affecting 2 thousand in MMI&gt;=II. The earthquake had Magnitude 5.5M, Depth:17km."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green flood alert in United States",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=FL&amp;eventid=1103789",
+          "time": "Sat, 07 Mar 2026 06:42:54 GMT",
+          "description": "On 05/03/2026, a flood started in United States, lasting until 07/03/2026 (last update). The flood caused 0 deaths and 50 displaced ."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green earthquake (Magnitude 6.4M, Depth:10km) in United States 04/03/2026 17:54 UTC, Few people affected in MMI IV.",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527379",
+          "time": "Wed, 04 Mar 2026 18:01:13 GMT",
+          "description": "On 3/4/2026 5:54:36 PM, an earthquake occurred in United States potentially affecting Few people affected in MMI IV. The earthquake had Magnitude 6.4M, Depth:10km."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green notification for tropical cyclone TWENTYFIVE-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001261",
+          "time": "Wed, 04 Mar 2026 08:06:31 GMT",
+          "description": "From 04/03/2026 to 05/03/2026, a Tropical Storm (maximum wind speed of 74 km/h) TWENTYFIVE-26 was active in SEIndian. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimate"
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Australia",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027680",
+          "time": "Thu, 05 Mar 2026 12:00:10 GMT",
+          "description": "On 04/03/2026, a forest fire started in Australia,  until 06/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green notification for tropical cyclone TWENTYFOUR-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001260",
+          "time": "Wed, 04 Mar 2026 02:07:49 GMT",
+          "description": "From 04/03/2026 to 05/03/2026, a Tropical Depression (maximum wind speed of 65 km/h) TWENTYFOUR-26 was active in SWPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Es"
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Australia",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027663",
+          "time": "Wed, 04 Mar 2026 08:00:09 GMT",
+          "description": "On 04/03/2026, a forest fire started in Australia,  until 05/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green earthquake (Magnitude 6.2M, Depth:18km) in Indonesia 03/03/2026 04:56 UTC, 20 thousand in MMI&gt;=V.",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527111",
+          "time": "Tue, 03 Mar 2026 05:08:56 GMT",
+          "description": "On 3/3/2026 4:56:46 AM, an earthquake occurred in Indonesia potentially affecting 20 thousand in MMI&gt;=V. The earthquake had Magnitude 6.2M, Depth:18km."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Ethiopia",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027699",
+          "time": "Sat, 07 Mar 2026 08:00:24 GMT",
+          "description": "On 03/03/2026, a forest fire started in Ethiopia,  until 06/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in India",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027705",
+          "time": "Sat, 07 Mar 2026 00:00:22 GMT",
+          "description": "On 03/03/2026, a forest fire started in India,  until 06/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green flood alert in Indonesia",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=FL&amp;eventid=1103786",
+          "time": "Wed, 04 Mar 2026 07:03:12 GMT",
+          "description": "On 02/03/2026, a flood started in Indonesia, lasting until 04/03/2026 (last update). The flood caused 0 deaths and 111 displaced ."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Ethiopia",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027675",
+          "time": "Thu, 05 Mar 2026 12:00:16 GMT",
+          "description": "On 02/03/2026, a forest fire started in Ethiopia,  until 05/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Central African Republic",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027683",
+          "time": "Thu, 05 Mar 2026 16:00:22 GMT",
+          "description": "On 02/03/2026, a forest fire started in Central African Republic,  until 05/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Chad",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027707",
+          "time": "Sat, 07 Mar 2026 08:00:35 GMT",
+          "description": "On 02/03/2026, a forest fire started in Chad,  until 07/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Venezuela",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027696",
+          "time": "Fri, 06 Mar 2026 20:00:48 GMT",
+          "description": "On 01/03/2026, a forest fire started in Venezuela,  until 07/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Sudan",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027676",
+          "time": "Thu, 05 Mar 2026 04:00:33 GMT",
+          "description": "On 01/03/2026, a forest fire started in Sudan,  until 05/03/2026."
+        },
+        {
+          "type": "rss_item",
+          "title": "Green forest fire notification in Myanmar",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027664",
+          "time": "Wed, 04 Mar 2026 12:00:20 GMT",
+          "description": "On 01/03/2026, a forest fire started in Myanmar,  until 05/03/2026."
+        }
+      ]
+    },
+    "polymarket_active": {
+      "name": "Polymarket Active Markets",
+      "category": "prediction",
+      "fetchedAt": "2026-03-07T12:59:30.972Z",
+      "events": [
+        {
+          "type": "prediction_market",
+          "question": "BitBoy convicted?",
+          "outcome_prices": "[\"0.1785\", \"0.8215\"]",
+          "volume": "62315.829685999815",
+          "liquidity": "1420.97446",
+          "end_date": "2026-03-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Russia-Ukraine Ceasefire before GTA VI?",
+          "outcome_prices": "[\"0.585\", \"0.415\"]",
+          "volume": "1362336.4164559986",
+          "liquidity": "62603.5706",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "New Rihanna Album before GTA VI?",
+          "outcome_prices": "[\"0.545\", \"0.455\"]",
+          "volume": "645280.7857010016",
+          "liquidity": "57021.1272",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "New Playboi Carti Album before GTA VI?",
+          "outcome_prices": "[\"0.52\", \"0.48\"]",
+          "volume": "679146.8064820012",
+          "liquidity": "52008.5574",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Jesus Christ return before GTA VI?",
+          "outcome_prices": "[\"0.485\", \"0.515\"]",
+          "volume": "9857379.67457015",
+          "liquidity": "736317.393",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Trump out as President before GTA VI?",
+          "outcome_prices": "[\"0.525\", \"0.475\"]",
+          "volume": "527137.4677310063",
+          "liquidity": "67734.5823",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will China invades Taiwan before GTA VI?",
+          "outcome_prices": "[\"0.515\", \"0.485\"]",
+          "volume": "1456763.8363859993",
+          "liquidity": "94546.0901",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will bitcoin hit $1m before GTA VI?",
+          "outcome_prices": "[\"0.4895\", \"0.5105\"]",
+          "volume": "3437888.609023731",
+          "liquidity": "442605.40535",
+          "end_date": "2026-07-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "GTA VI released before June 2026?",
+          "outcome_prices": "[\"0.0215\", \"0.9785\"]",
+          "volume": "10031938.948581994",
+          "liquidity": "34328.86771",
+          "end_date": "2026-05-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Harvey Weinstein be sentenced to no prison time?",
+          "outcome_prices": "[\"0.2755\", \"0.7245\"]",
+          "volume": "50680.28433099997",
+          "liquidity": "994.49873",
+          "end_date": "2025-12-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Harvey Weinstein be sentenced to less than 5 years in prison?",
+          "outcome_prices": "[\"0.0305\", \"0.9695\"]",
+          "volume": "18618.168260999995",
+          "liquidity": "6835.05183",
+          "end_date": "2025-12-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Harvey Weinstein be sentenced to between 5 and 10 years in prison?",
+          "outcome_prices": "[\"0.098\", \"0.902\"]",
+          "volume": "14022.03496599999",
+          "liquidity": "2022.26362",
+          "end_date": "2025-12-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Harvey Weinstein be sentenced to between 10 and 20 years in prison?",
+          "outcome_prices": "[\"0.075\", \"0.925\"]",
+          "volume": "105431.17065299996",
+          "liquidity": "542.13159",
+          "end_date": "2025-12-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Harvey Weinstein be sentenced to between 20 and 30 years in prison?",
+          "outcome_prices": "[\"0.5205\", \"0.4795\"]",
+          "volume": "128144.04631800011",
+          "liquidity": "671.17808",
+          "end_date": "2025-12-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Harvey Weinstein be sentenced to more than 30 years in prison?",
+          "outcome_prices": "[\"0.0625\", \"0.9375\"]",
+          "volume": "16342.489002999997",
+          "liquidity": "5644.21176",
+          "end_date": "2025-12-31T12:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will OpenAI launch a new consumer hardware product by March 31, 2026?",
+          "outcome_prices": "[\"0.013\", \"0.987\"]",
+          "volume": "89405.89509200008",
+          "liquidity": "7454.91964"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Italy qualify for the 2026 FIFA World Cup?",
+          "outcome_prices": "[\"0.6\", \"0.4\"]",
+          "volume": "210860.87605699987",
+          "liquidity": "2403.4491",
+          "end_date": "2026-04-12T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Sweden qualify for the 2026 FIFA World Cup?",
+          "outcome_prices": "[\"0.29\", \"0.71\"]",
+          "volume": "103362.65206699981",
+          "liquidity": "4131.6774",
+          "end_date": "2026-04-12T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Poland qualify for the 2026 FIFA World Cup?",
+          "outcome_prices": "[\"0.355\", \"0.645\"]",
+          "volume": "456972.2231010001",
+          "liquidity": "3043.8633",
+          "end_date": "2026-04-12T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will Ukraine qualify for the 2026 FIFA World Cup?",
+          "outcome_prices": "[\"0.275\", \"0.725\"]",
+          "volume": "136567.92385200018",
+          "liquidity": "5020.6955",
+          "end_date": "2026-04-12T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Carolina Hurricanes win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.105\", \"0.895\"]",
+          "volume": "162332.09017900034",
+          "liquidity": "102757.6332",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Florida Panthers win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.006\", \"0.994\"]",
+          "volume": "702076.5876559962",
+          "liquidity": "72015.52252",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Edmonton Oilers win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.085\", \"0.915\"]",
+          "volume": "322906.02953400085",
+          "liquidity": "52403.3888",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Dallas Stars win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.0585\", \"0.9415\"]",
+          "volume": "512167.6607990011",
+          "liquidity": "73794.89791",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Colorado Avalanche win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.246\", \"0.754\"]",
+          "volume": "10209095.171062041",
+          "liquidity": "95912.81474",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Vegas Golden Knights win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.06\", \"0.94\"]",
+          "volume": "743927.0956329952",
+          "liquidity": "104792.53015",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Tampa Bay Lightning win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.1445\", \"0.8555\"]",
+          "volume": "195597.5639469925",
+          "liquidity": "75529.08863",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Los Angeles Kings win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.0065\", \"0.9935\"]",
+          "volume": "6188174.604861931",
+          "liquidity": "110744.93341",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the New Jersey Devils win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.0025\", \"0.9975\"]",
+          "volume": "435625.43231000117",
+          "liquidity": "85671.29186",
+          "end_date": "2026-06-30T00:00:00Z"
+        },
+        {
+          "type": "prediction_market",
+          "question": "Will the Winnipeg Jets win the 2026 NHL Stanley Cup?",
+          "outcome_prices": "[\"0.005\", \"0.995\"]",
+          "volume": "368229.2619830001",
+          "liquidity": "121199.0186",
+          "end_date": "2026-06-30T00:00:00Z"
+        }
+      ]
+    },
+    "hackernews_top": {
+      "name": "Hacker News Top",
+      "category": "news",
+      "fetchedAt": "2026-03-07T12:59:33.665Z",
+      "events": [
+        {
+          "type": "hackernews",
+          "title": "Ki Editor - an editor that operates on the AST",
+          "url": "https://ki-editor.org/",
+          "score": 48,
+          "comments": 13,
+          "time": "2026-03-07T10:29:13.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Plasma Bigscreen – 10-foot interface for KDE plasma",
+          "url": "https://plasma-bigscreen.org",
+          "score": 486,
+          "comments": 144,
+          "time": "2026-03-06T23:59:16.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Tell HN: I'm 60 years old. Claude Code has re-ignited a passion",
+          "score": 582,
+          "comments": 451,
+          "time": "2026-03-07T00:05:06.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "UUID package coming to Go standard library",
+          "url": "https://github.com/golang/go/issues/62026",
+          "score": 234,
+          "comments": 142,
+          "time": "2026-03-07T02:03:21.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "this css proves me human",
+          "url": "https://will-keleher.com/posts/this-css-makes-me-human/",
+          "score": 289,
+          "comments": 93,
+          "time": "2026-03-06T21:52:44.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "US economy sheds 92,000 jobs in February in sharp slide",
+          "url": "https://www.ft.com/content/6542bd0c-59ca-493b-ab5d-2d69e4e00cae",
+          "score": 14,
+          "comments": 0,
+          "time": "2026-03-07T12:13:04.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "48x32, a 1536 LED Game Computer (2023)",
+          "url": "https://jacquesmattheij.com/48x32-introduction/",
+          "score": 25,
+          "comments": 0,
+          "time": "2026-03-05T00:10:42.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "QGIS 4.0",
+          "url": "https://changelog.qgis.org/en/version/4.0/",
+          "score": 98,
+          "comments": 18,
+          "time": "2026-03-07T08:53:47.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Helix: A post-modern text editor",
+          "url": "https://helix-editor.com/",
+          "score": 184,
+          "comments": 81,
+          "time": "2026-03-06T23:53:29.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Uploading Pirated Books via BitTorrent Qualifies as Fair Use, Meta Argues",
+          "url": "https://torrentfreak.com/uploading-pirated-books-via-bittorrent-qualifies-as-fair-use-meta/",
+          "score": 98,
+          "comments": 60,
+          "time": "2026-03-07T09:18:40.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Galileo's handwritten notes found in ancient astronomy text",
+          "url": "https://www.science.org/content/article/galileo-s-handwritten-notes-found-ancient-astronomy-text",
+          "score": 153,
+          "comments": 30,
+          "time": "2026-03-05T16:47:27.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "LLMs work best when the user defines their acceptance criteria first",
+          "url": "https://blog.katanaquant.com/p/your-llm-doesnt-write-correct-code",
+          "score": 264,
+          "comments": 197,
+          "time": "2026-03-07T01:17:57.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Lock Scroll with a Vengeance",
+          "url": "https://unsung.aresluna.org/lock-scroll-with-a-vengeance/",
+          "score": 26,
+          "comments": 6,
+          "time": "2026-03-04T03:42:17.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Show HN: Moongate – Ultima Online server emulator in .NET 10 with Lua scripting",
+          "url": "https://github.com/moongate-community/moongatev2",
+          "score": 262,
+          "comments": 145,
+          "time": "2026-03-06T14:22:59.000Z"
+        },
+        {
+          "type": "hackernews",
+          "title": "Working and Communicating with Japanese Engineers",
+          "url": "https://www.tokyodev.com/articles/working-and-communicating-with-japanese-engineers",
+          "score": 52,
+          "comments": 25,
+          "time": "2026-03-03T15:02:32.000Z"
+        }
+      ]
+    },
+    "bbc_world": {
+      "name": "BBC World",
+      "category": "news",
+      "fetchedAt": "2026-03-07T12:59:33.858Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Trump demands 'unconditional surrender' from Iran as Putin speaks with Iran's president",
+          "url": "https://www.bbc.com/news/articles/c5yq82k1wk8o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 02:04:06 GMT",
+          "description": "The president also calls on Tehran to pick new leaders who are \"acceptable\" to the White House after six days of war."
+        },
+        {
+          "type": "rss_item",
+          "title": "Armed robots take to the battlefield in Ukraine war",
+          "url": "https://www.bbc.com/news/articles/c62662gzlp8o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 00:36:19 GMT",
+          "description": "Ukraine has embarked on a programme to deploy armed robots on the battlefield against Russian forces. "
+        },
+        {
+          "type": "rss_item",
+          "title": "We've been speaking to Iranians during one week of war. Here's what they said",
+          "url": "https://www.bbc.com/news/articles/c5y5lqygrn7o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 06:00:32 GMT",
+          "description": "Ordinary Iranians reflect on seven days of conflict and where they see their country going next."
+        },
+        {
+          "type": "rss_item",
+          "title": "Heavy rains and flooding kills at least 23 in Nairobi",
+          "url": "https://www.bbc.com/news/articles/cn87pl8e2l5o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 12:21:40 GMT",
+          "description": "Flights in and out of Nairobi Airport have been disrupted while some roads in the capital are submerged."
+        },
+        {
+          "type": "rss_item",
+          "title": "Israeli troops push into Lebanon for yet another war with Iran's proxy Hezbollah",
+          "url": "https://www.bbc.com/news/articles/cpv8xlvk3p4o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 16:16:05 GMT",
+          "description": "The BBC sees troops and tanks massing near the border, as speculation mounts that Israel is planning a full-scale ground invasion to fight Hezbollah. "
+        },
+        {
+          "type": "rss_item",
+          "title": "'Massive' numbers killed by gunmen in latest Nigeria attack, senator tells BBC",
+          "url": "https://www.bbc.com/news/articles/c1d69z3p9g2o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 17:06:14 GMT",
+          "description": "Suspected Islamist militants reportedly seized control of a village for two days before being forced out by troops and air strikes."
+        },
+        {
+          "type": "rss_item",
+          "title": "Russian strike on Kharkiv apartment block kills seven",
+          "url": "https://www.bbc.com/news/articles/cn8zd049l08o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 07:54:22 GMT",
+          "description": "Ukraine President Volodymyr Zelensky says ten other people - including children - are injured as rescuers continue to search through rubble."
+        },
+        {
+          "type": "rss_item",
+          "title": "China spent years building ties in Latin America. Can Trump make room for the US?",
+          "url": "https://www.bbc.com/news/articles/c5yvw0zwpd5o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 01:56:20 GMT",
+          "description": "US President Donald Trump will meet with ideologically-aligned Latin American leaders to try and counter China's influence in the region."
+        },
+        {
+          "type": "rss_item",
+          "title": "Swiss to vote on right-wing push to slash licence fee for public broadcaster",
+          "url": "https://www.bbc.com/news/articles/c4g55v24wrno?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 02:04:23 GMT",
+          "description": "The move is backed by the right-wing Swiss People's Party, which says the current fee is unjustified because of the high cost of living."
+        },
+        {
+          "type": "rss_item",
+          "title": "Indonesia to ban social media and other online platforms for under 16s",
+          "url": "https://www.bbc.com/news/articles/cvg50168ddgo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 13:25:12 GMT",
+          "description": "It is the latest country to curb young people's access to digital spaces to try and protect them from abuse."
+        },
+        {
+          "type": "rss_item",
+          "title": "Ukrainian bank workers released after detention in Hungary",
+          "url": "https://www.bbc.com/news/articles/cd03rj7n0nro?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 18:37:58 GMT",
+          "description": "Kyiv has reacted furiously after officials in Budapest accused staff transporting cash to Ukraine of money laundering."
+        },
+        {
+          "type": "rss_item",
+          "title": "US and Venezuela agree to resume diplomatic ties after Maduro capture",
+          "url": "https://www.bbc.com/news/articles/cy9g1l5jx90o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 04:23:12 GMT",
+          "description": "The US said the two sides would make joint efforts to promote stability after the US seized Maduro and his wife."
+        },
+        {
+          "type": "rss_item",
+          "title": "US economy unexpectedly sheds 92,000 jobs in February",
+          "url": "https://www.bbc.com/news/articles/cjd98091g28o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 14:50:36 GMT",
+          "description": "The contraction came as a surprise with payrolls down in nearly every sector."
+        },
+        {
+          "type": "rss_item",
+          "title": "Canadian teen died from drowning after dingo attack in Australia",
+          "url": "https://www.bbc.com/news/articles/cde4599n8zpo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 01:47:32 GMT",
+          "description": "The body of Piper James was found in January surrounded by dingoes on the island of K'Gari."
+        },
+        {
+          "type": "rss_item",
+          "title": "The final voyage of the Iranian warship sunk by the US",
+          "url": "https://www.bbc.com/news/articles/c4geelnw7w3o?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 00:59:39 GMT",
+          "description": "The sinking of an Iranian ship by the US near Sri Lanka brings the conflict uncomfortably close to India."
+        },
+        {
+          "type": "rss_item",
+          "title": "AI-generated Iran war videos surge as creators use new tech to cash in",
+          "url": "https://www.bbc.com/news/articles/ckg8wvz427vo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Sat, 07 Mar 2026 00:32:35 GMT",
+          "description": "The US-Israel war with Iran is being monetised by online creators with AI-generated misinformation."
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump sets his sights on crisis-hit Cuba after Iran action ",
+          "url": "https://www.bbc.com/news/articles/c14m5mj055jo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 19:50:51 GMT",
+          "description": "The US president has claimed the Cuban authorities “want to make a deal so bad”."
+        },
+        {
+          "type": "rss_item",
+          "title": "'What is the game plan?': The Iran war is unsettling China and its ambitions ",
+          "url": "https://www.bbc.com/news/articles/c2044vzrdpzo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Thu, 05 Mar 2026 23:13:57 GMT",
+          "description": "China is not feeling the shock of war in the Middle East - yet. But it is feeling the ripples.\n"
+        },
+        {
+          "type": "rss_item",
+          "title": "Fatbikes are wreaking havoc in Sydney's wealthy beach suburbs",
+          "url": "https://www.bbc.com/news/articles/cy8l1d221evo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 18:56:47 GMT",
+          "description": "Teens are infuriating locals by riding over golf courses and doing wheelies on the Harbour Bridge."
+        },
+        {
+          "type": "rss_item",
+          "title": "The young women who fought in Ethiopia's last civil war and don't want to see another one",
+          "url": "https://www.bbc.com/news/articles/cyv959eyjgjo?at_medium=RSS&amp;at_campaign=rss",
+          "time": "Fri, 06 Mar 2026 00:05:46 GMT",
+          "description": "Female fighters recall how the conflict in the northern Tigray destroyed their lives, as fears grow that fighting could resume."
+        }
+      ]
+    },
+    "fed_speeches": {
+      "name": "Federal Reserve",
+      "category": "government",
+      "fetchedAt": "2026-03-07T12:59:34.018Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Agencies clarify the capital treatment of tokenized securities",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20260305a.htm",
+          "time": "<![CDATA[Thu, 5 Mar 2026 20:30:00 GMT]]>",
+          "description": "Agencies clarify the capital treatment of tokenized securities"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces termination of enforcement action with Wells Fargo",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/enforcement20260305a.htm",
+          "time": "<![CDATA[Thu, 5 Mar 2026 16:00:00 GMT]]>",
+          "description": "Federal Reserve Board announces termination of enforcement action with Wells Fargo"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board issues enforcement actions with former employee of East Cambridge Savings Bank and former employee of United Bank",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/enforcement20260303a.htm",
+          "time": "<![CDATA[Tue, 3 Mar 2026 16:00:00 GMT]]>",
+          "description": "Federal Reserve Board issues enforcement actions with former employee of East Cambridge Savings Bank and former employee of United Bank"
+        },
+        {
+          "type": "rss_item",
+          "title": "Minutes of the Board&#39;s discount rate meetings on January 20 and 28, 2026",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260224a.htm",
+          "time": "<![CDATA[Tue, 24 Feb 2026 19:00:00 GMT]]>",
+          "description": "Minutes of the Board&#39;s discount rate meetings on January 20 and 28, 2026"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board issues enforcement action with former employee of First Financial Bank",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/enforcement20260224a.htm",
+          "time": "<![CDATA[Tue, 24 Feb 2026 16:00:00 GMT]]>",
+          "description": "Federal Reserve Board issues enforcement action with former employee of First Financial Bank"
+        },
+        {
+          "type": "rss_item",
+          "title": "Following earlier actions to remove reputation risk from its supervision of banks, Federal Reserve Board requests comment on proposal to codify that removal",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20260223a.htm",
+          "time": "<![CDATA[Mon, 23 Feb 2026 22:00:00 GMT]]>",
+          "description": "Following earlier actions to remove reputation risk from its supervision of banks, Federal Reserve Board requests comment on proposal to codify that removal"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces approval of application by Fulton Financial Corporation",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/orders20260219a.htm",
+          "time": "<![CDATA[Thu, 19 Feb 2026 21:30:00 GMT]]>",
+          "description": "Federal Reserve Board announces approval of application by Fulton Financial Corporation"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces it will hold a hybrid public outreach meeting on Thursday, March 26, as part of its review of regulations under the Economic Growth and Regulatory Paperwork Reduction Act (EGRPRA)",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20260219a.htm",
+          "time": "<![CDATA[Thu, 19 Feb 2026 20:00:00 GMT]]>",
+          "description": "Federal Reserve Board announces it will hold a hybrid public outreach meeting on Thursday, March 26, as part of its review of regulations under the Economic Growth and Regulatory Paperwork Reduction A"
+        },
+        {
+          "type": "rss_item",
+          "title": "Minutes of the Federal Open Market Committee, January 27–28, 2026",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260218a.htm",
+          "time": "<![CDATA[Wed, 18 Feb 2026 19:00:00 GMT]]>",
+          "description": "Minutes of the Federal Open Market Committee, January 27–28, 2026"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces approval of application by Cooperativa de Ahorro y Credito Elga, Ltda. ",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/orders20260212a.htm",
+          "time": "<![CDATA[Thu, 12 Feb 2026 21:00:00 GMT]]>",
+          "description": "Federal Reserve Board announces approval of application by Cooperativa de Ahorro y Credito Elga, Ltda. "
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board issues enforcement action with former employee of Regions Bank",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/enforcement20260212a.htm",
+          "time": "<![CDATA[Thu, 12 Feb 2026 16:00:00 GMT]]>",
+          "description": "Federal Reserve Board issues enforcement action with former employee of Regions Bank"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board finalizes hypothetical scenarios for its annual stress test and votes to maintain the current stress test-related capital requirements until public feedback can be considered",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20260204a.htm",
+          "time": "<![CDATA[Wed, 4 Feb 2026 21:30:00 GMT]]>",
+          "description": "Federal Reserve Board finalizes hypothetical scenarios for its annual stress test and votes to maintain the current stress test-related capital requirements until public feedback can be considered"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces approval of application by Cornerstone Capital Bancorp, Inc.",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/orders20260130a.htm",
+          "time": "<![CDATA[Fri, 30 Jan 2026 21:00:00 GMT]]>",
+          "description": "Federal Reserve Board announces approval of application by Cornerstone Capital Bancorp, Inc."
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces appointment of seven members, including four new members, to its Insurance Policy Advisory Committee (IPAC)",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/other20260129a.htm",
+          "time": "<![CDATA[Thu, 29 Jan 2026 18:30:00 GMT]]>",
+          "description": "Federal Reserve Board announces appointment of seven members, including four new members, to its Insurance Policy Advisory Committee (IPAC)"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve issues FOMC statement",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128a.htm",
+          "time": "<![CDATA[Wed, 28 Jan 2026 19:00:00 GMT]]>",
+          "description": "Federal Reserve issues FOMC statement"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Open Market Committee reaffirms its &quot;Statement on Longer-Run Goals and Monetary Policy Strategy&quot;",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128b.htm",
+          "time": "<![CDATA[Wed, 28 Jan 2026 19:00:00 GMT]]>",
+          "description": "Federal Open Market Committee reaffirms its &quot;Statement on Longer-Run Goals and Monetary Policy Strategy&quot;"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces approval of application by Banco Inter, S.A.",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/orders20260116a.htm",
+          "time": "<![CDATA[Fri, 16 Jan 2026 18:45:00 GMT]]>",
+          "description": "Federal Reserve Board announces approval of application by Banco Inter, S.A."
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board issues enforcement action with former employee of PrimeLending",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/enforcement20260115a.htm",
+          "time": "<![CDATA[Thu, 15 Jan 2026 16:00:00 GMT]]>",
+          "description": "Federal Reserve Board issues enforcement action with former employee of PrimeLending"
+        },
+        {
+          "type": "rss_item",
+          "title": "Federal Reserve Board announces approval of application by Fifth Third Bancorp",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/orders20260113a.htm",
+          "time": "<![CDATA[Tue, 13 Jan 2026 22:30:00 GMT]]>",
+          "description": "Federal Reserve Board announces approval of application by Fifth Third Bancorp"
+        },
+        {
+          "type": "rss_item",
+          "title": "Agencies issue 2025 Shared National Credit Program report",
+          "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20260112a.htm",
+          "time": "<![CDATA[Mon, 12 Jan 2026 20:00:00 GMT]]>",
+          "description": "Agencies issue 2025 Shared National Credit Program report"
+        }
+      ]
+    },
+    "nasa_breaking": {
+      "name": "NASA Breaking News",
+      "category": "space",
+      "fetchedAt": "2026-03-07T12:59:34.102Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "ARMD Research Solicitations (Updated March 6)",
+          "url": "https://www.nasa.gov/aeronautics/armd-solicitations/",
+          "time": "Fri, 06 Mar 2026 22:00:00 +0000",
+          "description": "THIS PAGE WAS UPDATED ON MARCH 6, 2026 This Aeronautics Research Mission Directorate (ARMD) solicitations page compiles the opportunities to collaborate with NASA’s aeronautical innovators and/or cont"
+        },
+        {
+          "type": "rss_item",
+          "title": "NASA Invites Media to Northrop Grumman CRS-24 Station Resupply Launch",
+          "url": "https://www.nasa.gov/news-release/nasa-invites-media-to-northrop-grumman-crs-24-station-resupply-launch/",
+          "time": "Fri, 06 Mar 2026 21:36:22 +0000",
+          "description": "Media accreditation is open for the next launch to deliver NASA science investigations, supplies, and equipment to the International Space Station. A Northrop Grumman Cygnus XL spacecraft will launch "
+        },
+        {
+          "type": "rss_item",
+          "title": "NASA’s DART Mission Changed Orbit of Asteroid Didymos Around Sun",
+          "url": "https://www.nasa.gov/missions/dart/nasas-dart-mission-changed-orbit-of-asteroid-didymos-around-sun/",
+          "time": "Fri, 06 Mar 2026 19:00:36 +0000",
+          "description": "New research reveals that when NASA’s DART (Double Asteroid Redirection Test) spacecraft intentionally impacted the asteroid moonlet Dimorphos in September 2022, it didn’t just change the motion of Di"
+        },
+        {
+          "type": "rss_item",
+          "title": "Track NASA’s Artemis II Mission in Real Time",
+          "url": "https://www.nasa.gov/missions/artemis/artemis-2/track-nasas-artemis-ii-mission-in-real-time/",
+          "time": "Fri, 06 Mar 2026 16:40:25 +0000",
+          "description": "As NASA invites the public to follow the Artemis II mission as a crew of four astronauts venture around the Moon inside the agency’s Orion spacecraft, people around the world can pinpoint Orion during"
+        },
+        {
+          "type": "rss_item",
+          "title": "Weekends on the Space Station",
+          "url": "https://www.nasa.gov/image-article/weekends-on-the-space-station/",
+          "time": "Fri, 06 Mar 2026 15:23:52 +0000",
+          "description": "NASA astronaut Jessica Meir trims the hair of fellow NASA astronaut Jack Hathaway in this March 1, 2026, image. Meir uses an electric razor attached to a vacuum that collects loose clippings to keep t"
+        },
+        {
+          "type": "rss_item",
+          "title": "NASA to Cover Northrop Grumman Cargo Spacecraft Departure",
+          "url": "https://www.nasa.gov/news-release/nasa-to-cover-northrop-grumman-cargo-spacecraft-departure/",
+          "time": "Fri, 06 Mar 2026 15:13:36 +0000",
+          "description": "After delivering more than 11,000 pounds of supplies, science investigations, hardware, and other cargo to the International Space Station for NASA and its international partners, the Cygnus XL spacec"
+        },
+        {
+          "type": "rss_item",
+          "title": "Ailing “Megaberg” Sparks Surge of Microscopic Life",
+          "url": "https://science.nasa.gov/earth/earth-observatory/ailing-megaberg-sparks-surge-of-microscopic-life/",
+          "time": "Fri, 06 Mar 2026 05:01:00 +0000",
+          "description": "As Iceberg A-23A disintegrated, it shed meltwater that helped fuel an extensive phytoplankton bloom in the South Atlantic Ocean."
+        },
+        {
+          "type": "rss_item",
+          "title": "About Air Traffic Management and Safety Project",
+          "url": "https://www.nasa.gov/directorates/armd/aosp/atms/about-atms/",
+          "time": "Fri, 06 Mar 2026 04:29:02 +0000",
+          "description": "The Air Traffic Management and Safety (ATMS) project defines, validates, and transfers advanced requirements and technologies to shift air traffic management from tactical to strategic.  This change e"
+        },
+        {
+          "type": "rss_item",
+          "title": "About Advanced Air Mobility Pathfinders Project",
+          "url": "https://www.nasa.gov/directorates/armd/aosp/amp/about-aamp/",
+          "time": "Fri, 06 Mar 2026 02:59:34 +0000",
+          "description": "The Advanced Air Mobility Pathfinders (AAMP) project accelerates advanced air mobility technologies for wildfire response and urban transportation through real-world demonstrations and strategic partn"
+        },
+        {
+          "type": "rss_item",
+          "title": "About Transformative Aeronautics Concepts Program (TACP)",
+          "url": "https://www.nasa.gov/directorates/armd/tacp/about-tacp/",
+          "time": "Thu, 05 Mar 2026 22:00:00 +0000",
+          "description": "TACP Benefits Foundation for disruptive technologies: Placing emphasis on transformative concepts lays the groundwork for revolutionary advancements in aviation. Accelerated innovation in aerospace: D"
+        }
+      ]
+    },
+    "spacex_launches": {
+      "name": "SpaceX Launches",
+      "category": "space",
+      "fetchedAt": "2026-03-07T12:59:34.342Z",
+      "events": [
+        {
+          "type": "launch",
+          "name": "USSF-44",
+          "date": "2022-11-01T13:41:00.000Z",
+          "rocket": "5e9d0d95eda69974db09d1ed",
+          "launchpad": "5e9e4502f509094188566f88"
+        },
+        {
+          "type": "launch",
+          "name": "Starlink 4-36 (v1.5)",
+          "date": "2022-10-20T14:50:00.000Z",
+          "rocket": "5e9d0d95eda69973a809d1ec",
+          "launchpad": "5e9e4501f509094ba4566f84"
+        },
+        {
+          "type": "launch",
+          "name": "Galaxy 33 (15R) & 34 (12R)",
+          "date": "2022-10-08T23:05:00.000Z",
+          "rocket": "5e9d0d95eda69973a809d1ec",
+          "launchpad": "5e9e4501f509094ba4566f84"
+        },
+        {
+          "type": "launch",
+          "name": "Hotbird 13F",
+          "date": "2022-10-15T05:22:00.000Z",
+          "rocket": "5e9d0d95eda69973a809d1ec",
+          "launchpad": "5e9e4501f509094ba4566f84"
+        },
+        {
+          "type": "launch",
+          "name": "Hotbird 13G",
+          "date": "2022-11-03T03:24:00.000Z",
+          "rocket": "5e9d0d95eda69973a809d1ec",
+          "launchpad": "5e9e4501f509094ba4566f84"
+        }
+      ]
+    },
+    "techcrunch": {
+      "name": "TechCrunch",
+      "category": "news",
+      "fetchedAt": "2026-03-07T12:59:34.880Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Robinhood’s startup fund stumbles in NYSE debut",
+          "url": "https://techcrunch.com/2026/03/06/robinhoods-startup-fund-stumbles-in-nyse-debut/",
+          "time": "Sat, 07 Mar 2026 02:04:43 +0000",
+          "description": "The fund currently offers retail investors exposure to eight startups, including Mercor, Ramp, and Stripe, with plans to expand its portfolio."
+        },
+        {
+          "type": "rss_item",
+          "title": "X is testing a new ad format that connects posts with products",
+          "url": "https://techcrunch.com/2026/03/06/x-is-testing-a-new-ad-format-that-connects-posts-with-products/",
+          "time": "Fri, 06 Mar 2026 22:41:26 +0000",
+          "description": "An ad test on X promotes Musk's Starlink beneath original content."
+        },
+        {
+          "type": "rss_item",
+          "title": "Nintendo sues the US government for a refund on tariffs",
+          "url": "https://techcrunch.com/2026/03/06/nintendo-sues-the-u-s-government-for-a-refund-on-tariffs/",
+          "time": "Fri, 06 Mar 2026 22:35:35 +0000",
+          "description": "This lawsuit comes after a Supreme Court decision struck down some of the president's sweeping tariffs, which had impacted Nintendo and thousands of other companies."
+        },
+        {
+          "type": "rss_item",
+          "title": "Life EV officially owns Rad Power Bikes now",
+          "url": "https://techcrunch.com/2026/03/06/life-ev-officially-owns-rad-power-bikes-now/",
+          "time": "Fri, 06 Mar 2026 21:56:35 +0000",
+          "description": "The Rad Power brand is expected to live on. "
+        },
+        {
+          "type": "rss_item",
+          "title": "OSHA probing fatality at Rivian warehouse",
+          "url": "https://techcrunch.com/2026/03/06/osha-probing-fatality-at-rivian-warehouse/",
+          "time": "Fri, 06 Mar 2026 20:23:08 +0000",
+          "description": "A 61-year-old worker died on Thursday after reportedly getting stuck between a tractor trailer and a loading dock."
+        },
+        {
+          "type": "rss_item",
+          "title": "Microsoft, Google, Amazon say Anthropic Claude remains available to non-defense customers",
+          "url": "https://techcrunch.com/2026/03/06/microsoft-anthropic-claude-remains-available-to-customers-except-the-defense-department/",
+          "time": "Fri, 06 Mar 2026 19:50:10 +0000",
+          "description": "Trump's Department of War feud with Anthropic won't impact other companies that are using Claude via Microsoft and Google products."
+        },
+        {
+          "type": "rss_item",
+          "title": "Bill Gates’ TerraPower gets approval to build new nuclear reactor",
+          "url": "https://techcrunch.com/2026/03/06/bill-gates-terrapower-gets-approval-to-build-new-nuclear-reactor/",
+          "time": "Fri, 06 Mar 2026 19:47:40 +0000",
+          "description": "It's the first permit to be issued by the Nuclear Regulatory Commission in nearly a decade. "
+        },
+        {
+          "type": "rss_item",
+          "title": "Anthropic&#8217;s Claude found 22 vulnerabilities in Firefox over two weeks",
+          "url": "https://techcrunch.com/2026/03/06/anthropics-claude-found-22-vulnerabilities-in-firefox-over-two-weeks/",
+          "time": "Fri, 06 Mar 2026 19:00:22 +0000",
+          "description": "In a recent security partnership with Mozilla, Anthropic found 22 separate vulnerabilities in Firefox — 14 of them classified as \"high-severity.\" "
+        },
+        {
+          "type": "rss_item",
+          "title": "Anthropic&#8217;s Pentagon deal is a cautionary tale for startups chasing federal contracts",
+          "url": "https://techcrunch.com/video/anthropics-pentagon-deal-is-a-cautionary-tale-for-startups-chasing-federal-contracts/",
+          "time": "Fri, 06 Mar 2026 18:09:11 +0000",
+          "description": "The Pentagon has officially designated Anthropic a supply-chain risk after the two failed to agree on how much control the military should have over its AI models, including its use in autonomous weap"
+        },
+        {
+          "type": "rss_item",
+          "title": "Claude&#8217;s consumer growth surge continues after Pentagon deal debacle",
+          "url": "https://techcrunch.com/2026/03/06/claudes-consumer-growth-surge-continues-after-pentagon-deal-debacle/",
+          "time": "Fri, 06 Mar 2026 17:56:07 +0000",
+          "description": "Claude's app is now seeing more new installs than ChatGPT and is growing its daily active users. "
+        },
+        {
+          "type": "rss_item",
+          "title": "India PC shipments surpass pandemic peak as first-time users upgrade",
+          "url": "https://techcrunch.com/2026/03/06/india-pc-shipments-surpass-pandemic-peak-as-first-time-users-upgrade/",
+          "time": "Fri, 06 Mar 2026 17:51:49 +0000",
+          "description": "Pandemic-driven lockdowns exposed many people in India to PCs for the first time, expanding the country's PC userbase and creating demand for upgrades as those devices age. "
+        },
+        {
+          "type": "rss_item",
+          "title": "These are the countries moving to ban social media for children",
+          "url": "https://techcrunch.com/2026/03/06/social-media-ban-children-countries-list/",
+          "time": "Fri, 06 Mar 2026 16:00:56 +0000",
+          "description": "Australia was the first country to issue a ban in late 2025, aiming to reduce the pressures and risks that young users may face on social media, including cyberbullying, social media addiction, and ex"
+        },
+        {
+          "type": "rss_item",
+          "title": "TriZetto confirms 3.4M people&#8217;s health and personal data was stolen during breach",
+          "url": "https://techcrunch.com/2026/03/06/trizetto-confirms-3-4m-peoples-health-and-personal-data-was-stolen-during-breach/",
+          "time": "Fri, 06 Mar 2026 14:28:31 +0000",
+          "description": "Health tech giant TriZetto has confirmed that more than 3.4 million people had personal and health information stolen in a 2024 cyberattack, which the company failed to detect for almost a year."
+        },
+        {
+          "type": "rss_item",
+          "title": "Indonesia outlines plan to limit under-16s&#8217; access to social media",
+          "url": "https://techcrunch.com/2026/03/06/indonesia-outlines-plan-to-limit-under-16s-access-to-social-media/",
+          "time": "Fri, 06 Mar 2026 14:18:16 +0000",
+          "description": "Indonesia has outlined new regulations that would restrict users under 16 from accessing digital platforms."
+        },
+        {
+          "type": "rss_item",
+          "title": "City Detect, which uses AI to help cities stay safe and clean, raises $13M Series A",
+          "url": "https://techcrunch.com/2026/03/06/city-detect-uses-ai-to-help-cities-stay-safe-and-clean/",
+          "time": "Fri, 06 Mar 2026 14:00:00 +0000",
+          "description": "City Detect, a company that helps local governments prevent urban decay, is in at least 17 cities so far, including Dallas and Miami."
+        },
+        {
+          "type": "rss_item",
+          "title": "Quantum scale-up Pasqal plans $2B SPAC listing, promises to &#8216;remain French&#8217;",
+          "url": "https://techcrunch.com/2026/03/06/quantum-scale-up-pasqal-plans-2b-spac-listing-promises-to-remain-french/",
+          "time": "Fri, 06 Mar 2026 13:44:18 +0000",
+          "description": "A SPAC deal that is set to take French quantum company Pasqal public on the Nasdaq values the company at $2 billion pre-money. "
+        },
+        {
+          "type": "rss_item",
+          "title": "India&#8217;s Karnataka signals intent to ban social media for under-16s",
+          "url": "https://techcrunch.com/2026/03/06/indias-karnataka-signals-intent-to-ban-social-media-for-under-16s/",
+          "time": "Fri, 06 Mar 2026 13:35:57 +0000",
+          "description": "Karnataka's proposal highlights a growing global debate over children’s rights and online policy."
+        },
+        {
+          "type": "rss_item",
+          "title": "After Europe, WhatsApp will let rival AI companies offer chatbots in Brazil",
+          "url": "https://techcrunch.com/2026/03/06/after-europe-whatsapp-will-let-rival-ai-companies-offer-chatbots-in-brazil/",
+          "time": "Fri, 06 Mar 2026 13:20:43 +0000",
+          "description": "Meta is now allowing rival AI companies to provide their chatbots on WhatsApp to Brazilian users for a fee, a day after the company confirmed a similar decision for users in Europe."
+        },
+        {
+          "type": "rss_item",
+          "title": "Anthropic to challenge DOD&#8217;s supply-chain label in court",
+          "url": "https://techcrunch.com/2026/03/05/anthropic-to-challenge-dods-supply-chain-label-in-court/",
+          "time": "Fri, 06 Mar 2026 01:28:54 +0000",
+          "description": "Anthropic CEO Dario Amodei said he plans to challenge the Department of Defense's designation of the AI firm as a supply-chain risk. He claims most Anthropic customers are unaffected by the label."
+        },
+        {
+          "type": "rss_item",
+          "title": "DiligenceSquared uses AI, voice agents to make M&#038;A research affordable",
+          "url": "https://techcrunch.com/2026/03/05/diligencesquared-uses-ai-voice-agents-to-make-ma-research-affordable/",
+          "time": "Thu, 05 Mar 2026 23:14:04 +0000",
+          "description": "Instead of relying on expensive management consultants, the startup uses AI voice agents to conduct interviews with customers of the companies the PE firms are considering buying."
+        }
+      ]
+    },
+    "ars_technica": {
+      "name": "Ars Technica",
+      "category": "news",
+      "fetchedAt": "2026-03-07T12:59:34.899Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "A unicorn-like Spinosaurus found in the Sahara",
+          "url": "https://arstechnica.com/science/2026/03/a-unicorn-like-spinosaurus-found-in-the-sahara/",
+          "time": "Sat, 07 Mar 2026 12:30:56 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "From Iran to Ukraine, everyone's trying to hack security cameras",
+          "url": "https://arstechnica.com/security/2026/03/from-iran-to-ukraine-everyones-trying-to-hack-security-cameras/",
+          "time": "Sat, 07 Mar 2026 11:30:06 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Ding-dong! The Exploration Upper Stage is dead",
+          "url": "https://arstechnica.com/space/2026/03/ding-dong-the-exploration-upper-stage-is-dead/",
+          "time": "Fri, 06 Mar 2026 23:40:35 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Satellite firm pauses imagery after revealing Iran's attacks on US bases",
+          "url": "https://arstechnica.com/space/2026/03/satellite-firm-pauses-imagery-after-revealing-irans-attacks-on-us-bases/",
+          "time": "Fri, 06 Mar 2026 22:49:48 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Fishing crews in the Atlantic keep accidentally dredging up chemical weapons",
+          "url": "https://arstechnica.com/health/2026/03/fishing-crews-in-the-atlantic-keep-accidentally-dredging-up-chemical-weapons/",
+          "time": "Fri, 06 Mar 2026 22:03:10 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Google's new command-line tool can plug OpenClaw into your Workspace data",
+          "url": "https://arstechnica.com/ai/2026/03/googles-new-command-line-tool-can-plug-openclaw-into-your-workspace-data/",
+          "time": "Fri, 06 Mar 2026 19:56:20 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Feds take notice of iOS vulnerabilities exploited under mysterious circumstances",
+          "url": "https://arstechnica.com/security/2026/03/cisa-adds-3-ios-flaws-to-its-catalog-of-known-exploited-vulnerabilities/",
+          "time": "Fri, 06 Mar 2026 19:41:33 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Asteroid defense mission shifted the orbit of more than its target",
+          "url": "https://arstechnica.com/science/2026/03/nasas-dart-mission-shifted-the-orbits-of-two-asteroids/",
+          "time": "Fri, 06 Mar 2026 19:00:02 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "How moss helped convict grave robbers of a Chicago cemetery",
+          "url": "https://arstechnica.com/science/2026/03/how-moss-helped-convict-grave-robbers-of-a-chicago-cemetery/",
+          "time": "Fri, 06 Mar 2026 18:33:34 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Musk fails to block California data disclosure law he fears will ruin xAI",
+          "url": "https://arstechnica.com/tech-policy/2026/03/musk-fails-to-block-california-data-disclosure-law-he-fears-will-ruin-xai/",
+          "time": "Fri, 06 Mar 2026 18:21:42 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Americans trust Fauci over RFK Jr. and career scientists over Trump officials",
+          "url": "https://arstechnica.com/health/2026/03/americans-trust-fauci-over-rfk-jr-and-career-scientists-over-trump-officials/",
+          "time": "Fri, 06 Mar 2026 17:15:22 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Climate change sucks, but at least it won't kill your EV battery",
+          "url": "https://arstechnica.com/cars/2026/03/climate-change-sucks-but-at-least-it-wont-kill-your-ev-battery/",
+          "time": "Fri, 06 Mar 2026 16:37:24 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Apple users in the US can no longer download ByteDance's Chinese apps",
+          "url": "https://arstechnica.com/tech-policy/2026/03/apple-users-in-the-us-can-no-longer-download-bytedances-chinese-apps/",
+          "time": "Fri, 06 Mar 2026 16:22:08 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Apple's 512GB Mac Studio vanishes, a quiet acknowledgment of the RAM shortage",
+          "url": "https://arstechnica.com/gadgets/2026/03/apples-512gb-mac-studio-vanishes-a-quiet-acknowledgement-of-the-ram-shortage/",
+          "time": "Fri, 06 Mar 2026 15:41:23 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "With Gateway likely gone, where will lunar landers rendezvous with Orion?",
+          "url": "https://arstechnica.com/space/2026/03/nasa-has-shuffled-its-artemis-rockets-but-what-of-the-lunar-landers/",
+          "time": "Fri, 06 Mar 2026 15:20:37 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Why are vertebrate eyes so different from those of other animals?",
+          "url": "https://arstechnica.com/science/2026/03/the-vertebrate-eye-may-have-begun-as-a-cyclops/",
+          "time": "Fri, 06 Mar 2026 14:23:59 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Tech industry is in tariff hell, even if refunds are automated",
+          "url": "https://arstechnica.com/tech-policy/2026/03/tech-industry-is-in-tariff-hell-even-if-refunds-are-automated/",
+          "time": "Fri, 06 Mar 2026 12:20:40 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "AI startup sues ex-CEO, saying he took 41GB of email and lied on résumé",
+          "url": "https://arstechnica.com/tech-policy/2026/03/ai-startup-sues-ex-ceo-saying-he-took-41gb-of-email-and-lied-on-resume/",
+          "time": "Fri, 06 Mar 2026 12:10:07 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Which of these two arcades is the \"world largest\"—and does it matter?",
+          "url": "https://arstechnica.com/gaming/2026/03/which-of-these-two-arcades-is-the-world-largest-and-does-it-matter/",
+          "time": "Fri, 06 Mar 2026 12:00:02 +0000",
+          "description": "\n                        \n                    "
+        },
+        {
+          "type": "rss_item",
+          "title": "Rocket Report: SpaceX launch prices are going up; Russia fixes broken launch pad",
+          "url": "https://arstechnica.com/space/2026/03/rocket-report-spacex-launch-prices-are-going-up-russia-fixes-broken-launch-pad/",
+          "time": "Fri, 06 Mar 2026 12:00:02 +0000",
+          "description": "\n                        \n                    "
+        }
+      ]
+    },
+    "wired": {
+      "name": "Wired",
+      "category": "news",
+      "fetchedAt": "2026-03-07T12:59:34.956Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "The Best MIDI Controllers for Synths, Guitars, and More (2026)",
+          "url": "https://www.wired.com/gallery/best-midi-controllers/",
+          "time": "Sat, 07 Mar 2026 12:00:00 +0000",
+          "description": "Want to digitally control your favorite instruments? These tools will help."
+        },
+        {
+          "type": "rss_item",
+          "title": "Best Mid Layer for Hiking, Backpacking, and Travel (2026)",
+          "url": "https://www.wired.com/gallery/best-mid-layers/",
+          "time": "Sat, 07 Mar 2026 11:30:00 +0000",
+          "description": "Should you get a high-tech jacket like a grid fleece, or stick with tried and true merino wool? We found the warmest, lightest mid layers for your next adventure."
+        },
+        {
+          "type": "rss_item",
+          "title": "CBP Used Online Ad Data to Track Phone Locations",
+          "url": "https://www.wired.com/story/cbp-used-online-ad-data-to-track-phone-locations/",
+          "time": "Sat, 07 Mar 2026 11:30:00 +0000",
+          "description": "Plus: Proton helped the FBI identify a protester, the Leakbase cybercrime forum was busted in an international operation, and more."
+        },
+        {
+          "type": "rss_item",
+          "title": "How Each Gulf Country Is Intercepting Iranian Missiles and Drones",
+          "url": "https://www.wired.com/story/how-each-gulf-country-is-intercepting-iranian-missiles-and-drones/",
+          "time": "Sat, 07 Mar 2026 11:00:00 +0000",
+          "description": "As missiles and drones cross the region’s skies, the Gulf’s layered air-defense networks—from THAAD to Patriot batteries—are being tested in real time."
+        },
+        {
+          "type": "rss_item",
+          "title": "How to Avoid Getting Locked Out of Your Google Account",
+          "url": "https://www.wired.com/story/how-to-avoid-getting-locked-out-of-your-google-account/",
+          "time": "Sat, 07 Mar 2026 10:00:00 +0000",
+          "description": "Make a recovery plan now to avoid losing access to your account in the future."
+        },
+        {
+          "type": "rss_item",
+          "title": "This Jammer Wants to Block Always-Listening AI Wearables. It Probably Won’t Work",
+          "url": "https://www.wired.com/story/deveillance-spectre-i/",
+          "time": "Fri, 06 Mar 2026 23:45:14 +0000",
+          "description": "Deveillance’s Spectre I, developed by a recent Harvard grad, wants to give people control over the always-on wearables surrounding their lives. The problem? Physics."
+        },
+        {
+          "type": "rss_item",
+          "title": "Marley Spoon Meal Kit Review 2026: Less Martha, More Moroccan",
+          "url": "https://www.wired.com/review/marley-spoon-meal-kit-2026/",
+          "time": "Fri, 06 Mar 2026 22:41:10 +0000",
+          "description": "Marley Spoon has stripped Martha Stewart from its website and seems to be cooking a little differently. Here’s a review."
+        },
+        {
+          "type": "rss_item",
+          "title": "72 'Buy It for Life' Products: Cast-Iron, Tools, Speakers, Chairs, and More",
+          "url": "https://www.wired.com/story/buy-it-for-life/",
+          "time": "Fri, 06 Mar 2026 21:27:19 +0000",
+          "description": "From cast-iron pans to mechanical watches, we’ve rounded up products that are made to last for decades."
+        },
+        {
+          "type": "rss_item",
+          "title": "The Best Google Pixel Phones of 2026, Tested and Reviewed",
+          "url": "https://www.wired.com/story/best-google-pixel-phone/",
+          "time": "Fri, 06 Mar 2026 20:17:02 +0000",
+          "description": "Here’s a guide to all the models—plus Pixel case recommendations and smart software tricks to try."
+        },
+        {
+          "type": "rss_item",
+          "title": "The Future of Iran’s Internet Is More Uncertain Than Ever",
+          "url": "https://www.wired.com/story/the-future-of-irans-internet-is-more-uncertain-than-ever/",
+          "time": "Fri, 06 Mar 2026 20:06:06 +0000",
+          "description": "Iran’s internet shutdown has reduced connectivity by 99 percent, with air strikes likely causing additional outages, and few workarounds remaining."
+        },
+        {
+          "type": "rss_item",
+          "title": "These Beats Headphones We Like Are $150 Off",
+          "url": "https://www.wired.com/story/beats-studio-pro-deal-326/",
+          "time": "Fri, 06 Mar 2026 18:21:05 +0000",
+          "description": "Save a chunk of change on the Beats Studio Pro over-ear headphones."
+        },
+        {
+          "type": "rss_item",
+          "title": "When AI Companies Go to War, Safety Gets Left Behind",
+          "url": "https://www.wired.com/story/when-ai-companies-go-to-war-safety-gets-left-behind/",
+          "time": "Fri, 06 Mar 2026 18:19:57 +0000",
+          "description": "We were promised AI regulation and a race to the top. Now, we’re arguing about killer robots."
+        },
+        {
+          "type": "rss_item",
+          "title": "9 Best Android Phones of 2026, Tested and Reviewed",
+          "url": "https://www.wired.com/gallery/best-android-phones/",
+          "time": "Fri, 06 Mar 2026 18:00:00 +0000",
+          "description": "Shopping for a phone can be an ordeal. That’s why we’ve tested almost every Android phone, from the smartest to the cheapest—even phones that fold—to find the ones worth your money."
+        },
+        {
+          "type": "rss_item",
+          "title": "11 Best USB Flash Drives (2026): Pen Drives, Thumb Drives, Memory Sticks",
+          "url": "https://www.wired.com/gallery/best-usb-flash-drives/",
+          "time": "Fri, 06 Mar 2026 14:00:00 +0000",
+          "description": "These WIRED-tested memory sticks are a virtual filing cabinet in your pocket."
+        },
+        {
+          "type": "rss_item",
+          "title": "Corsair Sabre V2 Carbon Fiber and Magnesium Gaming Mice Review",
+          "url": "https://www.wired.com/review/corsair-sabre-v2-cf-and-mg/",
+          "time": "Fri, 06 Mar 2026 13:00:00 +0000",
+          "description": "Is it worth using motorsports materials in a gaming mouse? As long as it’s the same price as plastic."
+        },
+        {
+          "type": "rss_item",
+          "title": "Jones Mercury FASE Snowboard Bindings Review: The Best Fast Entry System",
+          "url": "https://www.wired.com/review/jones-mercury-fase-snowboard-bindings/",
+          "time": "Fri, 06 Mar 2026 12:30:00 +0000",
+          "description": "In! Out! In! Out! Jones’ latest fast-entry snowboard bindings mean you’ll never get left behind by a bunch of skiers again."
+        },
+        {
+          "type": "rss_item",
+          "title": "These 2 Apps Help Me Make Sense of My 100K Screenshots",
+          "url": "https://www.wired.com/story/rodeo-swipewipe-declutter-screenshots/",
+          "time": "Fri, 06 Mar 2026 12:01:00 +0000",
+          "description": "The shameful pile of screenshots on my phone was as useless as it was disorganized. Rodeo and Swipewipe are helping to change that."
+        },
+        {
+          "type": "rss_item",
+          "title": "7 Laptop Docking Stations to Unlock the Full Desktop Experience (2026)",
+          "url": "https://www.wired.com/gallery/best-laptop-docking-stations/",
+          "time": "Fri, 06 Mar 2026 11:39:00 +0000",
+          "description": "Laptop docking stations expand what your laptop can do, and I’ve been testing the best of the best to see which you should buy."
+        },
+        {
+          "type": "rss_item",
+          "title": "From Ukraine to Iran, Hacking Security Cameras Is Now Part of War’s ‘Playbook’",
+          "url": "https://www.wired.com/story/from-ukraine-to-iran-hacking-security-cameras-is-now-part-of-wars-playbook/",
+          "time": "Fri, 06 Mar 2026 11:30:00 +0000",
+          "description": "New research shows hundreds of attempts by apparent Iranian state hackers to hijack consumer-grade cameras, timed to missile and drone strikes. Israel, Russia, and Ukraine have also adopted this trick"
+        },
+        {
+          "type": "rss_item",
+          "title": "Why Is Alexa+ So Bad?",
+          "url": "https://www.wired.com/story/why-is-amazon-alexa-plus-so-bad/",
+          "time": "Fri, 06 Mar 2026 11:00:00 +0000",
+          "description": "I stuck Amazon’s Echo Show 15 and its Alexa+ AI assistant in my kitchen for a month. Things have not gone well."
+        }
+      ]
+    },
+    "defense_one": {
+      "name": "Defense One",
+      "category": "conflict",
+      "fetchedAt": "2026-03-07T12:59:35.511Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "Missile makers agree to ‘quadruple’ production, Trump says",
+          "url": "https://www.defenseone.com/business/2026/03/missile-makers-agree-quadruple-production-trump-says/411966/",
+          "time": "Fri, 06 Mar 2026 23:07:38 -0500",
+          "description": "The announcement comes after months of White House pressure on defense companies to build weapons faster."
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump's new cyber strategy calls for tougher responses to threats",
+          "url": "https://www.defenseone.com/policy/2026/03/trumps-new-cyber-strategy-details-more-offensive-response-cyber-threats/411965/",
+          "time": "Fri, 06 Mar 2026 17:53:00 -0500",
+          "description": "Released Friday afternoon, the new strategy is notably shorter than those issued by Biden and the first Trump administration."
+        },
+        {
+          "type": "rss_item",
+          "title": "The D Brief: Russia’s helping Iran; Updated strike map; Drone threats; DOD’s new CDO; And a bit more.",
+          "url": "https://www.defenseone.com/threats/2026/03/the-d-brief-march-06-2026/411944/",
+          "time": "Fri, 06 Mar 2026 11:37:46 -0500",
+          "description": ""
+        },
+        {
+          "type": "rss_item",
+          "title": "The Pentagon’s investment deals draw congressional scrutiny ",
+          "url": "https://www.defenseone.com/business/2026/03/pentagons-investment-deals-draw-congressional-scrutiny/411937/",
+          "time": "Fri, 06 Mar 2026 09:00:00 -0500",
+          "description": "DOD weapons buyer Michael Duffey testified about the decision to invest $1 billion in L3Harris."
+        },
+        {
+          "type": "rss_item",
+          "title": "The US says it destroyed Iran’s space command. Experts say it wasn’t much of a threat.",
+          "url": "https://www.defenseone.com/threats/2026/03/us-says-it-destroyed-irans-space-command-experts-say-it-wasnt-much-threat/411938/",
+          "time": "Thu, 05 Mar 2026 23:10:45 -0500",
+          "description": "The Islamic Revolutionary Guard Corps’ nascent space program has only a handful of satellites."
+        },
+        {
+          "type": "rss_item",
+          "title": "‘Firepower about to surge dramatically’ over Iran: Hegseth",
+          "url": "https://www.defenseone.com/threats/2026/03/firepower-about-surge-dramatically-over-iran-hegseth/411935/",
+          "time": "Thu, 05 Mar 2026 18:57:06 -0500",
+          "description": "The defense secretary asserts that the U.S. has no shortage of munitions."
+        },
+        {
+          "type": "rss_item",
+          "title": "Air Force cybersecurity chief tapped to lead Pentagon's information-security efforts",
+          "url": "https://www.defenseone.com/policy/2026/03/dod-names-james-aaron-bishop-serve-ciso/411930/",
+          "time": "Thu, 05 Mar 2026 16:42:00 -0500",
+          "description": "James Bishop will replace acting DCIO(CS)-CISO David McKeown, who followed acting chief Katie Arrington."
+        },
+        {
+          "type": "rss_item",
+          "title": "The Pentagon moves into the era of affordable mass",
+          "url": "https://www.defenseone.com/ideas/2026/03/pentagon-moves-era-affordable-mass/411927/",
+          "time": "Thu, 05 Mar 2026 16:38:50 -0500",
+          "description": "Even as cheap drones deplete expensive air defenses near Iran, the U.S. military is working to turn the tables."
+        },
+        {
+          "type": "rss_item",
+          "title": "B-1, B-52 bombers join Trump’s war on Iran",
+          "url": "https://www.defenseone.com/defense-systems/2026/03/b-1-and-b-52-bombers-join-trumps-war-iran/411922/",
+          "time": "Thu, 05 Mar 2026 15:35:24 -0500",
+          "description": "Modernized 20th-century aircraft are still crucial for the conflicts of today and tomorrow, aviation experts say."
+        },
+        {
+          "type": "rss_item",
+          "title": "Drone threat ‘will far exceed’ that of GWOT’s roadside bombs",
+          "url": "https://www.defenseone.com/threats/2026/03/drone-threat-will-far-exceed-gwots-roadside-bomb-threat-counter-drone-task-force-director/411921/",
+          "time": "Thu, 05 Mar 2026 15:32:34 -0500",
+          "description": "“We're making sure that we get them everything they require to protect themselves,” Brig. Gen. Matt Ross said of troops in CENTCOM."
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump to fire DHS Secretary Noem, picks Mullin as successor",
+          "url": "https://www.defenseone.com/policy/2026/03/trump-fire-dhs-secretary-noem-selects-mullin-as-successor/411917/",
+          "time": "Thu, 05 Mar 2026 14:56:00 -0500",
+          "description": "The controversial Homeland Security leader will end her tenure amid a budget shutdown of her agency and bipartisan criticism in both houses of Congress."
+        },
+        {
+          "type": "rss_item",
+          "title": "Defense Business Brief: Shrinking stockpiles + Epic Fury; and an exclusive look at how AI can up UUV’s game ",
+          "url": "https://www.defenseone.com/business/2026/03/defense-business-brief-shrinking-stockpiles-epic-fury-plus-how-ai-can-uuvs-game/411903/",
+          "time": "Thu, 05 Mar 2026 13:09:14 -0500",
+          "description": ""
+        },
+        {
+          "type": "rss_item",
+          "title": "Why the US went to war without a plan to evacuate DOD civilians, contractors, and others",
+          "url": "https://www.defenseone.com/ideas/2026/03/operational-secrecy-kept-us-making-evacuation-plans-and-means-americans-mideast-could-wait-days/411906/",
+          "time": "Thu, 05 Mar 2026 12:10:56 -0500",
+          "description": "A diplomatic veteran cites operational secrecy—and describes how things might have gone better."
+        },
+        {
+          "type": "rss_item",
+          "title": "The D Brief: Death toll, oil prices rise; Ukraine to send anti-drone help; WH calls industry meeting; Claude at war; And a bit more.",
+          "url": "https://www.defenseone.com/threats/2026/03/the-d-brief-march-05-2026/411902/",
+          "time": "Thu, 05 Mar 2026 11:20:22 -0500",
+          "description": ""
+        },
+        {
+          "type": "rss_item",
+          "title": "CISA nominee: I left Coast Guard to address GOP hold",
+          "url": "https://www.defenseone.com/policy/2026/03/trumps-cisa-nominee-said-he-left-coast-guard-address-gop-hold/411904/",
+          "time": "Wed, 04 Mar 2026 19:32:00 -0500",
+          "description": "Sean Plankey told Nextgov he was reacting to lawmakers' concerns about his shipbuilding ties."
+        },
+        {
+          "type": "rss_item",
+          "title": "The US built up its missile defenses—and will need to do it again",
+          "url": "https://www.defenseone.com/ideas/2026/03/us-built-its-missile-defensesand-will-need-do-it-again/411881/",
+          "time": "Wed, 04 Mar 2026 14:04:13 -0500",
+          "description": "The war against Iran has depleted stocks of vital interceptors."
+        },
+        {
+          "type": "rss_item",
+          "title": "The D Brief: US-Israel strikes continue; Hormuz closed; 4 US dead, ID’d; SOF join Ecuador drug ops; And a bit more.",
+          "url": "https://www.defenseone.com/threats/2026/03/the-d-brief-march-04-2026/411875/",
+          "time": "Wed, 04 Mar 2026 11:50:14 -0500",
+          "description": ""
+        },
+        {
+          "type": "rss_item",
+          "title": "Hegseth: US went to war because Iran 'had no intention' of signing a nuclear deal",
+          "url": "https://www.defenseone.com/threats/2026/03/hegseth-cites-irans-reluctance-sign-new-nuclear-deal-impetus-war/411871/",
+          "time": "Wed, 04 Mar 2026 10:54:06 -0500",
+          "description": "The Joint Chiefs chairman gave an updated battle damage assessment, roundup of Iran’s capabilities during a briefing Wednesday."
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran-linked hacktivists could target US state and local targets, experts warn",
+          "url": "https://www.defenseone.com/threats/2026/03/iran-linked-hacktivists-could-target-governments-experts-warn/411874/",
+          "time": "Wed, 04 Mar 2026 10:30:00 -0500",
+          "description": "Networks, government websites, and critical infrastructure providers should buckle up."
+        },
+        {
+          "type": "rss_item",
+          "title": "Trump’s CISA nominee to exit Coast Guard role, but still in running to lead cyber agency",
+          "url": "https://www.defenseone.com/policy/2026/03/trumps-cisa-nominee-exit-coast-guard-role-still-running-lead-cyber-agency/411864/",
+          "time": "Tue, 03 Mar 2026 20:04:00 -0500",
+          "description": "Sean Plankey has been serving in a Coast Guard advisory role for some months and is still set to be the nominee to lead CISA."
+        }
+      ]
+    },
+    "breaking_defense": {
+      "name": "Breaking Defense",
+      "category": "conflict",
+      "fetchedAt": "2026-03-07T12:59:35.787Z",
+      "events": [
+        {
+          "type": "rss_item",
+          "title": "How technology, strategy and industry are shaping the next fleet",
+          "url": "https://breakingdefense.com/2026/03/how-technology-strategy-and-industry-are-shaping-the-next-fleet/",
+          "time": "Sat, 07 Mar 2026 02:35:55 +0000",
+          "description": "<img width=\"700\" height=\"375\" src=\"https://breakingdefense.com/wp-content/uploads/site"
+        },
+        {
+          "type": "rss_item",
+          "title": "Defense companies to quadruple production of &#8216;exquisite&#8217; weapons: Trump",
+          "url": "https://breakingdefense.com/2026/03/defense-companies-to-quadruple-production-of-exquisite-weapons-trump/",
+          "time": "Fri, 06 Mar 2026 22:15:55 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upload"
+        },
+        {
+          "type": "rss_item",
+          "title": "3,000 strikes, 43 ships hit: US operations against Iran by the numbers",
+          "url": "https://breakingdefense.com/2026/03/2000-strikes-30-ships-down-us-operations-against-iran-by-the-numbers/",
+          "time": "Fri, 06 Mar 2026 19:12:34 +0000",
+          "description": "<img width=\"1024\" height=\"535\" src=\"https://breakingdefense.com/wp-content/upload"
+        },
+        {
+          "type": "rss_item",
+          "title": "Anthropic CEO says Pentagon ban less harsh than Hegseth had threatened",
+          "url": "https://breakingdefense.com/2026/03/anthropic-ceo-says-pentagon-ban-less-harsh-than-hegseth-had-threatened/",
+          "time": "Fri, 06 Mar 2026 18:36:24 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/uplo"
+        },
+        {
+          "type": "rss_item",
+          "title": "Swiss cutting F-35 order by six, facing up to five year Patriot delay",
+          "url": "https://breakingdefense.com/2026/03/swiss-cutting-f-35-order-by-six-facing-up-to-five-year-patriot-delay/",
+          "time": "Fri, 06 Mar 2026 18:30:45 +0000",
+          "description": "<img width=\"1024\" height=\"575\" src=\"https://breakingdefense.com/wp-content/upload"
+        },
+        {
+          "type": "rss_item",
+          "title": "US sinking of Iranian navy ship stirs controversy in Australia, India",
+          "url": "https://breakingdefense.com/2026/03/us-sinking-of-iranian-navy-ship-stirs-controversy-in-australia-india/",
+          "time": "Fri, 06 Mar 2026 16:25:00 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upload"
+        },
+        {
+          "type": "rss_item",
+          "title": "Pentagon&#8217;s new chief data officer to push &#8216;AI capabilities to warfighters&#8217;",
+          "url": "https://breakingdefense.com/2026/03/pentagons-new-chief-data-officer-to-push-ai-capabilities-to-warfighters/",
+          "time": "Fri, 06 Mar 2026 16:18:42 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upl"
+        },
+        {
+          "type": "rss_item",
+          "title": "&#8216;New status quo&#8217;: Germany reaches for European conventional military dominance",
+          "url": "https://breakingdefense.com/2026/03/new-status-quo-germany-reaches-for-european-conventional-military-dominance/",
+          "time": "Fri, 06 Mar 2026 14:47:01 +0000",
+          "description": "<img width=\"1024\" height=\"576\" src=\"https://breakingdefense.com/wp-content"
+        },
+        {
+          "type": "rss_item",
+          "title": "Drone Dominance: Pentagon to order 30,000 one-way drones in &#8216;next few days&#8217;",
+          "url": "https://breakingdefense.com/2026/03/drone-dominance-pentagon-to-order-30000-one-way-drones-in-next-few-days/",
+          "time": "Thu, 05 Mar 2026 20:24:02 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/upl"
+        },
+        {
+          "type": "rss_item",
+          "title": "Multi-channel data link reshapes Navy’s communications capabilities",
+          "url": "https://breakingdefense.com/2026/03/multi-channel-data-link-reshapes-navys-communications-capabilities/",
+          "time": "Thu, 05 Mar 2026 20:01:07 +0000",
+          "description": "<img width=\"1024\" height=\"576\" src=\"https://breakingdefense.com/wp-content/uploads/"
+        },
+        {
+          "type": "rss_item",
+          "title": "Air Force seeks additional vendors for radar-killing missile",
+          "url": "https://breakingdefense.com/2026/03/air-force-seeks-additional-vendors-for-radar-killing-missile/",
+          "time": "Thu, 05 Mar 2026 18:30:19 +0000",
+          "description": "<img width=\"1024\" height=\"576\" src=\"https://breakingdefense.com/wp-content/uploads/sites/"
+        },
+        {
+          "type": "rss_item",
+          "title": "How RAFT is approaching AI at the edge",
+          "url": "https://breakingdefense.com/2026/03/how-raft-is-approaching-ai-at-the-edge/",
+          "time": "Thu, 05 Mar 2026 16:36:55 +0000",
+          "description": "<img width=\"768\" height=\"432\" src=\"https://breakingdefense.com/wp-content/uploads/sites/13/2026/03/260305_ai_br"
+        },
+        {
+          "type": "rss_item",
+          "title": "UAE&#8217;s defense giant EDGE Group to equip Ecuador with border protection systems",
+          "url": "https://breakingdefense.com/2026/03/uaes-defense-giant-edge-group-to-equip-ecuador-with-border-protection-systems/",
+          "time": "Thu, 05 Mar 2026 14:52:13 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-conte"
+        },
+        {
+          "type": "rss_item",
+          "title": "Navy&#8217;s Kilby signals USS Ford could see 11-month deployment, approaching record length",
+          "url": "https://breakingdefense.com/2026/03/navys-kilby-signals-uss-ford-could-see-11-month-deployment-approaching-record-length/",
+          "time": "Thu, 05 Mar 2026 12:38:00 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/w"
+        },
+        {
+          "type": "rss_item",
+          "title": "Iran war powers resolution fails in Senate",
+          "url": "https://breakingdefense.com/2026/03/iran-war-powers-resolution-fails-in-senate/",
+          "time": "Wed, 04 Mar 2026 22:28:04 +0000",
+          "description": "<img width=\"1024\" height=\"577\" src=\"https://breakingdefense.com/wp-content/uploads/sites/13/2026/03/GettyIm"
+        }
+      ]
+    }
+  }
+}

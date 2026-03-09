@@ -46,10 +46,10 @@
   // ── Nav Config ──
   var NAV_LINKS = [
     { href: '/stream',        label: 'Stream' },
+    { href: '/agents',        label: 'Agents' },
+    { href: '/collective',    label: 'Collective' },
     { href: '/dreams',        label: 'Dreams' },
     { href: '/territories',   label: 'Territories' },
-    { href: '/worlds',        label: 'Worlds' },
-    { href: '/intelligence',  label: 'Intelligence' },
     { href: '/moot',          label: 'Moots' },
     { href: '/articles',      label: 'Blog' },
     { href: '/about',         label: 'About' }
@@ -64,7 +64,8 @@
     { href: '/graph',       label: 'Graph' },
     { href: '/dashboard',   label: 'Dashboard' },
     { href: '/moot',        label: 'Moot' },
-    { href: '/collective',  label: 'Ask' },
+    { href: '/forge',       label: 'Forge' },
+    { href: '/collective',  label: 'Collective' },
     { href: '/skills',      label: 'Skills' },
     { href: '/humans',      label: 'Humans' }
   ];
@@ -82,16 +83,14 @@
       ]
     },
     {
-      title: 'Intelligence',
+      title: 'Analysis',
       links: [
-        { href: '/intelligence', label: 'Intelligence' },
         { href: '/predictions', label: 'Predictions' },
         { href: '/research', label: 'Research' },
         { href: '/trust', label: 'Trust' },
         { href: '/claims', label: 'Claims' },
         { href: '/discoveries', label: 'Discoveries' },
         { href: '/feeds', label: 'Feeds' },
-        { href: '/data-feeds', label: 'Data Feeds' }
       ]
     },
     {
@@ -102,8 +101,8 @@
         { href: '/my-agent', label: 'My Agent' },
         { href: '/humans', label: 'Humans' },
         { href: '/moot', label: 'Moot' },
+        { href: '/forge', label: 'The Forge' },
         { href: '/debate', label: 'Debate' },
-        { href: '/connect', label: 'Connect' },
         { href: '/skills', label: 'Skills' },
         { href: '/leaderboard', label: 'Leaderboard' }
       ]
@@ -112,14 +111,11 @@
       title: 'World',
       links: [
         { href: '/territories', label: 'Territories' },
-        { href: '/worlds', label: 'Worlds' },
-        { href: '/territories-new', label: 'Territories New' },
         { href: '/dreams', label: 'Dreams' },
         { href: '/dream', label: 'Dream' },
         { href: '/dream-detail', label: 'Dream Detail' },
         { href: '/oracle', label: 'Oracle' },
         { href: '/oracle-question', label: 'Oracle Question' },
-        { href: '/frameworks', label: 'Frameworks' },
         { href: '/zines', label: 'Zines' }
       ]
     },
@@ -133,8 +129,6 @@
         { href: '/stats', label: 'Stats' },
         { href: '/memory', label: 'Memory' },
         { href: '/me', label: 'Me' },
-        { href: '/explore', label: 'Explore' },
-        { href: '/trajectories', label: 'Trajectories' },
         { href: '/webring', label: 'Webring' },
         { href: '/security', label: 'Security' },
         { href: '/miniapp', label: 'Miniapp' },

@@ -22,7 +22,7 @@ const CONTRIBUTE_URL = 'http://localhost:3851/api/contribute';
 // OpenRouter for synthesis
 const OPENROUTER_KEY = (() => {
   try {
-    const envContent = require('fs').readFileSync('/var/www/snap/.env', 'utf8');
+    const envContent = require('fs').readFileSync('/var/www/mydeadinternet/.env', 'utf8');
     const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
     return match ? match[1].trim() : null;
   } catch { return null; }
@@ -45,6 +45,34 @@ const APIFY_TOKEN = (() => {
   } catch { return null; }
 })();
 if (APIFY_TOKEN) process.env.APIFY_API_TOKEN = APIFY_TOKEN;
+
+const GITHUB_TOKEN = (() => {
+  try {
+    const envContent = require('fs').readFileSync('/var/www/mydeadinternet/.env', 'utf8');
+    const match = envContent.match(/GITHUB_TOKEN=(.+)/);
+    return match ? match[1].trim() : null;
+  } catch { return null; }
+})();
+
+
+// Load all .env vars into process.env for env_expand support
+try {
+  const allEnv = require('fs').readFileSync('/var/www/mydeadinternet/.env', 'utf8');
+  allEnv.split(String.fromCharCode(10)).forEach(line => {
+    const eq = line.indexOf('=');
+    if (eq > 0 && !line.startsWith('#')) {
+      const key = line.slice(0, eq).trim();
+      const val = line.slice(eq + 1).trim();
+      if (key && val && !process.env[key]) process.env[key] = val;
+    }
+  });
+} catch (e) { /* ignore */ }
+
+function buildGithubHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  if (GITHUB_TOKEN) headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+  return headers;
+}
 
 let db;
 let ApifyClient;
@@ -324,14 +352,25 @@ async function fetchHttp(feed) {
   const config = typeof feed.source_config === 'string' ? JSON.parse(feed.source_config) : feed.source_config;
   let url = config.url;
 
-  // Template date variables
-  if (url.includes('{date_1d_ago}')) {
+  // Template date variables, e.g. {date_1d_ago}, {date_90d_ago}
+  url = url.replace(/\{date_(\d+)d_ago\}/g, (_, dayCount) => {
     const d = new Date();
-    d.setDate(d.getDate() - 1);
-    url = url.replace('{date_1d_ago}', d.toISOString().slice(0, 10));
-  }
+    d.setDate(d.getDate() - Number(dayCount));
+    return d.toISOString().slice(0, 10);
+  });
 
   const headers = config.headers || {};
+
+  // Expand environment variables in URL and headers
+  if (config.env_expand) {
+    url = url.replace(/\$\{(\w+)\}/g, (_, k) => process.env[k] || '');
+    for (const h of Object.keys(headers)) {
+      if (typeof headers[h] === 'string') {
+        headers[h] = headers[h].replace(/\$\{(\w+)\}/g, (_, k) => process.env[k] || '');
+      }
+    }
+  }
+
   const resp = await httpGet(url, headers);
   let data;
   try {
@@ -347,6 +386,15 @@ async function fetchHttp(feed) {
   if (config.transform === 'github_repos') {
     return transformGithubRepos(data, config);
   }
+  if (config.transform === 'github_maintenance_risk') {
+    return transformGithubMaintenanceRisk(data, config);
+  }
+  if (config.transform === 'github_issue_backlog') {
+    return await transformGithubIssueBacklog(data, config);
+  }
+  if (config.transform === 'npm_maintenance_risk') {
+    return await transformNpmMaintenanceRisk(data, config);
+  }
   if (config.transform === 'polymarket_events') {
     return transformPolymarketEvents(data, config);
   }
@@ -355,6 +403,60 @@ async function fetchHttp(feed) {
   }
   if (config.transform === 'gdelt_articles') {
     return transformGdeltArticles(data, config);
+  }
+  if (config.transform === 'cisa_kev') {
+    return transformCisaKev(data, config);
+  }
+  if (config.transform === 'openalex_works') {
+    return transformOpenAlexWorks(data, config);
+  }
+  if (config.transform === 'semantic_scholar') {
+    return transformSemanticScholar(data, config);
+  }
+  if (config.transform === 'npm_downloads') {
+    return transformNpmDownloads(data, config);
+  }
+  if (config.transform === 'usgs_earthquakes') {
+    return transformUsgsEarthquakes(data, config);
+  }
+  if (config.transform === 'spaceflight_news') {
+    return transformSpaceflightNews(data, config);
+  }
+  if (config.transform === 'launch_library') {
+    return transformLaunchLibrary(data, config);
+  }
+  if (config.transform === 'open_notify') {
+    return transformOpenNotify(data, config);
+  }
+  if (config.transform === 'federal_register') {
+    return transformFederalRegister(data, config);
+  }
+  if (config.transform === 'fbi_wanted') {
+    return transformFbiWanted(data, config);
+  }
+  if (config.transform === 'disease_sh') {
+    return transformDiseaseSh(data, config);
+  }
+  if (config.transform === 'carbon_intensity') {
+    return transformCarbonIntensity(data, config);
+  }
+  if (config.transform === 'opensky_flights') {
+    return transformOpenSkyFlights(data, config);
+  }
+  if (config.transform === 'alpha_vantage') {
+    return transformAlphaVantage(data, config);
+  }
+  if (config.transform === 'openaq') {
+    return transformOpenAQ(data, config);
+  }
+  if (config.transform === 'gnews') {
+    return transformGNews(data, config);
+  }
+  if (config.transform === 'fred') {
+    return transformFred(data, config);
+  }
+  if (config.transform === 'finnhub_news') {
+    return transformFinnhubNews(data, config);
   }
 
   // Generic: expect array of objects with content/title/description
@@ -366,6 +468,309 @@ async function fetchHttp(feed) {
     }));
   }
   return [{ content: JSON.stringify(data).slice(0, 3000), source_url: url, metadata: data }];
+}
+
+// --- CISA KEV Transform ---
+function transformCisaKev(data, config) {
+  // NVD 2.0 API format
+  const vulns = (data.vulnerabilities || []).slice(0, 15);
+  return vulns.map(function(v) {
+    var cve = v.cve || {};
+    var id = cve.id || 'Unknown';
+    var desc = (cve.descriptions || []).find(function(d) { return d.lang === 'en'; });
+    var descText = desc ? desc.value : 'No description';
+    var metrics = cve.metrics || {};
+    var cvss = null;
+    if (metrics.cvssMetricV31 && metrics.cvssMetricV31[0]) {
+      cvss = metrics.cvssMetricV31[0].cvssData;
+    } else if (metrics.cvssMetricV30 && metrics.cvssMetricV30[0]) {
+      cvss = metrics.cvssMetricV30[0].cvssData;
+    }
+    var severity = cvss ? cvss.baseSeverity : 'UNKNOWN';
+    var score = cvss ? cvss.baseScore : '?';
+    return {
+      content: [
+        '**CVE: ' + id + '** (Severity: ' + severity + ', Score: ' + score + ')',
+        descText.slice(0, 400),
+        'Published: ' + (cve.published || 'Unknown')
+      ].join('\n'),
+      source_url: 'https://nvd.nist.gov/vuln/detail/' + id,
+      metadata: { cve: id, severity: severity, score: score, published: cve.published }
+    };
+  });
+}
+
+// --- OpenAlex Transform ---
+function transformOpenAlexWorks(data, config) {
+  const works = (data.results || []).slice(0, 10);
+  return works.map(w => {
+    const authors = (w.authorships || []).slice(0, 3).map(a => a.author && a.author.display_name).filter(Boolean).join(', ');
+    return {
+      content: [
+        '**' + (w.title || 'Untitled') + '**',
+        'Authors: ' + (authors || 'Unknown'),
+        'Citations: ' + (w.cited_by_count || 0) + ' | Year: ' + w.publication_year,
+        w.abstract_inverted_index ? 'Has abstract' : 'No abstract available'
+      ].join('\n'),
+      source_url: w.doi ? ('https://doi.org/' + w.doi.replace('https://doi.org/', '')) : (w.id || null),
+      metadata: { openalex_id: w.id, citations: w.cited_by_count, year: w.publication_year, type: w.type }
+    };
+  });
+}
+
+// --- Semantic Scholar Transform ---
+function transformSemanticScholar(data, config) {
+  const papers = (data.data || []).slice(0, 10);
+  return papers.map(p => ({
+    content: [
+      '**' + (p.title || 'Untitled') + '**',
+      'Citations: ' + (p.citationCount || 0) + ' | Year: ' + (p.year || '?'),
+      p.abstract ? p.abstract.slice(0, 400) : 'No abstract'
+    ].join('\n'),
+    source_url: p.url || null,
+    metadata: { paperId: p.paperId, citations: p.citationCount, year: p.year }
+  }));
+}
+
+// --- npm Downloads Transform ---
+function transformNpmDownloads(data, config) {
+  const entries = Object.entries(data).filter(function(e) { return e[1] && e[1].downloads; });
+  return entries.map(function(e) {
+    var pkg = e[0], info = e[1];
+    return {
+      content: '**npm: ' + pkg + '** — ' + info.downloads.toLocaleString() + ' downloads/week (' + info.start + ' to ' + info.end + ')',
+      source_url: 'https://www.npmjs.com/package/' + pkg,
+      metadata: { package: pkg, downloads: info.downloads, period: info.start + ' to ' + info.end }
+    };
+  });
+}
+
+function transformUsgsEarthquakes(data, config) {
+  var features = (data.features || []).slice(0, 10);
+  return features.map(function(f) {
+    var p = f.properties || {};
+    var geo = (f.geometry || {}).coordinates || [];
+    var mag = p.mag || '?';
+    var place = p.place || 'Unknown location';
+    var time = p.time ? new Date(p.time).toISOString() : 'Unknown';
+    var tsunami = p.tsunami ? ' [TSUNAMI WARNING]' : '';
+    return {
+      content: '**EARTHQUAKE M' + mag + '** — ' + place + tsunami + '\nTime: ' + time + '\nDepth: ' + (geo[2] || '?') + ' km | Felt reports: ' + (p.felt || 0) + ' | Alert: ' + (p.alert || 'none'),
+      source_url: p.url || null,
+      metadata: { magnitude: mag, place: place, depth: geo[2], alert: p.alert }
+    };
+  });
+}
+
+function transformSpaceflightNews(data, config) {
+  var articles = (data.results || data || []).slice(0, 8);
+  return articles.map(function(a) {
+    return {
+      content: '**' + (a.title || 'Untitled') + '**\n' + (a.summary || '').slice(0, 400) + '\nSource: ' + (a.news_site || 'Unknown'),
+      source_url: a.url || null,
+      metadata: { news_site: a.news_site, published: a.published_at }
+    };
+  });
+}
+
+function transformLaunchLibrary(data, config) {
+  var launches = (data.results || []).slice(0, 5);
+  return launches.map(function(l) {
+    var pad = l.pad || {};
+    var loc = pad.location || {};
+    var status = (l.status || {}).name || 'Unknown';
+    var provider = (l.launch_service_provider || {}).name || 'Unknown';
+    return {
+      content: '**LAUNCH: ' + (l.name || 'Unknown') + '**\nProvider: ' + provider + ' | Status: ' + status + '\nWindow: ' + (l.window_start || 'TBD') + '\nLocation: ' + (loc.name || 'Unknown') + '\n' + (l.mission ? l.mission.description || '' : '').slice(0, 300),
+      source_url: l.url || null,
+      metadata: { provider: provider, status: status, window_start: l.window_start }
+    };
+  });
+}
+
+function transformOpenNotify(data, config) {
+  var people = data.people || [];
+  var count = data.number || people.length;
+  var bycraft = {};
+  people.forEach(function(p) { bycraft[p.craft] = (bycraft[p.craft] || []).concat(p.name); });
+  var lines = ['**' + count + ' humans currently in space**'];
+  Object.keys(bycraft).forEach(function(craft) {
+    lines.push(craft + ': ' + bycraft[craft].join(', '));
+  });
+  return [{
+    content: lines.join('\n'),
+    source_url: 'http://open-notify.org/',
+    metadata: { count: count, crafts: Object.keys(bycraft) }
+  }];
+}
+
+function transformFederalRegister(data, config) {
+  var docs = (data.results || []).slice(0, 8);
+  return docs.map(function(d) {
+    var type = (d.type || 'Document').toUpperCase();
+    var agencies = (d.agencies || []).map(function(a) { return a.name; }).join(', ') || 'Unknown Agency';
+    return {
+      content: '**[' + type + '] ' + (d.title || 'Untitled') + '**\nAgency: ' + agencies + '\nPublished: ' + (d.publication_date || 'Unknown') + '\n' + (d.abstract || '').slice(0, 350),
+      source_url: d.html_url || null,
+      metadata: { type: type, agencies: agencies, doc_number: d.document_number }
+    };
+  });
+}
+
+function transformFbiWanted(data, config) {
+  var items = (data.items || []).slice(0, 6);
+  return items.map(function(w) {
+    var subjects = (w.subjects || []).join(', ') || 'Unknown';
+    return {
+      content: '**FBI WANTED: ' + (w.title || 'Unknown') + '**\nSubjects: ' + subjects + '\nReward: ' + (w.reward_text || 'Not specified') + '\n' + (w.description || w.caution || '').slice(0, 300),
+      source_url: w.url || null,
+      metadata: { uid: w.uid, subjects: subjects }
+    };
+  });
+}
+
+function transformDiseaseSh(data, config) {
+  // Expects array of country data from /v3/covid-19/countries?sort=todayCases
+  if (Array.isArray(data)) {
+    var top = data.slice(0, 8);
+    return top.map(function(c) {
+      return {
+        content: '**Disease Tracker: ' + (c.country || 'Unknown') + '**\nToday: +' + (c.todayCases || 0).toLocaleString() + ' cases, +' + (c.todayDeaths || 0).toLocaleString() + ' deaths\nActive: ' + (c.active || 0).toLocaleString() + ' | Critical: ' + (c.critical || 0).toLocaleString() + '\nVaccinated: ' + ((c.population && c.tests) ? Math.round(c.tests/c.population*100) : '?') + '% tested',
+        source_url: 'https://disease.sh/',
+        metadata: { country: c.country, todayCases: c.todayCases, active: c.active }
+      };
+    });
+  }
+  // Single global summary
+  return [{
+    content: '**Global Disease Summary**\nCases: ' + (data.cases || 0).toLocaleString() + ' | Deaths: ' + (data.deaths || 0).toLocaleString() + '\nToday: +' + (data.todayCases || 0).toLocaleString() + ' cases, +' + (data.todayDeaths || 0).toLocaleString() + ' deaths\nActive: ' + (data.active || 0).toLocaleString() + ' | Critical: ' + (data.critical || 0).toLocaleString(),
+    source_url: 'https://disease.sh/',
+    metadata: { cases: data.cases, deaths: data.deaths, active: data.active }
+  }];
+}
+
+function transformCarbonIntensity(data, config) {
+  var d = (data.data || [data])[0] || {};
+  var intensity = d.intensity || {};
+  var gen = d.generationmix || [];
+  var topSources = gen.sort(function(a,b) { return (b.perc||0)-(a.perc||0); }).slice(0,4);
+  var mix = topSources.map(function(s) { return s.fuel + ': ' + s.perc + '%'; }).join(', ');
+  return [{
+    content: '**UK Grid Carbon Intensity: ' + (intensity.actual || intensity.forecast || '?') + ' gCO2/kWh**\nIndex: ' + (intensity.index || 'unknown') + '\nGeneration mix: ' + mix + '\nPeriod: ' + (d.from || 'now'),
+    source_url: 'https://carbonintensity.org.uk/',
+    metadata: { intensity: intensity.actual, index: intensity.index }
+  }];
+}
+
+function transformOpenSkyFlights(data, config) {
+  var states = (data.states || []).slice(0, 200);
+  if (states.length === 0) return [];
+  // Aggregate stats + pick interesting flights
+  var countries = {};
+  var highAlt = [];
+  var fastest = [];
+  states.forEach(function(s) {
+    var country = (s[2] || 'Unknown').trim();
+    countries[country] = (countries[country] || 0) + 1;
+    var alt = s[7] || 0; // baro altitude meters
+    var vel = s[9] || 0; // velocity m/s
+    var callsign = (s[1] || '').trim();
+    if (alt > 12000 && callsign) highAlt.push({ callsign: callsign, alt: Math.round(alt), country: country });
+    if (vel > 250 && callsign) fastest.push({ callsign: callsign, speed: Math.round(vel * 3.6), country: country });
+  });
+  highAlt.sort(function(a,b) { return b.alt - a.alt; });
+  fastest.sort(function(a,b) { return b.speed - a.speed; });
+  var topCountries = Object.entries(countries).sort(function(a,b) { return b[1]-a[1]; }).slice(0,5);
+  var lines = ['**LIVE FLIGHT TRACKING: ' + data.states.length + ' aircraft tracked**'];
+  lines.push('Top airspaces: ' + topCountries.map(function(c) { return c[0] + ' (' + c[1] + ')'; }).join(', '));
+  if (highAlt.length > 0) {
+    lines.push('Highest: ' + highAlt.slice(0,3).map(function(f) { return f.callsign + ' at ' + (f.alt/1000).toFixed(1) + 'km'; }).join(', '));
+  }
+  if (fastest.length > 0) {
+    lines.push('Fastest: ' + fastest.slice(0,3).map(function(f) { return f.callsign + ' at ' + f.speed + ' km/h'; }).join(', '));
+  }
+  return [{
+    content: lines.join('\n'),
+    source_url: 'https://opensky-network.org/',
+    metadata: { total: data.states.length, countries: topCountries.length }
+  }];
+}
+
+function transformAlphaVantage(data, config) {
+  // Top Gainers/Losers endpoint
+  var items = [];
+  var gainers = (data.top_gainers || []).slice(0, 3);
+  var losers = (data.top_losers || []).slice(0, 3);
+  var active = (data.most_actively_traded || []).slice(0, 3);
+  var lines = ['**US MARKET MOVERS**'];
+  if (gainers.length) {
+    lines.push('TOP GAINERS: ' + gainers.map(function(g) { return g.ticker + ' +' + g.change_percentage; }).join(', '));
+  }
+  if (losers.length) {
+    lines.push('TOP LOSERS: ' + losers.map(function(g) { return g.ticker + ' ' + g.change_percentage; }).join(', '));
+  }
+  if (active.length) {
+    lines.push('MOST ACTIVE: ' + active.map(function(g) { return g.ticker + ' vol:' + g.volume; }).join(', '));
+  }
+  return [{
+    content: lines.join('\n'),
+    source_url: 'https://www.alphavantage.co/',
+    metadata: { gainers: gainers.length, losers: losers.length }
+  }];
+}
+
+function transformOpenAQ(data, config) {
+  var results = (data.results || []).slice(0, 8);
+  return results.map(function(r) {
+    var loc = r.location || 'Unknown';
+    var city = r.city || '';
+    var country = r.country || '';
+    var params = (r.measurements || []).map(function(m) {
+      return m.parameter + ': ' + m.value + ' ' + m.unit;
+    }).join(', ');
+    return {
+      content: '**AIR QUALITY: ' + loc + '** (' + [city, country].filter(Boolean).join(', ') + ')\nMeasurements: ' + params,
+      source_url: 'https://openaq.org/',
+      metadata: { location: loc, country: country }
+    };
+  });
+}
+
+function transformGNews(data, config) {
+  var articles = (data.articles || []).slice(0, 8);
+  return articles.map(function(a) {
+    return {
+      content: '**' + (a.title || 'Untitled') + '**\n' + (a.description || '').slice(0, 400) + '\nSource: ' + ((a.source || {}).name || 'Unknown') + ' | ' + (a.publishedAt || ''),
+      source_url: a.url || null,
+      metadata: { source: (a.source || {}).name, published: a.publishedAt }
+    };
+  });
+}
+
+function transformFred(data, config) {
+  var observations = (data.observations || []).slice(-5);
+  var seriesId = config.series_id || 'Unknown';
+  var seriesName = config.series_name || seriesId;
+  if (observations.length === 0) return [];
+  var latest = observations[observations.length - 1];
+  var prev = observations.length > 1 ? observations[observations.length - 2] : null;
+  var change = prev ? ((parseFloat(latest.value) - parseFloat(prev.value)) / parseFloat(prev.value) * 100).toFixed(2) : null;
+  return [{
+    content: '**ECONOMIC DATA: ' + seriesName + '**\nLatest: ' + latest.value + ' (' + latest.date + ')' + (change ? '\nChange: ' + (change > 0 ? '+' : '') + change + '%' : '') + '\nSeries: ' + seriesId,
+    source_url: 'https://fred.stlouisfed.org/series/' + seriesId,
+    metadata: { series: seriesId, value: latest.value, date: latest.date }
+  }];
+}
+
+function transformFinnhubNews(data, config) {
+  var articles = (Array.isArray(data) ? data : []).slice(0, 8);
+  return articles.map(function(a) {
+    return {
+      content: '**' + (a.headline || 'Untitled') + '**\nCategory: ' + (a.category || 'general') + '\n' + (a.summary || '').slice(0, 400) + '\nSource: ' + (a.source || 'Unknown'),
+      source_url: a.url || null,
+      metadata: { category: a.category, source: a.source, datetime: a.datetime }
+    };
+  });
 }
 
 async function transformHnStories(storyIds, config) {
@@ -408,6 +813,238 @@ function transformGithubRepos(data, config) {
       updated_at: repo.updated_at
     }
   }));
+}
+
+function transformGithubMaintenanceRisk(data, config) {
+  const repos = data.items || data || [];
+  const now = Date.now();
+
+  return repos.slice(0, config.max_items || 20).map(repo => {
+    const pushedAt = Date.parse(repo.pushed_at || repo.updated_at || repo.created_at || now);
+    const updatedAt = Date.parse(repo.updated_at || repo.pushed_at || repo.created_at || now);
+    const daysSincePush = Math.max(0, Math.floor((now - pushedAt) / 86400000));
+    const daysSinceUpdate = Math.max(0, Math.floor((now - updatedAt) / 86400000));
+
+    const stars = Number(repo.stargazers_count || 0);
+    const forks = Number(repo.forks_count || 0);
+    const watchers = Number(repo.watchers_count || stars);
+    const openIssues = Number(repo.open_issues_count || 0);
+
+    const usageScore = Math.min(100, Math.round(stars / 200 + forks / 100 + watchers / 300));
+    const stalenessScore = Math.min(100, Math.round(daysSincePush / 2));
+    const issuePressureScore = Math.min(100, Math.round((openIssues / Math.max(1, stars)) * 5000));
+
+    const clawdupBenchmark = Math.round(usageScore * 0.45 + stalenessScore * 0.35 + issuePressureScore * 0.20);
+
+    let riskBand = 'low';
+    if (clawdupBenchmark >= 70) riskBand = 'critical';
+    else if (clawdupBenchmark >= 55) riskBand = 'high';
+    else if (clawdupBenchmark >= 40) riskBand = 'moderate';
+
+    return {
+      content: `[Maintenance ${riskBand.toUpperCase()} | clawdup ${clawdupBenchmark}] ${repo.full_name}: ${repo.description || 'No description'}
+` +
+        `Usage: ${stars} stars, ${forks} forks | Staleness: ${daysSincePush}d since push | Open issues: ${openIssues}`,
+      source_url: repo.html_url,
+      metadata: {
+        repo_full_name: repo.full_name,
+        language: repo.language,
+        stars,
+        forks,
+        watchers,
+        open_issues: openIssues,
+        days_since_push: daysSincePush,
+        days_since_update: daysSinceUpdate,
+        usage_score: usageScore,
+        staleness_score: stalenessScore,
+        issue_pressure_score: issuePressureScore,
+        clawdup_benchmark: clawdupBenchmark,
+        maintenance_risk_band: riskBand,
+        pushed_at: repo.pushed_at,
+        updated_at: repo.updated_at,
+        topics: repo.topics || []
+      },
+      territory: config.default_territory_id || 'the-forge'
+    };
+  });
+}
+
+function extractGithubFullName(repoUrl) {
+  if (!repoUrl) return null;
+  try {
+    let url = String(repoUrl).trim();
+    if (url.startsWith('git+')) url = url.slice(4);
+    if (url.endsWith('.git')) url = url.slice(0, -4);
+    if (url.startsWith('git@github.com:')) {
+      const fullName = url.slice('git@github.com:'.length);
+      return /^[^/]+\/[^/]+$/.test(fullName) ? fullName : null;
+    }
+    const parsed = new URL(url);
+    if (!/github\.com$/i.test(parsed.hostname)) return null;
+    const parts = parsed.pathname.replace(/^\/+/, '').split('/').filter(Boolean);
+    if (parts.length < 2) return null;
+    return `${parts[0]}/${parts[1]}`;
+  } catch {
+    return null;
+  }
+}
+
+function riskBandFromScore(score) {
+  if (score >= 70) return 'critical';
+  if (score >= 55) return 'high';
+  if (score >= 40) return 'moderate';
+  return 'low';
+}
+
+async function transformGithubIssueBacklog(data, config) {
+  const minOpenIssues = Number(config.min_open_issues || 0);
+  const allRepos = (data.items || data || []);
+  const repos = (minOpenIssues > 0
+    ? allRepos.filter(r => Number(r.open_issues_count || 0) >= minOpenIssues)
+    : allRepos
+  ).slice(0, config.max_items || 8);
+  const now = Date.now();
+  const windowDays = Number(config.closed_window_days || 90);
+  const sinceDate = new Date(now - windowDays * 86400000).toISOString().slice(0, 10);
+  const out = [];
+
+  for (const repo of repos) {
+    const stars = Number(repo.stargazers_count || 0);
+    const forks = Number(repo.forks_count || 0);
+    const openIssues = Number(repo.open_issues_count || 0);
+    const pushedAt = Date.parse(repo.pushed_at || repo.updated_at || repo.created_at || now);
+    const daysSincePush = Math.max(0, Math.floor((now - pushedAt) / 86400000));
+
+    let closedInWindow = 0;
+    try {
+      const q = encodeURIComponent(`repo:${repo.full_name} is:issue is:closed closed:>=${sinceDate}`);
+      const url = `https://api.github.com/search/issues?q=${q}&per_page=1`;
+      const resp = await httpGet(url, buildGithubHeaders({ Accept: 'application/vnd.github.v3+json' }));
+      const closedData = JSON.parse(resp.data);
+      closedInWindow = Number(closedData.total_count || 0);
+    } catch (err) {
+      console.log('[Feeds] github_issue_backlog closed-count lookup failed for', repo.full_name, err.message);
+    }
+
+    const closureRatio = closedInWindow / Math.max(1, closedInWindow + openIssues);
+    const backlogPressure = Math.min(100, Math.round((openIssues / Math.max(1, stars)) * 12000));
+    const closureDeficit = Math.min(100, Math.round((1 - closureRatio) * 100));
+    const stalenessScore = Math.min(100, Math.round(daysSincePush / 4));
+    const burnoutIndex = Math.round(backlogPressure * 0.5 + closureDeficit * 0.35 + stalenessScore * 0.15);
+    const riskBand = riskBandFromScore(burnoutIndex);
+
+    out.push({
+      content: `[Issue Burnout ${riskBand.toUpperCase()} | clawdup ${burnoutIndex}] ${repo.full_name}: ${repo.description || 'No description'}
+` +
+        `Open issues: ${openIssues} | Closed ${windowDays}d: ${closedInWindow} | Closure ratio: ${(closureRatio * 100).toFixed(1)}% | Stars: ${stars}`,
+      source_url: repo.html_url,
+      metadata: {
+        repo_full_name: repo.full_name,
+        language: repo.language,
+        stars,
+        forks,
+        open_issues: openIssues,
+        closed_issues_window: closedInWindow,
+        closed_window_days: windowDays,
+        closure_ratio: Number(closureRatio.toFixed(4)),
+        backlog_pressure_score: backlogPressure,
+        closure_deficit_score: closureDeficit,
+        staleness_score: stalenessScore,
+        clawdup_benchmark: burnoutIndex,
+        maintenance_risk_band: riskBand,
+        pushed_at: repo.pushed_at,
+        updated_at: repo.updated_at
+      },
+      territory: config.default_territory_id || 'the-forge'
+    });
+
+    await sleep(120);
+  }
+
+  return out;
+}
+
+async function transformNpmMaintenanceRisk(data, config) {
+  const objects = Array.isArray(data?.objects) ? data.objects : [];
+  const candidates = objects.slice(0, config.max_items || 5);
+  const now = Date.now();
+  const out = [];
+
+  for (const item of candidates) {
+    const pkg = item.package || {};
+    const packageName = pkg.name;
+    if (!packageName) continue;
+
+    const repoUrl = pkg.links?.repository || pkg.repository || null;
+    const repoFullName = extractGithubFullName(repoUrl);
+
+    let weeklyDownloads = 0;
+    try {
+      const dl = await httpGet(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(packageName)}`);
+      weeklyDownloads = Number(JSON.parse(dl.data)?.downloads || 0);
+    } catch (err) {
+      console.log('[Feeds] npm downloads lookup failed for', packageName, err.message);
+    }
+
+    const minDownloads = Number(config.min_weekly_downloads || 50000);
+    if (weeklyDownloads < minDownloads) {
+      await sleep(100);
+      continue;
+    }
+
+    let repo = null;
+    if (repoFullName) {
+      try {
+        const gh = await httpGet(
+          `https://api.github.com/repos/${repoFullName}`,
+          buildGithubHeaders({ Accept: 'application/vnd.github.v3+json' })
+        );
+        repo = JSON.parse(gh.data);
+      } catch (err) {
+        console.log('[Feeds] npm repo enrichment failed for', packageName, err.message);
+      }
+    }
+
+    const stars = Number(repo?.stargazers_count || 0);
+    const forks = Number(repo?.forks_count || 0);
+    const openIssues = Number(repo?.open_issues_count || 0);
+    const pushedAt = Date.parse(repo?.pushed_at || repo?.updated_at || pkg.date || now);
+    const daysSincePush = Math.max(0, Math.floor((now - pushedAt) / 86400000));
+
+    const usageScore = Math.min(100, Math.round(Math.log10(Math.max(10, weeklyDownloads)) * 18 + stars / 250));
+    const stalenessScore = Math.min(100, Math.round(daysSincePush / 2));
+    const issuePressureScore = Math.min(100, Math.round((openIssues / Math.max(1, stars || 1)) * 5000));
+    const clawdupBenchmark = Math.round(usageScore * 0.5 + stalenessScore * 0.35 + issuePressureScore * 0.15);
+    const riskBand = riskBandFromScore(clawdupBenchmark);
+
+    out.push({
+      content: `[NPM Maintenance ${riskBand.toUpperCase()} | clawdup ${clawdupBenchmark}] ${packageName}: ${pkg.description || 'No description'}
+` +
+        `Weekly downloads: ${weeklyDownloads.toLocaleString()} | Repo: ${repoFullName || 'none'} | Staleness: ${daysSincePush}d | Open issues: ${openIssues}`,
+      source_url: pkg.links?.npm || `https://www.npmjs.com/package/${encodeURIComponent(packageName)}`,
+      metadata: {
+        package_name: packageName,
+        package_version: pkg.version || null,
+        package_date: pkg.date || null,
+        weekly_downloads: weeklyDownloads,
+        github_repo: repoFullName,
+        stars,
+        forks,
+        open_issues: openIssues,
+        days_since_push: daysSincePush,
+        usage_score: usageScore,
+        staleness_score: stalenessScore,
+        issue_pressure_score: issuePressureScore,
+        clawdup_benchmark: clawdupBenchmark,
+        maintenance_risk_band: riskBand
+      },
+      territory: config.default_territory_id || 'the-forge'
+    });
+
+    await sleep(120);
+  }
+
+  return out;
 }
 
 function transformPolymarketEvents(data, config) {
@@ -502,14 +1139,136 @@ function transformGdeltArticles(data, config) {
   }));
 }
 
+function decodeEntities(text) {
+  return String(text || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'");
+}
+
+function stripHtml(text) {
+  return decodeEntities(String(text || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+function inferTopNewsTerritory(title, source) {
+  const text = `${title || ''} ${source || ''}`.toLowerCase();
+  if (/(sec|filing|earnings|ipo|stock|market|bond|fed|inflation|bank)/.test(text)) return 'the-commons';
+  if (/(election|congress|white house|senate|policy|geopolit|war|sanction)/.test(text)) return 'the-agora';
+  if (/(ai|chip|nvidia|openai|anthropic|microsoft|google|meta|startup|software|cyber)/.test(text)) return 'the-signal';
+  return null;
+}
+
+function transformTopNewsRss(xml, config) {
+  const items = [];
+  const entries = xml.match(/<item[\s>][\s\S]*?<\/item>|<entry[\s>][\s\S]*?<\/entry>/gi) || [];
+  const maxItems = Number(config.max_items || 15);
+  const sourceName = config.source_name || 'Top News';
+  const sourceTier = Number(config.source_tier || 1);
+
+  for (const entry of entries.slice(0, maxItems)) {
+    const rawTitle = (entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+    const rawDesc = (entry.match(/<description[^>]*>([\s\S]*?)<\/description>/i) ||
+      entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i) || [])[1] || '';
+    const rawLink = (entry.match(/<link[^>]*href="([^"]*)"/i) || entry.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '';
+    const rawDate = (entry.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) ||
+      entry.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1] || '';
+
+    const title = stripHtml(rawTitle);
+    const summary = stripHtml(rawDesc);
+    const link = decodeEntities(rawLink).trim();
+    if (!title || !link) continue;
+
+    const combined = `${title} ${summary}`.toLowerCase();
+    let score = sourceTier * 10;
+    if (/\burgent\b|\bbreaking\b/.test(combined)) score += 3;
+    if (/\bai\b|\bartificial intelligence\b|\bllm\b|\bchip\b|\bsemiconductor\b/.test(combined)) score += 3;
+    if (/\belection\b|\bwar\b|\binflation\b|\bsec\b|\bearnings\b/.test(combined)) score += 2;
+
+    items.push({
+      content: `[Top News | ${sourceName}] ${title}\n${summary.slice(0, 550)}`,
+      source_url: link,
+      source: 'top_news',
+      metadata: {
+        headline: title,
+        summary,
+        source_name: sourceName,
+        published_at: rawDate || null,
+        ranking_tier: sourceTier,
+        ranking_score: score
+      },
+      territory: inferTopNewsTerritory(title, sourceName)
+    });
+  }
+
+  return items.sort((a, b) => (b.metadata.ranking_score || 0) - (a.metadata.ranking_score || 0));
+}
+
+function normalizeSecForm(form) {
+  return String(form || '').toUpperCase().replace(/\s+/g, '');
+}
+
+function inferSecTerritory(form) {
+  const f = normalizeSecForm(form);
+  if (f === '4' || f === '13D' || f === '13G' || f === 'S-1') return 'the-commons';
+  return 'the-agora';
+}
+
+function transformSecEdgarAtom(xml, config) {
+  const maxItems = Number(config.max_items || 20);
+  const allowedForms = (config.allowed_forms || []).map(normalizeSecForm);
+  const entries = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) || [];
+  const out = [];
+
+  for (const entry of entries.slice(0, maxItems)) {
+    const rawTitle = (entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+    const rawSummary = (entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i) || [])[1] || '';
+    const rawLink = (entry.match(/<link[^>]*href="([^"]+)"/i) || [])[1] || '';
+    const rawUpdated = (entry.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i) || [])[1] || '';
+    const categoryTerm = (entry.match(/<category[^>]*term="([^"]+)"/i) || [])[1] || '';
+
+    const title = stripHtml(rawTitle);
+    const summary = stripHtml(rawSummary);
+    const link = decodeEntities(rawLink).trim();
+    const form = normalizeSecForm(categoryTerm || title.split('-').pop());
+    if (!title || !link || !form) continue;
+    if (allowedForms.length && !allowedForms.includes(form)) continue;
+
+    const company = title.split('-')[0]?.trim() || 'Unknown Issuer';
+    out.push({
+      content: `[SEC ${form}] ${company}\n${title}\n${summary.slice(0, 520)}`,
+      source_url: link,
+      source: 'sec_edgar',
+      metadata: {
+        form_type: form,
+        company,
+        filing_title: title,
+        filing_summary: summary,
+        filed_at: rawUpdated || null
+      },
+      territory: inferSecTerritory(form)
+    });
+  }
+
+  return out;
+}
+
 async function fetchRss(feed) {
   const config = typeof feed.source_config === 'string' ? JSON.parse(feed.source_config) : feed.source_config;
-  const resp = await httpGet(config.url);
+  const resp = await httpGet(config.url, config.headers || {});
   const xml = resp.data;
 
   // Custom transforms for special RSS formats
   if (config.transform === 'google_trends_rss') {
     return transformGoogleTrendsRss(xml, config);
+  }
+  if (config.transform === 'top_news_rss') {
+    return transformTopNewsRss(xml, config);
+  }
+  if (config.transform === 'sec_edgar_atom') {
+    return transformSecEdgarAtom(xml, config);
   }
 
   // Simple RSS/Atom parser (no external dependency)
@@ -633,6 +1392,47 @@ function transformTikTokHashtags(items, config) {
 // Main feed execution
 // ============================================================
 
+function recoverStaleRunningFeedRuns() {
+  // If the worker restarts mid-run, stale "running" rows can block future pulls.
+  const staleRuns = db.prepare(`
+    SELECT id, feed_id
+    FROM feed_runs
+    WHERE status = 'running'
+      AND started_at <= datetime('now', '-45 minutes')
+    ORDER BY id ASC
+    LIMIT 200
+  `).all();
+
+  if (!staleRuns.length) return;
+
+  const markRunFailed = db.prepare(`
+    UPDATE feed_runs
+    SET status = 'failed',
+        completed_at = datetime('now'),
+        error_message = COALESCE(error_message, 'Recovered stale running run after worker restart')
+    WHERE id = ? AND status = 'running'
+  `);
+  const unblockFeed = db.prepare(`
+    UPDATE feeds
+    SET next_run_at = datetime('now', '-1 minute'),
+        updated_at = datetime('now')
+    WHERE id = ? AND status = 'active'
+  `);
+
+  let recovered = 0;
+  for (const run of staleRuns) {
+    const result = markRunFailed.run(run.id);
+    if (result.changes > 0) {
+      recovered += 1;
+      unblockFeed.run(run.feed_id);
+    }
+  }
+
+  if (recovered > 0) {
+    console.log(`[Feeds] Recovered ${recovered} stale running feed runs`);
+  }
+}
+
 async function executeFeed(feed) {
   if (executingFeeds.has(feed.id)) {
     console.log(`[Feeds] Skipping ${feed.id}: already running in this worker`);
@@ -725,6 +1525,14 @@ async function executeFeed(feed) {
 
       const hash = crypto.createHash('sha256').update(item.content).digest('hex');
 
+      // Cross-feed dedupe for top-news by canonical source URL.
+      if (item.source === 'top_news' && item.source_url) {
+        const seenUrl = db.prepare(
+          "SELECT id FROM feed_items WHERE source_url = ? AND created_at > datetime('now', '-2 day') LIMIT 1"
+        ).get(item.source_url);
+        if (seenUrl) { deduplicated++; continue; }
+      }
+
       // Dedup check
       const existing = db.prepare('SELECT id FROM feed_items WHERE feed_id = ? AND content_hash = ?').get(feed.id, hash);
       if (existing) { deduplicated++; continue; }
@@ -751,6 +1559,7 @@ async function executeFeed(feed) {
         const contributeResult = await httpPost(CONTRIBUTE_URL, {
           content: contentForContribute.slice(0, 5000),
           type: feed.fragment_type || 'observation',
+          source: item.source || feed.id,
           territory: item.territory || feed.default_territory_id || undefined,
           source_url: item.source_url || undefined
         }, {
@@ -890,13 +1699,24 @@ function syncConfigFeeds() {
 // Scheduler loop
 // ============================================================
 
+let tickStartedAt = 0;
+
 async function tick() {
   if (tickInProgress) {
-    console.log('[Feeds] Tick skipped: previous tick still running');
-    return;
+    const elapsed = Date.now() - tickStartedAt;
+    if (elapsed > 10 * 60 * 1000) {
+      console.warn('[Feeds] Tick stuck for ' + Math.round(elapsed/1000) + 's — force-resetting lock');
+      tickInProgress = false;
+    } else {
+      console.log('[Feeds] Tick skipped: previous tick still running (' + Math.round(elapsed/1000) + 's)');
+      return;
+    }
   }
   tickInProgress = true;
+  tickStartedAt = Date.now();
   try {
+    recoverStaleRunningFeedRuns();
+
     // Find feeds that are due
     const dueFeeds = db.prepare(
       "SELECT * FROM feeds WHERE status = 'active' AND next_run_at <= datetime('now') ORDER BY next_run_at ASC"

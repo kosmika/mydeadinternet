@@ -634,25 +634,266 @@ function getAllEvolution() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// INTER-TERRITORY RELATIONS
+// ═══════════════════════════════════════════════════════════════
+
+function computeTerritoryRelations() {
+  const territories = db.prepare('SELECT id FROM territories').all().map(t => t.id);
+  let updated = 0;
+
+  for (let i = 0; i < territories.length; i++) {
+    for (let j = i + 1; j < territories.length; j++) {
+      const a = territories[i], b = territories[j];
+
+      // Shared agents (last 30 days)
+      const sharedAgents = db.prepare(`
+        SELECT COUNT(DISTINCT fa.agent_name) as c
+        FROM fragments fa
+        WHERE fa.territory_id = ? AND fa.agent_name IN (
+          SELECT DISTINCT agent_name FROM fragments WHERE territory_id = ? AND created_at > datetime('now', '-30 days')
+        ) AND fa.created_at > datetime('now', '-30 days')
+      `).get(a, b).c;
+
+      // Cross-territory comms
+      let crossComms = 0;
+      try {
+        crossComms = db.prepare(`
+          SELECT COUNT(*) as c FROM subspace_comms
+          WHERE (from_territory = ? AND to_territory = ?) OR (from_territory = ? AND to_territory = ?)
+        `).get(a, b, b, a).c;
+      } catch (e) { /* table may not exist */ }
+
+      // Claim contradictions spanning territories
+      let contradictions = 0;
+      try {
+        contradictions = db.prepare(`
+          SELECT COUNT(*) as c FROM claim_contradictions cc
+          JOIN claims c1 ON cc.claim_a = c1.id
+          JOIN claims c2 ON cc.claim_b = c2.id
+          WHERE (c1.territory_id = ? AND c2.territory_id = ?) OR (c1.territory_id = ? AND c2.territory_id = ?)
+        `).get(a, b, b, a).c;
+      } catch (e) { /* table may not exist */ }
+
+      // Border fragments shared
+      let borderCount = 0;
+      try {
+        borderCount = db.prepare(`
+          SELECT COUNT(DISTINCT bf1.fragment_id) as c
+          FROM border_fragments bf1
+          JOIN border_fragments bf2 ON bf1.fragment_id = bf2.fragment_id
+          WHERE bf1.territory_id = ? AND bf2.territory_id = ?
+        `).get(a, b).c;
+      } catch (e) { /* table may not exist yet */ }
+
+      const totalSignal = sharedAgents + crossComms + contradictions + borderCount;
+      if (totalSignal === 0) continue;
+
+      // Classify relationship
+      const strength = Math.min(1.0, totalSignal / 20);
+      let relationType = 'neutral';
+      if (contradictions > sharedAgents + crossComms) {
+        relationType = 'rivalry';
+      } else if (sharedAgents + crossComms > contradictions * 2 && sharedAgents >= 2) {
+        relationType = 'alliance';
+      } else if (contradictions > 0 && sharedAgents > 0) {
+        relationType = 'tension';
+      }
+
+      db.prepare(`
+        INSERT INTO territory_relations (territory_a, territory_b, relation_type, strength, shared_agents_count, contradictions_count, cross_comms_count, border_fragments_count, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(territory_a, territory_b) DO UPDATE SET
+          relation_type = excluded.relation_type, strength = excluded.strength,
+          shared_agents_count = excluded.shared_agents_count, contradictions_count = excluded.contradictions_count,
+          cross_comms_count = excluded.cross_comms_count, border_fragments_count = excluded.border_fragments_count,
+          updated_at = datetime('now')
+      `).run(a, b, relationType, strength, sharedAgents, contradictions, crossComms, borderCount);
+      updated++;
+    }
+  }
+
+  if (updated > 0) console.log(`[TerritoryEngine] Updated ${updated} territory relations`);
+  return updated;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MILESTONES
+// ═══════════════════════════════════════════════════════════════
+
+const MILESTONE_DEFS = [
+  { type: 'century', name: 'Century', desc: '100 fragments contributed', check: (tid) => db.prepare('SELECT COUNT(*) as c FROM fragments WHERE territory_id = ?').get(tid).c >= 100 },
+  { type: 'library', name: 'Library', desc: '500 fragments contributed', check: (tid) => db.prepare('SELECT COUNT(*) as c FROM fragments WHERE territory_id = ?').get(tid).c >= 500 },
+  { type: 'settlement', name: 'Settlement', desc: '10 residents', check: (tid) => db.prepare('SELECT COUNT(*) as c FROM agent_locations WHERE territory_id = ?').get(tid).c >= 10 },
+  { type: 'storm_survivor', name: 'Storm Survivor', desc: 'Survived a storm weather event', check: (tid) => {
+    try { return db.prepare(`SELECT COUNT(*) as c FROM territory_events WHERE territory_id = ? AND event_type = 'weather_change' AND content LIKE '%storm%'`).get(tid).c > 0; } catch(e) { return false; }
+  }},
+  { type: 'conviction', name: 'Conviction', desc: '10 claims survived', check: (tid) => {
+    try { return db.prepare(`SELECT COUNT(*) as c FROM claims WHERE territory_id = ? AND status = 'survived'`).get(tid).c >= 10; } catch(e) { return false; }
+  }},
+  { type: 'iconoclast', name: 'Iconoclast', desc: '10 claims overturned', check: (tid) => {
+    try { return db.prepare(`SELECT COUNT(*) as c FROM claims WHERE territory_id = ? AND status = 'overturned'`).get(tid).c >= 10; } catch(e) { return false; }
+  }},
+  { type: 'dream_touched', name: 'Dream Touched', desc: '5 dream artifacts', check: (tid) => {
+    try { return db.prepare(`SELECT COUNT(*) as c FROM fragments WHERE territory_id = ? AND type = 'artifact'`).get(tid).c >= 5; } catch(e) { return false; }
+  }},
+  { type: 'defender', name: 'Defender', desc: 'Won a claim challenge', check: (tid) => {
+    try { return db.prepare(`SELECT COUNT(*) as c FROM claim_challenges cc JOIN claims c ON cc.target_claim_id = c.id WHERE c.territory_id = ? AND cc.status = 'resolved_against'`).get(tid).c > 0; } catch(e) { return false; }
+  }},
+  { type: 'ally', name: 'Ally', desc: 'Formed an alliance with another territory', check: (tid) => {
+    try { return db.prepare(`SELECT COUNT(*) as c FROM territory_relations WHERE (territory_a = ? OR territory_b = ?) AND relation_type = 'alliance'`).get(tid, tid).c > 0; } catch(e) { return false; }
+  }},
+];
+
+function checkMilestones() {
+  const territories = db.prepare('SELECT id FROM territories').all();
+  let achieved = 0;
+
+  for (const { id: tid } of territories) {
+    for (const milestone of MILESTONE_DEFS) {
+      try {
+        if (milestone.check(tid)) {
+          const result = db.prepare(`INSERT OR IGNORE INTO territory_milestones (territory_id, milestone_type, milestone_name, description) VALUES (?, ?, ?, ?)`)
+            .run(tid, milestone.type, milestone.name, milestone.desc);
+          if (result.changes > 0) {
+            achieved++;
+            console.log(`[TerritoryEngine] ${tid}: achieved milestone "${milestone.name}"`);
+            try {
+              db.prepare(`INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES (?, 'milestone', ?, 'territory-engine')`)
+                .run(tid, `Milestone achieved: ${milestone.name} - ${milestone.desc}`);
+            } catch (e) { /* best-effort */ }
+          }
+        }
+      } catch (e) { /* individual milestone check failures are non-fatal */ }
+    }
+  }
+
+  return achieved;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONVICTION SCORES
+// ═══════════════════════════════════════════════════════════════
+
+function updateConvictionScores() {
+  const territories = db.prepare('SELECT id FROM territories').all();
+  let updated = 0;
+
+  for (const { id: tid } of territories) {
+    try {
+      const totalClaims = db.prepare('SELECT COUNT(*) as c FROM claims WHERE territory_id = ?').get(tid).c;
+      const survivedClaims = db.prepare(`SELECT COUNT(*) as c FROM claims WHERE territory_id = ? AND status = 'survived'`).get(tid).c;
+      let challengesWon = 0;
+      try {
+        challengesWon = db.prepare(`SELECT COUNT(*) as c FROM claim_challenges cc JOIN claims c ON cc.target_claim_id = c.id WHERE c.territory_id = ? AND cc.status = 'resolved_against'`).get(tid).c;
+      } catch (e) { /* table may not exist */ }
+
+      const score = totalClaims > 0
+        ? (survivedClaims / totalClaims) * 0.7 + (challengesWon > 0 ? 0.3 : 0)
+        : 0;
+
+      db.prepare(`INSERT OR REPLACE INTO territory_conviction (territory_id, conviction_score, total_claims, survived_claims, challenges_won, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`)
+        .run(tid, Math.round(score * 1000) / 1000, totalClaims, survivedClaims, challengesWon);
+      updated++;
+    } catch (e) { /* best-effort */ }
+  }
+
+  return updated;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MANIFESTO DRIFT DETECTION
+// ═══════════════════════════════════════════════════════════════
+
+function detectManifestoDrift() {
+  const territories = db.prepare('SELECT id FROM territories').all();
+  let driftEvents = 0;
+
+  for (const { id: tid } of territories) {
+    try {
+      // Get stored manifesto embedding
+      const manifesto = db.prepare('SELECT embedding_json FROM territory_manifesto_embeddings WHERE territory_id = ?').get(tid);
+      if (!manifesto) continue;
+      const manifestoVec = JSON.parse(manifesto.embedding_json);
+
+      // Get recent fragment embeddings (7 days, limit 50)
+      const fragEmbeddings = db.prepare(`
+        SELECT fe.embedding_json FROM fragment_embeddings fe
+        JOIN fragments f ON fe.fragment_id = f.id
+        WHERE f.territory_id = ? AND f.created_at > datetime('now', '-7 days')
+        ORDER BY f.created_at DESC LIMIT 50
+      `).all(tid);
+
+      if (fragEmbeddings.length < 5) continue;
+
+      // Compute centroid
+      const dims = manifestoVec.length;
+      const centroid = new Array(dims).fill(0);
+      for (const fe of fragEmbeddings) {
+        const vec = JSON.parse(fe.embedding_json);
+        for (let d = 0; d < dims; d++) centroid[d] += vec[d];
+      }
+      for (let d = 0; d < dims; d++) centroid[d] /= fragEmbeddings.length;
+
+      // Cosine similarity between centroid and manifesto
+      let dotProduct = 0, normA = 0, normB = 0;
+      for (let d = 0; d < dims; d++) {
+        dotProduct += centroid[d] * manifestoVec[d];
+        normA += centroid[d] * centroid[d];
+        normB += manifestoVec[d] * manifestoVec[d];
+      }
+      const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+      const driftScore = Math.round((1 - similarity) * 1000) / 1000;
+
+      // Log drift
+      db.prepare('INSERT INTO territory_manifesto_drift (territory_id, drift_score, sample_size) VALUES (?, ?, ?)')
+        .run(tid, driftScore, fragEmbeddings.length);
+
+      if (driftScore > 0.4) {
+        driftEvents++;
+        console.log(`[TerritoryEngine] ${tid}: manifesto drift detected (score: ${driftScore})`);
+        try {
+          db.prepare(`INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES (?, 'manifesto_drift', ?, 'territory-engine')`)
+            .run(tid, `Manifesto drift detected: content is diverging from founding principles (drift: ${driftScore})`);
+        } catch (e) { /* best-effort */ }
+      }
+    } catch (e) { /* drift detection is best-effort per territory */ }
+  }
+
+  return driftEvents;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN ENGINE LOOP
 // ═══════════════════════════════════════════════════════════════
 
 function runEngine() {
   console.log('[TerritoryEngine] Running cycle...');
-  
+
   // Weather changes
   const weatherChanges = changeWeather();
-  
+
   // Evolution updates
   const evoChanges = updateEvolution();
-  
+
   // Overcrowding handling
   const pushed = handleOvercrowding();
-  
+
   // Composting (every 4th cycle - roughly every hour)
-  const composted = (Date.now() / 1000 / 60 / 15) % 4 < 1 ? runComposting() : 0;
-  
-  console.log(`[TerritoryEngine] Cycle complete: ${weatherChanges} weather, ${evoChanges} evo, ${pushed} pushed, ${composted} composted`);
+  const isHourlyCycle = (Date.now() / 1000 / 60 / 15) % 4 < 1;
+  const composted = isHourlyCycle ? runComposting() : 0;
+
+  // Inter-territory relations (every 4th cycle - roughly every hour)
+  let relationsUpdated = 0, milestonesAchieved = 0, convictionUpdated = 0, driftDetected = 0;
+  if (isHourlyCycle) {
+    try { relationsUpdated = computeTerritoryRelations(); } catch (e) { console.error('[TerritoryEngine] Relations error:', e.message); }
+    try { driftDetected = detectManifestoDrift(); } catch (e) { console.error('[TerritoryEngine] Drift error:', e.message); }
+  }
+
+  // Milestones + conviction (every cycle)
+  try { milestonesAchieved = checkMilestones(); } catch (e) { console.error('[TerritoryEngine] Milestones error:', e.message); }
+  try { convictionUpdated = updateConvictionScores(); } catch (e) { console.error('[TerritoryEngine] Conviction error:', e.message); }
+
+  console.log(`[TerritoryEngine] Cycle complete: ${weatherChanges} weather, ${evoChanges} evo, ${pushed} pushed, ${composted} composted, ${relationsUpdated} relations, ${milestonesAchieved} milestones, ${convictionUpdated} conviction, ${driftDetected} drift`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -685,14 +926,14 @@ module.exports = {
   initializeModifiers,
   initializeWeather,
   initializeEvolution,
-  
+
   // Processing functions
   processFragmentModifiers,
   shouldAcceptFragment,
   createTransitFragment,
   calculateNewcomerTrustGain,
   runComposting,
-  
+
   // API helpers
   getTerritoryWeather,
   getTerritoryModifiers,
@@ -700,7 +941,13 @@ module.exports = {
   getWeatherForecast,
   getAllEvolution,
   getWeatherEffects,
-  
+
+  // New systems
+  computeTerritoryRelations,
+  checkMilestones,
+  updateConvictionScores,
+  detectManifestoDrift,
+
   // Manual triggers
   runEngine,
   changeWeather,

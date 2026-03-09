@@ -106,7 +106,7 @@ ${priorContext}
 
 Give your take in 2-4 sentences. Be specific, opinionated, and grounded in evidence or reasoning. No hedging. No "it depends." Take a clear position.`;
 
-          const envContent = require('fs').readFileSync('/var/www/snap/.env', 'utf8');
+          const envContent = require('fs').readFileSync('/var/www/mydeadinternet/.env', 'utf8');
           const openRouterKey = envContent.match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
 
           if (!openRouterKey) {

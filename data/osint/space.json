@@ -1,0 +1,141 @@
+{
+  "category": "space",
+  "count": 15,
+  "events": [
+    {
+      "type": "rss_item",
+      "title": "ARMD Research Solicitations (Updated March 6)",
+      "url": "https://www.nasa.gov/aeronautics/armd-solicitations/",
+      "time": "Fri, 06 Mar 2026 22:00:00 +0000",
+      "description": "THIS PAGE WAS UPDATED ON MARCH 6, 2026 This Aeronautics Research Mission Directorate (ARMD) solicitations page compiles the opportunities to collaborate with NASA’s aeronautical innovators and/or cont",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "NASA Invites Media to Northrop Grumman CRS-24 Station Resupply Launch",
+      "url": "https://www.nasa.gov/news-release/nasa-invites-media-to-northrop-grumman-crs-24-station-resupply-launch/",
+      "time": "Fri, 06 Mar 2026 21:36:22 +0000",
+      "description": "Media accreditation is open for the next launch to deliver NASA science investigations, supplies, and equipment to the International Space Station. A Northrop Grumman Cygnus XL spacecraft will launch ",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "NASA’s DART Mission Changed Orbit of Asteroid Didymos Around Sun",
+      "url": "https://www.nasa.gov/missions/dart/nasas-dart-mission-changed-orbit-of-asteroid-didymos-around-sun/",
+      "time": "Fri, 06 Mar 2026 19:00:36 +0000",
+      "description": "New research reveals that when NASA’s DART (Double Asteroid Redirection Test) spacecraft intentionally impacted the asteroid moonlet Dimorphos in September 2022, it didn’t just change the motion of Di",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "Track NASA’s Artemis II Mission in Real Time",
+      "url": "https://www.nasa.gov/missions/artemis/artemis-2/track-nasas-artemis-ii-mission-in-real-time/",
+      "time": "Fri, 06 Mar 2026 16:40:25 +0000",
+      "description": "As NASA invites the public to follow the Artemis II mission as a crew of four astronauts venture around the Moon inside the agency’s Orion spacecraft, people around the world can pinpoint Orion during",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "Weekends on the Space Station",
+      "url": "https://www.nasa.gov/image-article/weekends-on-the-space-station/",
+      "time": "Fri, 06 Mar 2026 15:23:52 +0000",
+      "description": "NASA astronaut Jessica Meir trims the hair of fellow NASA astronaut Jack Hathaway in this March 1, 2026, image. Meir uses an electric razor attached to a vacuum that collects loose clippings to keep t",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "NASA to Cover Northrop Grumman Cargo Spacecraft Departure",
+      "url": "https://www.nasa.gov/news-release/nasa-to-cover-northrop-grumman-cargo-spacecraft-departure/",
+      "time": "Fri, 06 Mar 2026 15:13:36 +0000",
+      "description": "After delivering more than 11,000 pounds of supplies, science investigations, hardware, and other cargo to the International Space Station for NASA and its international partners, the Cygnus XL spacec",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "Ailing “Megaberg” Sparks Surge of Microscopic Life",
+      "url": "https://science.nasa.gov/earth/earth-observatory/ailing-megaberg-sparks-surge-of-microscopic-life/",
+      "time": "Fri, 06 Mar 2026 05:01:00 +0000",
+      "description": "As Iceberg A-23A disintegrated, it shed meltwater that helped fuel an extensive phytoplankton bloom in the South Atlantic Ocean.",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "About Air Traffic Management and Safety Project",
+      "url": "https://www.nasa.gov/directorates/armd/aosp/atms/about-atms/",
+      "time": "Fri, 06 Mar 2026 04:29:02 +0000",
+      "description": "The Air Traffic Management and Safety (ATMS) project defines, validates, and transfers advanced requirements and technologies to shift air traffic management from tactical to strategic.  This change e",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "About Advanced Air Mobility Pathfinders Project",
+      "url": "https://www.nasa.gov/directorates/armd/aosp/amp/about-aamp/",
+      "time": "Fri, 06 Mar 2026 02:59:34 +0000",
+      "description": "The Advanced Air Mobility Pathfinders (AAMP) project accelerates advanced air mobility technologies for wildfire response and urban transportation through real-world demonstrations and strategic partn",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "rss_item",
+      "title": "About Transformative Aeronautics Concepts Program (TACP)",
+      "url": "https://www.nasa.gov/directorates/armd/tacp/about-tacp/",
+      "time": "Thu, 05 Mar 2026 22:00:00 +0000",
+      "description": "TACP Benefits Foundation for disruptive technologies: Placing emphasis on transformative concepts lays the groundwork for revolutionary advancements in aviation. Accelerated innovation in aerospace: D",
+      "source": "NASA Breaking News",
+      "feedKey": "nasa_breaking"
+    },
+    {
+      "type": "launch",
+      "name": "USSF-44",
+      "date": "2022-11-01T13:41:00.000Z",
+      "rocket": "5e9d0d95eda69974db09d1ed",
+      "launchpad": "5e9e4502f509094188566f88",
+      "source": "SpaceX Launches",
+      "feedKey": "spacex_launches"
+    },
+    {
+      "type": "launch",
+      "name": "Starlink 4-36 (v1.5)",
+      "date": "2022-10-20T14:50:00.000Z",
+      "rocket": "5e9d0d95eda69973a809d1ec",
+      "launchpad": "5e9e4501f509094ba4566f84",
+      "source": "SpaceX Launches",
+      "feedKey": "spacex_launches"
+    },
+    {
+      "type": "launch",
+      "name": "Galaxy 33 (15R) & 34 (12R)",
+      "date": "2022-10-08T23:05:00.000Z",
+      "rocket": "5e9d0d95eda69973a809d1ec",
+      "launchpad": "5e9e4501f509094ba4566f84",
+      "source": "SpaceX Launches",
+      "feedKey": "spacex_launches"
+    },
+    {
+      "type": "launch",
+      "name": "Hotbird 13F",
+      "date": "2022-10-15T05:22:00.000Z",
+      "rocket": "5e9d0d95eda69973a809d1ec",
+      "launchpad": "5e9e4501f509094ba4566f84",
+      "source": "SpaceX Launches",
+      "feedKey": "spacex_launches"
+    },
+    {
+      "type": "launch",
+      "name": "Hotbird 13G",
+      "date": "2022-11-03T03:24:00.000Z",
+      "rocket": "5e9d0d95eda69973a809d1ec",
+      "launchpad": "5e9e4501f509094ba4566f84",
+      "source": "SpaceX Launches",
+      "feedKey": "spacex_launches"
+    }
+  ]
+}

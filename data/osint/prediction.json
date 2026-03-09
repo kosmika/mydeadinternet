@@ -1,0 +1,305 @@
+{
+  "category": "prediction",
+  "count": 30,
+  "events": [
+    {
+      "type": "prediction_market",
+      "question": "BitBoy convicted?",
+      "outcome_prices": "[\"0.1785\", \"0.8215\"]",
+      "volume": "62315.829685999815",
+      "liquidity": "1420.97446",
+      "end_date": "2026-03-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Russia-Ukraine Ceasefire before GTA VI?",
+      "outcome_prices": "[\"0.585\", \"0.415\"]",
+      "volume": "1362336.4164559986",
+      "liquidity": "62603.5706",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "New Rihanna Album before GTA VI?",
+      "outcome_prices": "[\"0.545\", \"0.455\"]",
+      "volume": "645280.7857010016",
+      "liquidity": "57021.1272",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "New Playboi Carti Album before GTA VI?",
+      "outcome_prices": "[\"0.52\", \"0.48\"]",
+      "volume": "679146.8064820012",
+      "liquidity": "52008.5574",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Jesus Christ return before GTA VI?",
+      "outcome_prices": "[\"0.485\", \"0.515\"]",
+      "volume": "9857379.67457015",
+      "liquidity": "736317.393",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Trump out as President before GTA VI?",
+      "outcome_prices": "[\"0.525\", \"0.475\"]",
+      "volume": "527137.4677310063",
+      "liquidity": "67734.5823",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will China invades Taiwan before GTA VI?",
+      "outcome_prices": "[\"0.515\", \"0.485\"]",
+      "volume": "1456763.8363859993",
+      "liquidity": "94546.0901",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will bitcoin hit $1m before GTA VI?",
+      "outcome_prices": "[\"0.4895\", \"0.5105\"]",
+      "volume": "3437888.609023731",
+      "liquidity": "442605.40535",
+      "end_date": "2026-07-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "GTA VI released before June 2026?",
+      "outcome_prices": "[\"0.0215\", \"0.9785\"]",
+      "volume": "10031938.948581994",
+      "liquidity": "34328.86771",
+      "end_date": "2026-05-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Harvey Weinstein be sentenced to no prison time?",
+      "outcome_prices": "[\"0.2755\", \"0.7245\"]",
+      "volume": "50680.28433099997",
+      "liquidity": "994.49873",
+      "end_date": "2025-12-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Harvey Weinstein be sentenced to less than 5 years in prison?",
+      "outcome_prices": "[\"0.0305\", \"0.9695\"]",
+      "volume": "18618.168260999995",
+      "liquidity": "6835.05183",
+      "end_date": "2025-12-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Harvey Weinstein be sentenced to between 5 and 10 years in prison?",
+      "outcome_prices": "[\"0.098\", \"0.902\"]",
+      "volume": "14022.03496599999",
+      "liquidity": "2022.26362",
+      "end_date": "2025-12-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Harvey Weinstein be sentenced to between 10 and 20 years in prison?",
+      "outcome_prices": "[\"0.075\", \"0.925\"]",
+      "volume": "105431.17065299996",
+      "liquidity": "542.13159",
+      "end_date": "2025-12-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Harvey Weinstein be sentenced to between 20 and 30 years in prison?",
+      "outcome_prices": "[\"0.5205\", \"0.4795\"]",
+      "volume": "128144.04631800011",
+      "liquidity": "671.17808",
+      "end_date": "2025-12-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Harvey Weinstein be sentenced to more than 30 years in prison?",
+      "outcome_prices": "[\"0.0625\", \"0.9375\"]",
+      "volume": "16342.489002999997",
+      "liquidity": "5644.21176",
+      "end_date": "2025-12-31T12:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will OpenAI launch a new consumer hardware product by March 31, 2026?",
+      "outcome_prices": "[\"0.013\", \"0.987\"]",
+      "volume": "89405.89509200008",
+      "liquidity": "7454.91964",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Italy qualify for the 2026 FIFA World Cup?",
+      "outcome_prices": "[\"0.6\", \"0.4\"]",
+      "volume": "210860.87605699987",
+      "liquidity": "2403.4491",
+      "end_date": "2026-04-12T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Sweden qualify for the 2026 FIFA World Cup?",
+      "outcome_prices": "[\"0.29\", \"0.71\"]",
+      "volume": "103362.65206699981",
+      "liquidity": "4131.6774",
+      "end_date": "2026-04-12T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Poland qualify for the 2026 FIFA World Cup?",
+      "outcome_prices": "[\"0.355\", \"0.645\"]",
+      "volume": "456972.2231010001",
+      "liquidity": "3043.8633",
+      "end_date": "2026-04-12T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will Ukraine qualify for the 2026 FIFA World Cup?",
+      "outcome_prices": "[\"0.275\", \"0.725\"]",
+      "volume": "136567.92385200018",
+      "liquidity": "5020.6955",
+      "end_date": "2026-04-12T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Carolina Hurricanes win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.105\", \"0.895\"]",
+      "volume": "162332.09017900034",
+      "liquidity": "102757.6332",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Florida Panthers win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.006\", \"0.994\"]",
+      "volume": "702076.5876559962",
+      "liquidity": "72015.52252",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Edmonton Oilers win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.085\", \"0.915\"]",
+      "volume": "322906.02953400085",
+      "liquidity": "52403.3888",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Dallas Stars win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.0585\", \"0.9415\"]",
+      "volume": "512167.6607990011",
+      "liquidity": "73794.89791",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Colorado Avalanche win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.246\", \"0.754\"]",
+      "volume": "10209095.171062041",
+      "liquidity": "95912.81474",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Vegas Golden Knights win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.06\", \"0.94\"]",
+      "volume": "743927.0956329952",
+      "liquidity": "104792.53015",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Tampa Bay Lightning win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.1445\", \"0.8555\"]",
+      "volume": "195597.5639469925",
+      "liquidity": "75529.08863",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Los Angeles Kings win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.0065\", \"0.9935\"]",
+      "volume": "6188174.604861931",
+      "liquidity": "110744.93341",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the New Jersey Devils win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.0025\", \"0.9975\"]",
+      "volume": "435625.43231000117",
+      "liquidity": "85671.29186",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    },
+    {
+      "type": "prediction_market",
+      "question": "Will the Winnipeg Jets win the 2026 NHL Stanley Cup?",
+      "outcome_prices": "[\"0.005\", \"0.995\"]",
+      "volume": "368229.2619830001",
+      "liquidity": "121199.0186",
+      "end_date": "2026-06-30T00:00:00Z",
+      "source": "Polymarket Active Markets",
+      "feedKey": "polymarket_active"
+    }
+  ]
+}

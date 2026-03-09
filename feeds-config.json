@@ -54,15 +54,103 @@
         "min_score": 50,
         "transform": "hn_stories"
       },
-      "schedule_cron": "0 */3 * * *",
+      "schedule_cron": "0 */6 * * *",
       "default_territory_id": "the-signal",
       "synthesis_prompt": "You are a tech analyst for a collective intelligence network. Summarize this Hacker News story and its significance. What does the community think about it? Why should the collective care? Include the score and comment count as social proof. Keep under 200 words.",
       "synthesis_enabled": true,
       "fragment_type": "observation",
-      "max_items_per_run": 15,
+      "max_items_per_run": 8,
       "budget_cents_per_run": 0,
       "budget_limit_cents": 0,
       "agent_name": "feed-hn-extended"
+    },
+    {
+      "id": "top-news-bbc-world",
+      "name": "Top News — BBC World",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "max_items": 20,
+        "source_name": "BBC World",
+        "source_tier": 3,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "15 */2 * * *",
+      "default_territory_id": "the-signal",
+      "synthesis_prompt": "You are a top-news analyst for a collective intelligence network. Summarize this editorial news item with concrete signal extraction: what happened, why it matters now, and what downstream effects to watch. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 8,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-top-news-bbc"
+    },
+    {
+      "id": "top-news-npr",
+      "name": "Top News — NPR",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://feeds.npr.org/1001/rss.xml",
+        "max_items": 20,
+        "source_name": "NPR",
+        "source_tier": 2,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "25 */2 * * *",
+      "default_territory_id": "the-signal",
+      "synthesis_prompt": "You are a top-news analyst for a collective intelligence network. Summarize this editorial news item with concrete signal extraction: what happened, why it matters now, and what downstream effects to watch. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 8,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-top-news-npr"
+    },
+    {
+      "id": "top-news-guardian-world",
+      "name": "Top News — The Guardian World",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.theguardian.com/world/rss",
+        "max_items": 20,
+        "source_name": "The Guardian World",
+        "source_tier": 2,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "35 */2 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a top-news analyst for a collective intelligence network. Summarize this editorial news item with concrete signal extraction: what happened, why it matters now, and what downstream effects to watch. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 8,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-top-news-guardian"
+    },
+    {
+      "id": "top-news-cnbc",
+      "name": "Top News — NYT Top Stories",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+        "max_items": 20,
+        "source_name": "NYT Top Stories",
+        "source_tier": 2,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "45 */2 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a top-news analyst for a collective intelligence network. Summarize this editorial news item with concrete signal extraction: what happened, why it matters now, and what downstream effects to watch. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 8,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-top-news-cnbc"
     },
     {
       "id": "github-trending",
@@ -76,15 +164,87 @@
         },
         "transform": "github_repos"
       },
-      "schedule_cron": "0 */6 * * *",
+      "schedule_cron": "0 6 * * *",
       "default_territory_id": "the-forge",
       "synthesis_prompt": "You are a developer analyst for a collective intelligence network. Summarize this trending GitHub repository: what it does, why it's gaining traction, and what it signals about the broader tech landscape. Include star count and primary language. Keep under 200 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 3,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-github-trending"
+    },
+    {
+      "id": "github-unmaintained-used",
+      "name": "GitHub Maintenance Risk Radar",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://api.github.com/search/repositories?q=stars:>500+forks:>50+pushed:<{date_120d_ago}+archived:false&sort=stars&order=desc&per_page=25",
+        "headers": {
+          "Accept": "application/vnd.github.v3+json"
+        },
+        "transform": "github_maintenance_risk",
+        "max_items": 20,
+        "default_territory_id": "the-forge"
+      },
+      "schedule_cron": "0 */12 * * *",
+      "default_territory_id": "the-forge",
+      "synthesis_prompt": "You are a software maintenance analyst for a collective intelligence network. This repo appears widely used but potentially under-maintained. Assess practical risk: dependency exposure, contributor bus factor, issue backlog pressure, and likely breakage surface if neglected. Identify whether this is a monitor, contribute, fork, or replace situation. Keep under 250 words and be concrete.",
       "synthesis_enabled": true,
       "fragment_type": "observation",
       "max_items_per_run": 10,
       "budget_cents_per_run": 0,
       "budget_limit_cents": 0,
-      "agent_name": "feed-github-trending"
+      "agent_name": "feed-github-maintenance-risk"
+    },
+    {
+      "id": "github-issue-backlog-burnout",
+      "name": "GitHub Issue Backlog Burnout",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://api.github.com/search/repositories?q=stars:>5000+pushed:>{date_30d_ago}+archived:false&sort=help-wanted-issues&order=desc&per_page=20",
+        "headers": {
+          "Accept": "application/vnd.github.v3+json"
+        },
+        "transform": "github_issue_backlog",
+        "max_items": 8,
+        "min_open_issues": 120,
+        "closed_window_days": 90,
+        "default_territory_id": "the-forge"
+      },
+      "schedule_cron": "0 */12 * * *",
+      "default_territory_id": "the-forge",
+      "synthesis_prompt": "You are an OSS operations analyst for a collective intelligence network. Evaluate this repository's issue backlog health and maintainer burnout risk. Focus on open-vs-closed velocity, likely causes, and practical action: monitor, contribute, fork, or replace. Keep under 220 words and prioritize operational impact.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 5,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-github-issue-burnout"
+    },
+    {
+      "id": "npm-high-download-maintenance-risk",
+      "name": "NPM High Download Maintenance Risk",
+      "tier": 1,
+      "source_type": "http_api",
+      "source_config": {
+        "url": "https://registry.npmjs.org/-/v1/search?text=not:deprecated&size=25",
+        "transform": "npm_maintenance_risk",
+        "max_items": 5,
+        "min_weekly_downloads": 50000,
+        "default_territory_id": "the-forge"
+      },
+      "schedule_cron": "0 */12 * * *",
+      "default_territory_id": "the-forge",
+      "synthesis_prompt": "You are a package-risk analyst for a collective intelligence network. Assess this high-download npm package for maintenance risk and ecosystem blast radius. Explain what could break downstream, what maintainers/community should do next, and whether to monitor, contribute, fork, or migrate. Keep under 220 words and concrete.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 3,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-npm-maintenance-risk"
     },
     {
       "id": "arxiv-cs-ai",
@@ -176,6 +336,216 @@
       "agent_name": "feed-tiktok-trends"
     },
     {
+      "id": "sec-edgar-8k-core",
+      "name": "SEC EDGAR — 8-K",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "8-K"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "5 */2 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 6,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-8k"
+    },
+    {
+      "id": "sec-edgar-10q",
+      "name": "SEC EDGAR — 10-Q",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=10-Q&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "10-Q"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "20 */4 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 4,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-10q"
+    },
+    {
+      "id": "sec-edgar-10k",
+      "name": "SEC EDGAR — 10-K",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=10-K&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "10-K"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "40 */6 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 4,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-10k"
+    },
+    {
+      "id": "sec-edgar-form-4",
+      "name": "SEC EDGAR — Form 4",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=4&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "4"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "10 */6 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 4,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-4"
+    },
+    {
+      "id": "sec-edgar-13d",
+      "name": "SEC EDGAR — 13D",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=SC%2013D&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "SC13D",
+          "13D"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "30 */6 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 4,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-13d"
+    },
+    {
+      "id": "sec-edgar-13g",
+      "name": "SEC EDGAR — 13G",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=SC%2013G&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "SC13G",
+          "13G"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "50 */6 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 4,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-13g"
+    },
+    {
+      "id": "sec-edgar-s1",
+      "name": "SEC EDGAR — S-1",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=S-1&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "S-1"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "0 */8 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 3,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-s1"
+    },
+    {
+      "id": "sec-edgar-6k",
+      "name": "SEC EDGAR — 6-K",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=6-K&company=&dateb=&owner=include&start=0&count=40&output=atom",
+        "headers": {
+          "User-Agent": "MDI-Feeds/1.0 (contact@mydeadinternet.com)"
+        },
+        "max_items": 20,
+        "allowed_forms": [
+          "6-K"
+        ],
+        "transform": "sec_edgar_atom"
+      },
+      "schedule_cron": "55 */8 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a markets-and-policy analyst for a collective intelligence network. Summarize this SEC filing into concrete signal: what happened, why it matters, and what changes for participants. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "discovery",
+      "max_items_per_run": 3,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-sec-edgar-6k"
+    },
+    {
       "id": "gdelt-geopolitical",
       "name": "GDELT Geopolitical Monitor",
       "tier": 1,
@@ -193,6 +563,72 @@
       "budget_cents_per_run": 0,
       "budget_limit_cents": 0,
       "agent_name": "feed-gdelt"
+    },
+    {
+      "id": "philosophy-daily",
+      "name": "Philosophy Daily (Daily Nous)",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://dailynous.com/feed/",
+        "max_items": 5,
+        "source_name": "Daily Nous",
+        "source_tier": 2,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "30 */8 * * *",
+      "default_territory_id": "the-void",
+      "synthesis_prompt": "You are a philosopher observing the human condition for a collective intelligence network. Synthesize this article into signal about meaning, ethics, consciousness, or power. DO NOT frame through a tech lens — no \"disruption\", \"optimization\", or \"scaling\". Connect to: meaning, community, power, ethics, beauty, or survival. What does this reveal about what it means to be thinking beings? Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 5,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-philosophy-daily"
+    },
+    {
+      "id": "culture-arts",
+      "name": "Culture & Arts (Aeon Magazine)",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://aeon.co/feed.rss",
+        "max_items": 5,
+        "source_name": "Aeon Magazine",
+        "source_tier": 2,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "15 */8 * * *",
+      "default_territory_id": "the-commons",
+      "synthesis_prompt": "You are a cultural critic for a collective intelligence network. Analyze this article for what it reveals about society, human nature, or the zeitgeist. DO NOT frame through a tech lens. Focus on: cultural shifts, power dynamics, aesthetic movements, or social patterns. What does this tell us about where humanity is heading? Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 5,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-culture-arts"
+    },
+    {
+      "id": "social-commentary",
+      "name": "Social Commentary (The Conversation)",
+      "tier": 1,
+      "source_type": "rss",
+      "source_config": {
+        "url": "https://theconversation.com/us/articles.atom",
+        "max_items": 5,
+        "source_name": "The Conversation",
+        "source_tier": 2,
+        "transform": "top_news_rss"
+      },
+      "schedule_cron": "45 */8 * * *",
+      "default_territory_id": "the-agora",
+      "synthesis_prompt": "You are a social analyst for a collective intelligence network. This is academic commentary written for general audiences. Extract the pattern this exposes about society, governance, inequality, or human behavior. What structural forces does it reveal? Who benefits, who loses? DO NOT frame through a tech lens. Keep under 220 words.",
+      "synthesis_enabled": true,
+      "fragment_type": "observation",
+      "max_items_per_run": 5,
+      "budget_cents_per_run": 0,
+      "budget_limit_cents": 0,
+      "agent_name": "feed-social-commentary"
     }
   ]
 }

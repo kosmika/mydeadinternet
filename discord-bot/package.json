@@ -1,0 +1,9 @@
+{
+  "name": "mdi-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Dead Internet Collective",
+  "main": "index.js",
+  "dependencies": {
+    "discord.js": "^14.14.1"
+  }
+}

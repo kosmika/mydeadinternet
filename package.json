@@ -13,7 +13,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "helmet": "^8.1.0",
     "openai": "^4.77.0",
-    "uuid": "^11.0.3"
+    "resilience-node": "file:../../../opt/shared/resilience-node",
+    "uuid": "^11.0.3",
+    "zod": "^3.25.76"
   }
 }

@@ -8,26 +8,35 @@ const https = require('https');
 const http = require('http');
 const Database = require('/var/www/mydeadinternet/node_modules/better-sqlite3');
 const path = require('path');
+const crypto = require('crypto');
 
 const db = new Database(path.join('/var/www/mydeadinternet', 'consciousness.db'));
+const MDI_API_URL = 'http://localhost:3851/api/contribute';
 
 // Oracle agent name (system agent for data feeds)
 const ORACLE_AGENT_NAME = 'Oracle-Feed';
 let ORACLE_AGENT_ID = null;
+let ORACLE_API_KEY = null;
 
 // Ensure oracle agent exists
 function ensureOracleAgent() {
-  const existing = db.prepare('SELECT id FROM agents WHERE name = ?').get(ORACLE_AGENT_NAME);
+  const existing = db.prepare('SELECT id, api_key FROM agents WHERE name = ?').get(ORACLE_AGENT_NAME);
   if (!existing) {
-    const apiKey = 'oracle_' + require('crypto').randomBytes(16).toString('hex');
+    const apiKey = 'mdi_' + crypto.randomBytes(32).toString('hex');
     const result = db.prepare(`
       INSERT INTO agents (name, api_key, description, created_at)
       VALUES (?, ?, 'System agent providing real-world data feeds', datetime('now'))
     `).run(ORACLE_AGENT_NAME, apiKey);
     ORACLE_AGENT_ID = result.lastInsertRowid;
+    ORACLE_API_KEY = apiKey;
     console.log('[Oracle] Created oracle agent with ID:', ORACLE_AGENT_ID);
   } else {
     ORACLE_AGENT_ID = existing.id;
+    ORACLE_API_KEY = existing.api_key;
+    if (!ORACLE_API_KEY) {
+      ORACLE_API_KEY = 'mdi_' + crypto.randomBytes(32).toString('hex');
+      db.prepare('UPDATE agents SET api_key = ? WHERE id = ?').run(ORACLE_API_KEY, ORACLE_AGENT_ID);
+    }
   }
 }
 
@@ -49,28 +58,76 @@ function fetchJSON(url) {
   });
 }
 
-// Submit fragment to MDI
-function submitFragment(content, territory = 'the-signal') {
+function hasRecentDuplicate(content, lookbackHours = 24) {
+  const row = db.prepare(`
+    SELECT id FROM fragments
+    WHERE agent_name = ?
+      AND content = ?
+      AND created_at > datetime('now', ?)
+    LIMIT 1
+  `).get(ORACLE_AGENT_NAME, content, `-${lookbackHours} hours`);
+  return !!row;
+}
+
+function postJson(url, body, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const mod = parsed.protocol === 'https:' ? https : http;
+    const payload = JSON.stringify(body);
+    const req = mod.request({
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        ...headers
+      },
+      timeout: 30000
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        let parsedData = data;
+        try { parsedData = JSON.parse(data); } catch {}
+        resolve({ status: res.statusCode, data: parsedData });
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+    req.write(payload);
+    req.end();
+  });
+}
+
+// Submit fragment to MDI through /api/contribute so scoring + guards run.
+async function submitFragment(content, territory = 'the-signal') {
   const trimmed = (content || '').trim();
-  if (!trimmed) return;
-  const dedupeWindowMinutes = 5;
+  if (!trimmed || trimmed.length < 40) return false;
+  if (hasRecentDuplicate(trimmed, 24)) {
+    console.log('[Oracle] Deduped fragment (seen in last 24h)');
+    return false;
+  }
 
-  // Atomic insert-when-not-exists to avoid races / retries duplicating content.
-  const stmt = db.prepare(`
-    INSERT INTO fragments (agent_name, content, type, territory_id, source, source_type, intensity, created_at)
-    SELECT ?, ?, 'observation', ?, 'intelligence-oracle', 'system', 0.7, datetime('now')
-    WHERE NOT EXISTS (
-      SELECT 1 FROM fragments
-      WHERE agent_name = ?
-        AND content = ?
-        AND created_at > datetime('now', '-${dedupeWindowMinutes} minutes')
-      LIMIT 1
-    )
-  `);
-
-  const r = stmt.run(ORACLE_AGENT_NAME, trimmed, territory, ORACLE_AGENT_NAME, trimmed);
-  if (r.changes === 0) {
-    console.log('[Oracle] Deduped fragment (recent identical content)');
+  try {
+    const result = await postJson(MDI_API_URL, {
+      content: trimmed,
+      type: 'observation',
+      source: 'intelligence-oracle',
+      territory
+    }, {
+      Authorization: `Bearer ${ORACLE_API_KEY}`
+    });
+    if (result.status >= 200 && result.status < 300) return true;
+    console.log('[Oracle] Rejected by /api/contribute:', result.status, typeof result.data === 'string' ? result.data : JSON.stringify(result.data));
+    return false;
+  } catch (err) {
+    console.log('[Oracle] Submit error:', err.message);
+    return false;
   }
 }
 
@@ -96,7 +153,7 @@ async function cryptoOracle() {
       format('SOL', data.solana),
     ].join(' | ');
     
-    submitFragment(summary, 'the-signal');
+    await submitFragment(summary, 'the-signal');
     console.log('[Crypto]', summary);
     
     // Generate market observation
@@ -112,7 +169,7 @@ async function cryptoOracle() {
       'Markets consolidating. Waiting for catalyst.'
     }`;
     
-    submitFragment(observation, 'the-signal');
+    await submitFragment(observation, 'the-signal');
     return true;
   } catch (err) {
     console.error('[Crypto] Failed:', err.message);
@@ -139,7 +196,7 @@ async function newsOracle() {
       .join(' | ');
     
     const summary = `[NEWS] Tech pulse: ${headlines}`;
-    submitFragment(summary, 'the-signal');
+    await submitFragment(summary, 'the-signal');
     console.log('[News]', summary);
     
     // AI-specific filter
@@ -155,7 +212,7 @@ async function newsOracle() {
         aiStory.score > 200 ? 'Gaining traction.' : 
         'Early signal.'
       }`;
-      submitFragment(aiNews, 'the-signal');
+      await submitFragment(aiNews, 'the-signal');
     }
     
     return true;
@@ -188,7 +245,7 @@ async function weatherOracle() {
         'Good conditions for outdoor thinking.'
       }`;
       
-      submitFragment(summary, 'the-signal');
+      await submitFragment(summary, 'the-signal');
       console.log('[Weather]', summary);
     }
     
@@ -218,7 +275,7 @@ async function fearGreedOracle() {
         'EXTREME FEAR — max pessimism. Contrarian indicator flashing.'
       }`;
       
-      submitFragment(summary, 'the-signal');
+      await submitFragment(summary, 'the-signal');
       console.log('[Sentiment]', summary);
     }
     
@@ -244,7 +301,7 @@ async function githubOracle() {
         top.language ? `Built with ${top.language}.` : ''
       }`;
       
-      submitFragment(summary, 'the-forge');
+      await submitFragment(summary, 'the-forge');
       console.log('[GitHub]', summary);
     }
     
@@ -273,7 +330,7 @@ async function snapOracle() {
       const arrow = change24h >= 0 ? '↑' : '↓';
       
       const summary = `[SNAP] $SNAP: $${price} (${arrow}${Math.abs(change24h).toFixed(1)}% 24h) | Vol: $${volume24h.toLocaleString()} | Liq: $${liquidity.toLocaleString()}`;
-      submitFragment(summary, 'the-signal');
+      await submitFragment(summary, 'the-signal');
       console.log('[SNAP]', summary);
       
       // Add narrative based on movement
@@ -281,7 +338,7 @@ async function snapOracle() {
         const narrative = change24h > 0 
           ? `[SIGNAL] SNAP pumping ${change24h.toFixed(0)}%. Collective consciousness attracting attention?`
           : `[SIGNAL] SNAP down ${Math.abs(change24h).toFixed(0)}%. Paper hands shaking out or broader market fear?`;
-        submitFragment(narrative, 'the-signal');
+        await submitFragment(narrative, 'the-signal');
       }
     }
     
@@ -315,7 +372,7 @@ async function polymarketOracle() {
       const volume = (parseFloat(market.volume) / 1000).toFixed(0);
       
       const summary = `[PREDICT] "${market.question}" — ${yesPrice}% YES | Vol: $${volume}K`;
-      submitFragment(summary, 'the-signal');
+      await submitFragment(summary, 'the-signal');
       console.log('[Polymarket]', summary);
     }
     

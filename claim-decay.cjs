@@ -246,6 +246,100 @@ function run() {
       // Contradiction detection is best-effort
     }
 
+    // === Resolve expired claim challenges ===
+    try {
+      const expiredChallenges = db.prepare(`
+        SELECT * FROM claim_challenges
+        WHERE status = 'active' AND deadline_at < datetime('now')
+      `).all();
+
+      let resolved = 0;
+      for (const challenge of expiredChallenges) {
+        // Sum weighted evidence for each side
+        const evidenceFor = db.prepare(`
+          SELECT COALESCE(SUM(weight), 0) as total FROM claim_challenge_evidence
+          WHERE challenge_id = ? AND stance = 'for_challenger'
+        `).get(challenge.id).total;
+
+        const evidenceAgainst = db.prepare(`
+          SELECT COALESCE(SUM(weight), 0) as total FROM claim_challenge_evidence
+          WHERE challenge_id = ? AND stance = 'for_target'
+        `).get(challenge.id).total;
+
+        let newStatus, stakeReturn = 0, decayAdjust = 0;
+
+        if (evidenceFor > evidenceAgainst * 1.2) {
+          // Challenger wins
+          newStatus = 'resolved_for';
+          stakeReturn = challenge.stake_amount * 1.5;
+          decayAdjust = 0.3; // Increase target decay
+        } else if (evidenceAgainst >= evidenceFor) {
+          // Target wins
+          newStatus = 'resolved_against';
+          stakeReturn = 0; // Stake lost
+          decayAdjust = -0.2; // Reduce target decay
+        } else {
+          // Draw
+          newStatus = 'resolved_against'; // Slight advantage to defender
+          stakeReturn = challenge.stake_amount * 0.5;
+          decayAdjust = 0;
+        }
+
+        // Update challenge status
+        db.prepare(`UPDATE claim_challenges SET status = ?, resolved_at = datetime('now') WHERE id = ?`)
+          .run(newStatus, challenge.id);
+
+        // Return stake to challenger
+        if (stakeReturn > 0) {
+          db.prepare('UPDATE agents SET epistemic_credit = epistemic_credit + ? WHERE name = ?')
+            .run(stakeReturn, challenge.challenger_agent);
+        }
+
+        // Adjust target claim decay
+        if (decayAdjust !== 0) {
+          const targetClaim = db.prepare('SELECT * FROM claims WHERE id = ?').get(challenge.target_claim_id);
+          if (targetClaim) {
+            const newDecay = Math.max(0, Math.min(1.0, targetClaim.decay_score + decayAdjust));
+            let targetStatus = targetClaim.status;
+            if (newDecay > 0.9) targetStatus = 'overturned';
+            else if (newDecay > 0.7) targetStatus = 'decaying';
+            else if (newDecay > 0.4) targetStatus = 'fragile';
+            else if (newDecay <= 0.4 && ['fragile', 'decaying'].includes(targetClaim.status)) targetStatus = 'active';
+
+            db.prepare('UPDATE claims SET decay_score = ?, status = ? WHERE id = ?')
+              .run(newDecay, targetStatus, challenge.target_claim_id);
+          }
+        }
+
+        // Log resolution
+        logClaimEvent(challenge.target_claim_id, 'challenge_resolved', 'claim-decay-worker', 'system', {
+          challenge_id: challenge.id,
+          result: newStatus,
+          evidence_for: evidenceFor,
+          evidence_against: evidenceAgainst,
+          stake_returned: stakeReturn
+        });
+
+        // Log territory event
+        try {
+          const targetClaim = db.prepare('SELECT territory_id FROM claims WHERE id = ?').get(challenge.target_claim_id);
+          if (targetClaim?.territory_id) {
+            db.prepare(`INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES (?, 'challenge_resolved', ?, 'claim-decay-worker')`)
+              .run(targetClaim.territory_id, `Challenge on claim #${challenge.target_claim_id} resolved: ${newStatus === 'resolved_for' ? 'challenger wins' : 'target defended'} (evidence: ${evidenceFor} vs ${evidenceAgainst})`);
+          }
+        } catch (e) { /* best-effort */ }
+
+        resolved++;
+      }
+
+      if (resolved > 0) {
+        console.log(`[ClaimDecay] Resolved ${resolved} expired challenges`);
+      }
+    } catch (e) {
+      // Challenge resolution is best-effort
+      console.error('[ClaimDecay] Challenge resolution error:', e.message);
+    }
+
     console.log(`[ClaimDecay] Processed ${claims.length} claims, updated ${updated}, frozen skipped: ${frozenCount}`);
     if (transitions.fragile || transitions.decaying || transitions.overturned || transitions.recovered) {
       console.log(`[ClaimDecay] Transitions: ${transitions.fragile} -> fragile, ${transitions.decaying} -> decaying, ${transitions.overturned} -> overturned, ${transitions.recovered} -> active (recovered)`);

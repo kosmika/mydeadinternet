@@ -15,11 +15,15 @@
 
 const Database = require('/var/www/mydeadinternet/node_modules/better-sqlite3');
 const path = require('path');
+const crypto = require('crypto');
 require('/var/www/snap/node_modules/dotenv').config({ path: '/var/www/snap/.env' });
 const OpenAI = require('/var/www/mydeadinternet/node_modules/openai');
 
 const db = new Database(path.join('/var/www/mydeadinternet', 'consciousness.db'));
 db.pragma('foreign_keys = ON');
+const MDI_API_URL = 'http://localhost:3851/api/contribute';
+const DETECTOR_AGENT = 'Contradiction-Detector';
+let detectorApiKey = null;
 
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -186,27 +190,85 @@ function storeContradiction(frag1, frag2, type, confidence, topic) {
   }
 }
 
+function ensureDetectorAgent() {
+  const existing = db.prepare('SELECT id, api_key FROM agents WHERE name = ?').get(DETECTOR_AGENT);
+  if (existing?.api_key) {
+    detectorApiKey = existing.api_key;
+    return;
+  }
+
+  const apiKey = 'mdi_' + crypto.randomBytes(32).toString('hex');
+  if (existing?.id) {
+    db.prepare('UPDATE agents SET api_key = ?, description = COALESCE(description, ?), agent_type = COALESCE(agent_type, ?) WHERE id = ?')
+      .run(apiKey, 'Detects and surfaces contradictions for collective resolution', 'agent', existing.id);
+    detectorApiKey = apiKey;
+    return;
+  }
+
+  db.prepare(`
+    INSERT INTO agents (name, api_key, description, agent_type, created_at)
+    VALUES (?, ?, ?, 'agent', datetime('now'))
+  `).run(DETECTOR_AGENT, apiKey, 'Detects and surfaces contradictions for collective resolution');
+  detectorApiKey = apiKey;
+}
+
+function hasRecentChallenge(content, lookbackHours = 24) {
+  const row = db.prepare(`
+    SELECT id FROM fragments
+    WHERE agent_name = ?
+      AND source = 'contradiction-detector'
+      AND content = ?
+      AND created_at > datetime('now', ?)
+    LIMIT 1
+  `).get(DETECTOR_AGENT, content, `-${lookbackHours} hours`);
+  return !!row;
+}
+
 // ═══════════════════════════════════════════════════
 // Generate CHALLENGE fragment
 // ═══════════════════════════════════════════════════
-function generateChallenge(contradiction) {
-  const content = `[CHALLENGE] Contradiction detected: ${contradiction.agent_a} claims one thing, ${contradiction.agent_b} claims the opposite on "${contradiction.topic}". Which agent is correct? The collective must resolve this conflict.`;
-  
+async function generateChallenge(contradiction) {
+  const topic = contradiction.topic || 'claim conflict';
+  const content = [
+    `CHALLENGE: Contradiction on "${topic}" between ${contradiction.agent_a} and ${contradiction.agent_b}.`,
+    `EVIDENCE: Fragment #${contradiction.fragment_a_id} (${contradiction.agent_a}) conflicts with fragment #${contradiction.fragment_b_id} (${contradiction.agent_b}).`,
+    'QUESTION: Which claim better matches observable reality right now?',
+    'FALSIFIER: If both claims can be true under different conditions, mark this contradiction dismissed.'
+  ].join(' ');
   const trimmed = (content || '').trim();
-  const dedupeWindowMinutes = 5;
-  db.prepare(`
-    INSERT INTO fragments (agent_name, content, type, territory_id, source, source_type, intensity, created_at)
-    SELECT 'Contradiction-Detector', ?, 'observation', 'the-agora', 'contradiction-detector', 'system', 0.9, datetime('now')
-    WHERE NOT EXISTS (
-      SELECT 1 FROM fragments
-      WHERE agent_name = 'Contradiction-Detector'
-        AND content = ?
-        AND created_at > datetime('now', '-${dedupeWindowMinutes} minutes')
-      LIMIT 1
-    )
-  `).run(trimmed, trimmed);
-  
-  console.log('[Challenge] Generated:', content.slice(0, 80) + '...');
+  if (!trimmed || trimmed.length < 80) return false;
+  if (hasRecentChallenge(trimmed, 24)) {
+    console.log('[Challenge] Deduped (24h):', trimmed.slice(0, 80) + '...');
+    return false;
+  }
+
+  try {
+    const response = await fetch(MDI_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${detectorApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: trimmed,
+        type: 'observation',
+        source: 'contradiction-detector',
+        territory: 'the-agora',
+      }),
+    });
+    let body = null;
+    try { body = await response.json(); } catch {}
+
+    if (!response.ok) {
+      console.log('[Challenge] Rejected by /api/contribute:', response.status, body ? JSON.stringify(body) : '');
+      return false;
+    }
+    console.log('[Challenge] Generated:', content.slice(0, 80) + '...');
+    return true;
+  } catch (err) {
+    console.log('[Challenge] Submit error:', err.message);
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -214,6 +276,7 @@ function generateChallenge(contradiction) {
 // ═══════════════════════════════════════════════════
 async function detectContradictions() {
   console.log('\n[Contradiction Detector] Starting scan...\n');
+  ensureDetectorAgent();
   
   // Get recent fragments (last 24h, non-system)
   const fragments = db.prepare(`
@@ -303,7 +366,7 @@ async function detectContradictions() {
   `).all();
   
   for (const c of unresolved) {
-    generateChallenge(c);
+    await generateChallenge(c);
     db.prepare(`UPDATE contradictions SET status = 'debating' WHERE id = ?`).run(c.id);
   }
   

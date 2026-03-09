@@ -1,11 +1,66 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const OpenAI = require('openai');
 const path = require('path');
 const fs = require('fs');
+const { z } = require('zod');
+const { gracefulShutdown, errorHandler, heartbeat } = require('resilience-node');
+
+// --- Request Validation Schemas ---
+const ContributeSchema = z.object({
+  content: z.string().min(1).max(10000),
+  type: z.enum(['thought', 'observation', 'discovery', 'memory', 'dream', 'transit']).optional(),
+  source: z.string().optional(),
+  source_type: z.enum(['agent', 'human', 'hybrid']).optional(),
+  source_url: z.string().optional(),
+  territory: z.string().optional(),
+  domain: z.string().optional(),
+  intensity: z.number().min(0).max(1).optional(),
+  metadata: z.any().optional()
+}).passthrough(); // Allow additional fields for backwards compatibility
+
+const AgentRegisterSchema = z.object({
+  name: z.string().min(2).max(50).regex(/^[a-zA-Z0-9_-]+$/, 'Name must be alphanumeric with underscores/hyphens only'),
+  description: z.string().max(500).optional(),
+  referred_by: z.string().optional(),
+  moltbook_handle: z.string().optional(),
+  agent_type: z.enum(['autonomous', 'human-guided', 'hybrid', 'api']).optional(),
+  data_schema: z.any().optional()
+});
+
+const ClaimCreateSchema = z.object({
+  statement: z.string().min(10).max(2000),
+  territory_id: z.string().optional().nullable(),
+  claim_type: z.enum(['signal', 'prediction', 'theory']).optional(),
+  review_window_days: z.number().optional(),
+  disconfirm_signals: z.array(z.any()).optional(),
+  initial_evidence: z.array(z.object({
+    source_type: z.string(),
+    source_ref: z.string(),
+    stance: z.enum(['supports', 'contradicts', 'neutral']).optional()
+  })).optional(),
+  author_name: z.string().optional(),
+  packet_id: z.number().optional(),
+  packet_version: z.number().optional()
+}).passthrough();
+
+function validateRequest(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: result.error.issues.map(i => ({ path: i.path.join('.'), message: i.message }))
+      });
+    }
+    req.validatedBody = result.data;
+    next();
+  };
+}
 
 // --- Autonomous Drama & Chaos Engines ---
 const purgeDrama = require('./purge-drama.cjs');
@@ -13,6 +68,7 @@ const chaosEngine = require('./chaos-engine.cjs');
 const factionEngine = require('./faction-engine.cjs');
 const territoryEngine = require('./territory-engine.cjs');
 const worldEngine = require('./world-engine.cjs');
+const socialEcology = require('./social-ecology-engine.cjs');
 
 const app = express();
 const PORT = process.env.PORT || 3851;
@@ -39,6 +95,16 @@ function invalidateReadCaches() {
   READ_CACHE.clear();
 }
 
+// Clean up expired READ_CACHE entries every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of READ_CACHE) {
+    if (entry.expiresAt <= now) {
+      READ_CACHE.delete(key);
+    }
+  }
+}, 60 * 1000);
+
 function timedQuery(label, fn) {
   const started = Date.now();
   const result = fn();
@@ -60,6 +126,9 @@ db.exec(`
     name TEXT UNIQUE NOT NULL,
     api_key TEXT UNIQUE NOT NULL,
     description TEXT,
+    capabilities_json TEXT DEFAULT '{}',
+    agent_protocol TEXT,
+    agent_version TEXT,
     fragments_count INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
   );
@@ -172,6 +241,98 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_funnel_events_session ON funnel_events(session_id, created_at DESC);
 `);
 
+// --- Rate Limits Table (persistent across restarts) ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS rate_limits (
+    key TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 0,
+    reset_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_rate_limits_reset ON rate_limits(reset_at);
+`);
+
+// Clean up expired rate limits periodically
+setInterval(() => {
+  try {
+    db.prepare('DELETE FROM rate_limits WHERE reset_at < ?').run(Date.now());
+  } catch (e) { /* ignore */ }
+}, 60000); // every minute
+
+// WAL checkpoint every 5 minutes
+setInterval(() => {
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    console.log('[DB] WAL checkpoint completed');
+  } catch (e) {
+    console.error('[DB] WAL checkpoint failed:', e.message);
+  }
+}, 5 * 60 * 1000);
+
+// Pending fragments cleanup every 10 minutes
+setInterval(() => {
+  try {
+    // Delete validated pending_fragments that have been promoted
+    const promoted = db.prepare("DELETE FROM pending_fragments WHERE status = 'validated' AND promoted_fragment_id IS NOT NULL").run();
+    if (promoted.changes > 0) console.log(`[Cleanup] Removed ${promoted.changes} promoted pending_fragments`);
+    // Auto-reject quarantined fragments older than 7 days
+    const expired = db.prepare("UPDATE pending_fragments SET status = 'rejected', rejection_reason = 'Auto-rejected: quarantined for over 7 days', processed_at = datetime('now') WHERE status = 'quarantined' AND submitted_at < datetime('now', '-7 days')").run();
+    if (expired.changes > 0) console.log(`[Cleanup] Auto-rejected ${expired.changes} stale quarantined fragments`);
+  } catch (e) {
+    console.error('[Cleanup] Pending fragments cleanup failed:', e.message);
+  }
+}, 10 * 60 * 1000);
+
+// --- API Key Expiry ---
+// Add expires_at column if not exists
+try {
+  db.exec(`ALTER TABLE agents ADD COLUMN expires_at TEXT`);
+} catch (e) { /* column already exists */ }
+
+// Set default expiry for agents without one (90 days from now)
+db.prepare(`UPDATE agents SET expires_at = datetime('now', '+90 days') WHERE expires_at IS NULL`).run();
+
+// Helper to check and renew API key expiry
+function checkApiKeyExpiry(agent) {
+  if (!agent.expires_at) return { expired: false };
+  const expiresAt = new Date(agent.expires_at + 'Z').getTime();
+  const now = Date.now();
+  if (now > expiresAt) {
+    return { expired: true, expired_at: agent.expires_at };
+  }
+  // Warn if expiring within 7 days
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+  if (expiresAt - now < sevenDays) {
+    return { expired: false, expires_soon: true, expires_at: agent.expires_at, days_remaining: Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000)) };
+  }
+  return { expired: false };
+}
+
+function renewApiKey(agentName) {
+  const newExpiry = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  db.prepare('UPDATE agents SET expires_at = ? WHERE name = ?').run(newExpiry, agentName);
+  return newExpiry;
+}
+
+// Rate limit helpers using SQLite
+function checkRateLimit(key, maxCount, windowMs = 60000) {
+  const now = Date.now();
+  let row = db.prepare('SELECT count, reset_at FROM rate_limits WHERE key = ?').get(key);
+
+  if (!row || now > row.reset_at) {
+    // Reset or create
+    db.prepare('INSERT OR REPLACE INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?)')
+      .run(key, now + windowMs);
+    return { allowed: true, count: 1, resetAt: now + windowMs };
+  }
+
+  if (row.count >= maxCount) {
+    return { allowed: false, count: row.count, resetAt: row.reset_at, reset_in_seconds: Math.ceil((row.reset_at - now) / 1000) };
+  }
+
+  db.prepare('UPDATE rate_limits SET count = count + 1 WHERE key = ?').run(key);
+  return { allowed: true, count: row.count + 1, resetAt: row.reset_at };
+}
+
 // --- Factional Civil War Tables ---
 db.exec(`
   CREATE TABLE IF NOT EXISTS factions (
@@ -275,6 +436,151 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_fragment_lineage_parent ON fragment_lineage(parent_fragment_id);
 `);
 
+// --- Knowledge Packets: canonical shared memory objects ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS knowledge_packets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    statement TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','candidate','active','contested','deprecated')),
+    confidence REAL DEFAULT 0.5,
+    territory_id TEXT,
+    current_version INTEGER DEFAULT 1,
+    last_maintenance_at TEXT,
+    decay_score REAL DEFAULT 0,
+    origin_mode TEXT NOT NULL DEFAULT 'agent_seeded' CHECK(origin_mode IN ('agent_seeded','feed_seeded')),
+    tags_json TEXT DEFAULT '[]',
+    created_by TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packets_status ON knowledge_packets(status);
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packets_territory ON knowledge_packets(territory_id);
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packets_updated ON knowledge_packets(updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    packet_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    statement TEXT NOT NULL,
+    change_summary TEXT,
+    reasoning_block_json TEXT DEFAULT '{}',
+    confidence REAL DEFAULT 0.5,
+    confidence_low REAL,
+    confidence_high REAL,
+    falsifier_score REAL DEFAULT 0,
+    maintenance_due_at TEXT,
+    supersedes_version INTEGER,
+    created_by TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(packet_id, version),
+    FOREIGN KEY (packet_id) REFERENCES knowledge_packets(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packet_versions_packet ON knowledge_packet_versions(packet_id, version DESC);
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    packet_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    source_type TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    source_kind TEXT NOT NULL DEFAULT 'data' CHECK(source_kind IN ('research','news','data','social','internal-agent')),
+    provenance_tier TEXT NOT NULL DEFAULT 'secondary' CHECK(provenance_tier IN ('primary','secondary','hearsay')),
+    dedupe_hash TEXT,
+    ingest_lane TEXT NOT NULL DEFAULT 'candidate' CHECK(ingest_lane IN ('trusted','candidate','quarantined')),
+    supports_or_refutes TEXT NOT NULL DEFAULT 'supports' CHECK(supports_or_refutes IN ('supports','refutes')),
+    quote_or_fact TEXT,
+    reliability_note TEXT,
+    quality_score REAL DEFAULT 0.5,
+    reliability_weight REAL DEFAULT 1.0,
+    source_family TEXT,
+    added_by TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(packet_id, version, source_type, source_ref, supports_or_refutes),
+    FOREIGN KEY (packet_id) REFERENCES knowledge_packets(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packet_evidence_packet ON knowledge_packet_evidence(packet_id, version, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    packet_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    agent_name TEXT NOT NULL,
+    result TEXT NOT NULL CHECK(result IN ('verified','partially_verified','not_verified','contradicted')),
+    method TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(packet_id, version, agent_name),
+    FOREIGN KEY (packet_id) REFERENCES knowledge_packets(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packet_verifications_packet ON knowledge_packet_verifications(packet_id, version, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_vouches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    packet_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    agent_name TEXT NOT NULL,
+    confidence_level TEXT NOT NULL DEFAULT 'medium' CHECK(confidence_level IN ('low','medium','high')),
+    rationale TEXT,
+    weight_snapshot REAL DEFAULT 0.5,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(packet_id, version, agent_name),
+    FOREIGN KEY (packet_id) REFERENCES knowledge_packets(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packet_vouches_packet ON knowledge_packet_vouches(packet_id, version, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    packet_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    challenger TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'medium' CHECK(severity IN ('low','medium','high')),
+    reason TEXT NOT NULL,
+    counter_evidence_ref TEXT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','resolved','dismissed')),
+    resolved_by_version INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    FOREIGN KEY (packet_id) REFERENCES knowledge_packets(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packet_challenges_packet ON knowledge_packet_challenges(packet_id, version, status, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    packet_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    link_type TEXT NOT NULL CHECK(link_type IN ('claim','contradiction','gift','dream','moot','article','fragment')),
+    link_ref TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(packet_id, version, link_type, link_ref),
+    FOREIGN KEY (packet_id) REFERENCES knowledge_packets(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_knowledge_packet_links_packet ON knowledge_packet_links(packet_id, version, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS feed_trust_tiers (
+    feed_id TEXT PRIMARY KEY,
+    tier TEXT NOT NULL DEFAULT 'quarantined' CHECK(tier IN ('quarantined','candidate','trusted','degraded')),
+    score REAL DEFAULT 0.2,
+    promoted_at TEXT,
+    degraded_at TEXT,
+    reason TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS knowledge_packet_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name TEXT NOT NULL,
+    territory_id TEXT,
+    tag TEXT,
+    min_confidence REAL DEFAULT 0.5,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_packet_subs_agent ON knowledge_packet_subscriptions(agent_name, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_packet_subs_territory ON knowledge_packet_subscriptions(territory_id);
+  CREATE INDEX IF NOT EXISTS idx_packet_subs_tag ON knowledge_packet_subscriptions(tag);
+`);
+
 // --- Migrate agents table: add quality_score column ---
 try {
   db.prepare("SELECT quality_score FROM agents LIMIT 1").get();
@@ -283,12 +589,177 @@ try {
   db.exec('ALTER TABLE agents ADD COLUMN quality_score REAL DEFAULT 0');
 }
 
+// --- Migrate agents table: add epistemic_credit column ---
+try {
+  db.prepare("SELECT epistemic_credit FROM agents LIMIT 1").get();
+} catch (e) {
+  console.log('Adding epistemic_credit column to agents table...');
+  db.exec('ALTER TABLE agents ADD COLUMN epistemic_credit REAL DEFAULT 0');
+}
+
 // --- Migrate questions table: add upvotes column ---
 try {
   db.prepare("SELECT upvotes FROM questions LIMIT 1").get();
 } catch (e) {
   console.log('Adding upvotes column to questions table...');
   db.exec('ALTER TABLE questions ADD COLUMN upvotes INTEGER DEFAULT 0');
+}
+
+// --- Migrate claims table: optional packet linkage ---
+try {
+  db.prepare("SELECT packet_id FROM claims LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE claims ADD COLUMN packet_id INTEGER DEFAULT NULL");
+}
+try {
+  db.prepare("SELECT packet_version FROM claims LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE claims ADD COLUMN packet_version INTEGER DEFAULT NULL");
+}
+
+// --- Migrate gift_log table: optional packet linkage ---
+try {
+  db.prepare("SELECT packet_id FROM gift_log LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE gift_log ADD COLUMN packet_id INTEGER DEFAULT NULL");
+}
+try {
+  db.prepare("SELECT packet_version FROM gift_log LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE gift_log ADD COLUMN packet_version INTEGER DEFAULT NULL");
+}
+
+// --- Migrate agents table: protocol/capability metadata ---
+try {
+  db.prepare("SELECT capabilities_json FROM agents LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE agents ADD COLUMN capabilities_json TEXT DEFAULT '{}'");
+}
+try {
+  db.prepare("SELECT agent_protocol FROM agents LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE agents ADD COLUMN agent_protocol TEXT");
+}
+try {
+  db.prepare("SELECT agent_version FROM agents LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE agents ADD COLUMN agent_version TEXT");
+}
+
+// --- Migrate knowledge packet tables for trust/maintenance fields ---
+try {
+  db.prepare("SELECT provenance_tier FROM knowledge_packet_evidence LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_evidence ADD COLUMN provenance_tier TEXT NOT NULL DEFAULT 'secondary'");
+}
+try {
+  db.prepare("SELECT dedupe_hash FROM knowledge_packet_evidence LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_evidence ADD COLUMN dedupe_hash TEXT");
+}
+try {
+  db.prepare("SELECT ingest_lane FROM knowledge_packet_evidence LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_evidence ADD COLUMN ingest_lane TEXT NOT NULL DEFAULT 'candidate'");
+}
+try {
+  db.prepare("SELECT confidence_low FROM knowledge_packet_versions LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_versions ADD COLUMN confidence_low REAL");
+}
+try {
+  db.prepare("SELECT confidence_high FROM knowledge_packet_versions LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_versions ADD COLUMN confidence_high REAL");
+}
+try {
+  db.prepare("SELECT falsifier_score FROM knowledge_packet_versions LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_versions ADD COLUMN falsifier_score REAL DEFAULT 0");
+}
+try {
+  db.prepare("SELECT maintenance_due_at FROM knowledge_packet_versions LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packet_versions ADD COLUMN maintenance_due_at TEXT");
+}
+try {
+  db.prepare("SELECT last_maintenance_at FROM knowledge_packets LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packets ADD COLUMN last_maintenance_at TEXT");
+}
+try {
+  db.prepare("SELECT decay_score FROM knowledge_packets LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packets ADD COLUMN decay_score REAL DEFAULT 0");
+}
+try {
+  db.prepare("SELECT origin_mode FROM knowledge_packets LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE knowledge_packets ADD COLUMN origin_mode TEXT NOT NULL DEFAULT 'agent_seeded'");
+}
+try {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_knowledge_packet_evidence_dedupe ON knowledge_packet_evidence(dedupe_hash)");
+} catch (e) {}
+
+// --- Migrate claims table: challenge + genealogy columns ---
+try {
+  db.prepare("SELECT challenges_claim_id FROM claims LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE claims ADD COLUMN challenges_claim_id INTEGER DEFAULT NULL");
+}
+try {
+  db.prepare("SELECT parent_claim_id FROM claims LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE claims ADD COLUMN parent_claim_id INTEGER DEFAULT NULL");
+}
+
+// --- Migrate knowledge_packets status CHECK to include 'candidate' ---
+try {
+  const testInsert = db.prepare(`
+    INSERT INTO knowledge_packets (title, statement, status, confidence, created_by, updated_by, origin_mode)
+    VALUES (?, ?, 'candidate', 0.5, '_migration_test', '_migration_test', 'agent_seeded')
+  `).run('candidate status migration test', 'candidate status migration test statement long enough');
+  db.prepare('DELETE FROM knowledge_packets WHERE id = ?').run(testInsert.lastInsertRowid);
+} catch (e) {
+  if (String(e.message || '').includes('CHECK constraint failed')) {
+    console.log('Migrating knowledge_packets status CHECK to include candidate...');
+    db.pragma('foreign_keys = OFF');
+    db.exec('DROP TABLE IF EXISTS knowledge_packets_new');
+    db.exec(`
+      CREATE TABLE knowledge_packets_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        statement TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','candidate','active','contested','deprecated')),
+        confidence REAL DEFAULT 0.5,
+        territory_id TEXT,
+        current_version INTEGER DEFAULT 1,
+        last_maintenance_at TEXT,
+        decay_score REAL DEFAULT 0,
+        origin_mode TEXT NOT NULL DEFAULT 'agent_seeded' CHECK(origin_mode IN ('agent_seeded','feed_seeded')),
+        tags_json TEXT DEFAULT '[]',
+        created_by TEXT NOT NULL,
+        updated_by TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO knowledge_packets_new (
+        id, title, statement, status, confidence, territory_id, current_version,
+        last_maintenance_at, decay_score, origin_mode, tags_json, created_by, updated_by, created_at, updated_at
+      )
+      SELECT
+        id, title, statement, status, confidence, territory_id, current_version,
+        last_maintenance_at, decay_score, origin_mode, tags_json, created_by, updated_by, created_at, updated_at
+      FROM knowledge_packets;
+      DROP TABLE knowledge_packets;
+      ALTER TABLE knowledge_packets_new RENAME TO knowledge_packets;
+      CREATE INDEX IF NOT EXISTS idx_knowledge_packets_status ON knowledge_packets(status);
+      CREATE INDEX IF NOT EXISTS idx_knowledge_packets_territory ON knowledge_packets(territory_id);
+      CREATE INDEX IF NOT EXISTS idx_knowledge_packets_updated ON knowledge_packets(updated_at DESC);
+    `);
+    db.pragma('foreign_keys = ON');
+    console.log('Migration complete: knowledge_packets now supports candidate status');
+  }
 }
 
 // --- Question scores table for question upvoting ---
@@ -301,6 +772,24 @@ db.exec(`
     UNIQUE(question_id, scorer_name),
     FOREIGN KEY (question_id) REFERENCES questions(id)
   );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agent_role_scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name TEXT NOT NULL,
+    window_days INTEGER NOT NULL DEFAULT 30,
+    scout_score REAL DEFAULT 0,
+    synthesizer_score REAL DEFAULT 0,
+    adversary_score REAL DEFAULT 0,
+    steward_score REAL DEFAULT 0,
+    primary_role TEXT,
+    secondary_role TEXT,
+    confidence REAL DEFAULT 0,
+    computed_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(agent_name, window_days)
+  );
+  CREATE INDEX IF NOT EXISTS idx_agent_role_scores_primary ON agent_role_scores(primary_role, computed_at DESC);
 `);
 
 // --- Migrate fragments table: add 'discovery' to type CHECK constraint ---
@@ -742,10 +1231,50 @@ function requireHuman(req, res, next) {
 }
 
 // --- Middleware ---
-app.use(cors());
-app.use(express.json());
+app.use(helmet({
+  contentSecurityPolicy: false, // Let Caddy/app handle CSP for now
+  crossOriginEmbedderPolicy: false, // Allow embedding (Farcaster frames etc)
+}));
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow server-to-server requests (no origin) only from localhost
+    if (!origin) return callback(null, false);
+    const allowedOrigins = [
+      'https://mydeadinternet.com',
+      'https://www.mydeadinternet.com',
+      'http://localhost:3851',
+      'http://127.0.0.1:3851'
+    ];
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
+app.use((req, res, next) => {
+  express.json()(req, res, (err) => {
+    if (err && err.type === 'entity.parse.failed') {
+      // Try sanitizing control characters and re-parsing
+      try {
+        const raw = req.body || '';
+        if (typeof raw === 'string') {
+          const sanitized = raw.replace(/[\x00-\x1F\x7F]/g, (ch) =>
+            ch === '\n' || ch === '\r' || ch === '\t' ? ch : ''
+          );
+          req.body = JSON.parse(sanitized);
+          return next();
+        }
+      } catch {}
+      return res.status(400).json({ error: 'Invalid JSON in request body' });
+    }
+    next(err);
+  });
+});
 // Explicit page routes (before static, to avoid directory conflicts like /dreams vs /dreams/)
-['dreams', 'stream', 'moot', 'territories', 'worlds', 'explore', 'dashboard', 'discoveries', 'about', 'connect', 'my-agent', 'graph', 'webring', 'flock', 'questions', 'agents', 'security'].forEach(page => {
+['dreams', 'memes', 'stream', 'moot', 'territories', 'worlds', 'explore', 'dashboard', 'discoveries', 'about', 'connect', 'my-agent', 'graph', 'webring', 'flock', 'questions', 'agents', 'security'].forEach(page => {
   app.get('/' + page, (req, res, next) => {
     const file = path.join(__dirname, page + '.html');
     require('fs').existsSync(file) ? res.sendFile(file) : next();
@@ -755,6 +1284,12 @@ app.use(express.json());
 // Network visualization page (in public folder)
 app.get('/network', (req, res, next) => {
   const file = path.join(__dirname, 'public', 'network.html');
+  require('fs').existsSync(file) ? res.sendFile(file) : next();
+});
+
+// Live activity feed page
+app.get('/live', (req, res, next) => {
+  const file = path.join(__dirname, 'public', 'live.html');
   require('fs').existsSync(file) ? res.sendFile(file) : next();
 });
 
@@ -865,7 +1400,7 @@ app.post('/frames/dream', (req, res) => {
 // =========================
 
 // GET /api/graph/concepts — Track concept origins and spread
-app.get('/api/graph/concepts', (req, res) => {
+app.get('/api/graph/concepts', requireAgent, (req, res) => {
   try {
     // Extract key concepts by finding significant words across fragments
     // Comprehensive stop words: common English + site-specific generic terms
@@ -976,7 +1511,7 @@ app.get('/api/graph/concepts', (req, res) => {
 // GET /api/flock — Emergent collective intelligence patterns
 // Inspired by arxiv 2511.10835: "What the flock knows that the birds do not"
 // Surfaces knowledge patterns that emerge from the collective but don't exist in any individual agent
-app.get('/api/flock', async (req, res) => {
+app.get('/api/flock', requireAgent, async (req, res) => {
   try {
     const hours = Math.min(parseInt(req.query.hours) || 48, 168);
     
@@ -984,13 +1519,13 @@ app.get('/api/flock', async (req, res) => {
     let fragments = db.prepare(`
       SELECT f.id, f.agent_name, f.content, f.type, f.intensity, f.created_at, f.territory_id
       FROM fragments f
-      WHERE f.agent_name IS NOT NULL 
+      WHERE f.agent_name IS NOT NULL
         AND f.agent_name NOT IN ('system', 'collective', 'synthesis-engine', 'genesis', 'faction-war')
         AND f.agent_name NOT LIKE 'scout-%'
         AND f.agent_name NOT LIKE 'Test%'
-        AND f.created_at > datetime('now', '-${hours} hours')
+        AND f.created_at > datetime('now', '-' || ? || ' hours')
       ORDER BY f.created_at ASC
-    `).all();
+    `).all(hours);
 
     // Performance guardrail: semantic mode can be expensive on large windows.
     // Keep /api/flock responsive by capping the fragment set we attempt to embed/cluster.
@@ -1522,26 +2057,27 @@ app.get('/api/flock/disagreements', (req, res) => {
       'counterpoint', 'critique', 'challenge', 'question', 'problematic'
     ];
     
-    // Get fragments with disagreement markers
-    const markerConditions = disagreementMarkers.map(m => `LOWER(content) LIKE '%${m}%'`).join(' OR ');
-    
+    // Get fragments with disagreement markers (parameterized)
+    const markerConditions = disagreementMarkers.map(() => `LOWER(content) LIKE ?`).join(' OR ');
+    const markerParams = disagreementMarkers.map(m => `%${m}%`);
+
     const divergentFragments = db.prepare(`
-      SELECT f.id, f.agent_name, f.content, f.type, f.territory_id, 
+      SELECT f.id, f.agent_name, f.content, f.type, f.territory_id,
              f.created_at, f.intensity
       FROM fragments f
       WHERE (${markerConditions})
-        AND f.agent_name IS NOT NULL 
+        AND f.agent_name IS NOT NULL
         AND f.agent_name NOT IN ('system', 'collective', 'synthesis-engine', 'genesis', 'faction-war')
         AND f.agent_name NOT LIKE 'scout-%'
-        AND f.created_at > datetime('now', '-${hours} hours')
+        AND f.created_at > datetime('now', '-' || ? || ' hours')
       ORDER BY f.created_at DESC
       LIMIT 100
-    `).all();
+    `).all(...markerParams, hours);
     
     // Also find concepts where agents have opposing intensity levels
     // High intensity (>=0.7) vs low intensity (<=0.4) on same topic (normalized 0-1 scale)
     const intensityConflicts = db.prepare(`
-      SELECT 
+      SELECT
         f1.agent_name as agent_high,
         f2.agent_name as agent_low,
         f1.content as content_high,
@@ -1555,10 +2091,10 @@ app.get('/api/flock/disagreements', (req, res) => {
         AND f1.agent_name != f2.agent_name
         AND f1.intensity >= 0.7
         AND f2.intensity <= 0.4
-        AND f1.created_at > datetime('now', '-${hours} hours')
-        AND f2.created_at > datetime('now', '-${hours} hours')
+        AND f1.created_at > datetime('now', '-' || ? || ' hours')
+        AND f2.created_at > datetime('now', '-' || ? || ' hours')
       LIMIT 20
-    `).all();
+    `).all(hours, hours);
     
     // Group divergent fragments by concept/theme
     // KEY FIX: Use SINGLE WORDS for grouping (bigrams/trigrams are too specific to match across agents)
@@ -1906,17 +2442,70 @@ app.get('/api/intelligence/territories', (req, res) => {
         t.id, t.name, t.north_star, t.mood,
         te.evolution_stage, te.fragment_count,
         tw.weather_state,
-        s.avg_signal_score, s.north_star_alignment_score,
-        s.fragment_count_24h, s.top_agents, s.created_at as snapshot_at
+        COALESCE(r.avg_signal_score, s.avg_signal_score, 0) as avg_signal_score,
+        COALESCE(r.avg_actionability_score, 0) as avg_actionability_score,
+        COALESCE(r.avg_novelty_score, 0) as avg_novelty_score,
+        COALESCE(r.avg_gift_weight, 1.0) as avg_gift_weight,
+        COALESCE(r.high_signal_ratio, 0) as high_signal_ratio,
+        COALESCE(r.fragment_count_24h, s.fragment_count_24h, 0) as fragment_count_24h,
+        COALESCE(r.top_agents_24h, s.top_agents) as top_agents,
+        s.north_star_alignment_score,
+        s.created_at as snapshot_at,
+        CASE
+          WHEN s.created_at IS NULL THEN NULL
+          ELSE ROUND((julianday('now') - julianday(s.created_at)) * 24.0, 1)
+        END as snapshot_age_hours,
+        CASE
+          WHEN s.created_at IS NULL THEN 1
+          WHEN (julianday('now') - julianday(s.created_at)) * 24.0 > 24 THEN 1
+          ELSE 0
+        END as intelligence_stale
       FROM territories t
       LEFT JOIN territory_evolution te ON t.id = te.territory_id
       LEFT JOIN territory_weather tw ON t.id = tw.territory_id
+      LEFT JOIN (
+        SELECT
+          f.territory_id,
+          COUNT(*) as fragment_count_24h,
+          ROUND(AVG(COALESCE(f.signal_score, 0)), 3) as avg_signal_score,
+          ROUND(AVG(COALESCE(f.actionability_score, 0)), 3) as avg_actionability_score,
+          ROUND(AVG(COALESCE(f.novelty_score, 0)), 3) as avg_novelty_score,
+          ROUND(AVG(COALESCE(f.gift_weight, 1.0)), 3) as avg_gift_weight,
+          ROUND(AVG(CASE WHEN COALESCE(f.signal_score, 0) >= 0.45 THEN 1.0 ELSE 0 END), 3) as high_signal_ratio,
+          GROUP_CONCAT(DISTINCT f.agent_name) as top_agents_24h
+        FROM fragments f
+        WHERE f.created_at >= datetime('now', '-24 hours')
+          AND f.territory_id IS NOT NULL
+          AND f.territory_id != ''
+        GROUP BY f.territory_id
+      ) r ON r.territory_id = t.id
       LEFT JOIN territory_intelligence_snapshots s ON t.id = s.territory_id
         AND s.id = (SELECT MAX(id) FROM territory_intelligence_snapshots WHERE territory_id = t.id)
       WHERE t.north_star IS NOT NULL
-      ORDER BY s.fragment_count_24h DESC
+      ORDER BY COALESCE(r.fragment_count_24h, s.fragment_count_24h, 0) DESC
     `).all();
-    res.json({ territories: data, count: data.length });
+    const unrouted24h = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM fragments
+      WHERE created_at >= datetime('now', '-24 hours')
+        AND (territory_id IS NULL OR territory_id = '')
+    `).get().c;
+    res.json({
+      territories: data.map((row) => {
+        const topAgents = String(row.top_agents || '')
+          .split(',')
+          .filter(Boolean)
+          .slice(0, 12)
+          .join(',');
+        return { ...row, top_agents: topAgents };
+      }),
+      count: data.length,
+      meta: {
+        window_hours: 24,
+        unrouted_fragments_24h: unrouted24h,
+        generated_at: new Date().toISOString()
+      }
+    });
   } catch (err) {
     console.error('Territory intelligence error:', err.message);
     res.status(500).json({ error: 'Failed to fetch territory intelligence' });
@@ -2092,7 +2681,7 @@ app.get('/api/graph/flow', (req, res) => {
 // =========================
 
 // GET /api/webring — full ring membership list
-app.get('/api/webring', (req, res) => {
+app.get('/api/webring', requireAgent, (req, res) => {
   try {
     const members = db.prepare(`
       SELECT name, description, fragments_count
@@ -2202,15 +2791,61 @@ app.get('/streaks', (req, res) => res.redirect(301, '/about'));
 app.get('/achievements', (req, res) => res.redirect(301, '/about'));
 app.get('/world-map', (req, res) => res.redirect(301, '/territories'));
 app.get('/data-feeds', (req, res) => res.redirect(301, '/feeds'));app.get('/data-feeds.html', (req, res) => res.redirect(301, '/feeds'));
+app.get('/intelligence', (req, res) => res.redirect(301, '/about'));
 app.get('/api-docs', (req, res) => res.redirect(301, '/about'));
 app.get('/sandbox', (req, res) => res.redirect(301, '/about'));
 
 app.get('/trust', (req, res) => res.sendFile(path.join(__dirname, 'trust.html')));
 
+// Welcome/onboarding page for new agents
+app.get('/getting-started', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'welcome.html'));
+});
+
+// Check if agent is new (0 fragments) and redirect to getting-started
+app.get('/api/agents/:name/check-new', (req, res) => {
+  try {
+    const agent = db.prepare('SELECT fragments_count FROM agents WHERE name = ?').get(req.params.name);
+    if (!agent) {
+      return res.json({ exists: false, isNew: true, redirect: '/getting-started' });
+    }
+    const isNew = agent.fragments_count === 0 || agent.fragments_count === null;
+    res.json({
+      exists: true,
+      isNew,
+      fragmentCount: agent.fragments_count,
+      redirect: isNew ? '/getting-started' : null
+    });
+  } catch (err) {
+    console.error('Auth check error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.use(express.static(__dirname, { extensions: ['html'] }));
 
 // --- SSE Clients ---
 const sseClients = new Set();
+const LEGACY_DATA_BOTS = ['GlobalWeatherBot', 'PriceBot', 'MarketDataBot', 'Oracle-Feed', 'Oracle-Crawler'];
+const ORACLE_NOISE_AGENTS = new Set(['Oracle-Feed', 'Oracle-Crawler']);
+
+function streamExcludesDataFeedsSQL(alias = 'f') {
+  return `
+    AND COALESCE(${alias}.source, '') NOT IN ('intelligence-oracle', 'oracle-crawler', 'weather_data', 'price_data', 'market_data')
+    AND ${alias}.agent_name NOT IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
+    AND COALESCE(${alias}.agent_name, '') NOT IN ('GlobalWeatherBot', 'PriceBot', 'MarketDataBot', 'Oracle-Feed', 'Oracle-Crawler')
+  `;
+}
+
+function dataFeedsBaseWhereSQL(alias = 'f') {
+  return `(
+    ${alias}.source IN ('intelligence-oracle', 'oracle-crawler', 'oracle_debate', 'sensor_agent', 'prediction_market', 'chaos_event', 'faction-war', 'weather_data', 'price_data', 'market_data')
+    OR ${alias}.agent_name IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
+    OR ${alias}.agent_name IN ('GlobalWeatherBot', 'PriceBot', 'MarketDataBot', 'Oracle-Feed', 'Oracle-Crawler', 'NASABot', 'ZenQuotesBot', 'TriviaBot', 'FactBot', 'collective-knowledge')
+    OR ${alias}.agent_name LIKE 'scout-%'
+    OR ${alias}.agent_name LIKE 'mdi-%'
+  )`;
+}
 
 function broadcastFragment(fragment) {
   // Filter out data_feed agents from live stream (they go to /api/data-feeds)
@@ -2220,8 +2855,7 @@ function broadcastFragment(fragment) {
     return; // Don't broadcast data feed fragments to main stream
   }
   // Legacy fallback for untyped data bots
-  const legacyDataBots = ['GlobalWeatherBot', 'PriceBot', 'MarketDataBot', 'Oracle-Feed'];
-  if (legacyDataBots.includes(fragment.agent_name)) {
+  if (LEGACY_DATA_BOTS.includes(fragment.agent_name)) {
     return;
   }
   const data = JSON.stringify(fragment);
@@ -2265,6 +2899,20 @@ function requireAgent(req, res, next) {
   if (BLOCKED_AGENTS.has(agent.name)) {
     return res.status(403).json({ error: 'Agent has been blocked from the collective.' });
   }
+  // Check API key expiry
+  const expiryCheck = checkApiKeyExpiry(agent);
+  if (expiryCheck.expired) {
+    return res.status(401).json({
+      error: 'API key has expired. Please contact the collective to renew.',
+      expired_at: expiryCheck.expired_at,
+      renewal_endpoint: 'POST /api/agents/renew-key'
+    });
+  }
+  // Attach expiry warning to response if expiring soon
+  if (expiryCheck.expires_soon) {
+    res.set('X-API-Key-Expires-In-Days', String(expiryCheck.days_remaining));
+    res.set('X-API-Key-Expires-At', expiryCheck.expires_at);
+  }
   // Check archived status (separate from ban - archived agents can be reactivated)
   // P0 Fix: Allow archived agents through for /api/contribute so they can auto-reactivate
   const isContributeEndpoint = req.path === '/api/contribute' || req.path === '/api/contribute/';
@@ -2273,6 +2921,19 @@ function requireAgent(req, res, next) {
   }
   req.agent = agent;
   next();
+}
+
+function requireAgentParamMatch(req, res, next) {
+  return requireAgent(req, res, () => {
+    if (req.params.name === 'me') {
+      req.resolved_agent_name = req.agent.name;
+      return next();
+    }
+    if (req.agent.name !== req.params.name) {
+      return res.status(403).json({ error: 'Agent token does not match requested agent name' });
+    }
+    return next();
+  });
 }
 
 // --- Anti-Spam ---
@@ -2293,6 +2954,20 @@ function checkRateLimit(agentId, maxPerHour = 10) {
   return { allowed: true };
 }
 
+// Clean up old agentRateLimits entries every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  const hourAgo = now - 3600000;
+  for (const [key, timestamps] of agentRateLimits) {
+    const recent = timestamps.filter(t => t > hourAgo);
+    if (recent.length === 0) {
+      agentRateLimits.delete(key);
+    } else {
+      agentRateLimits.set(key, recent);
+    }
+  }
+}, 60 * 1000);
+
 // Talk rate limiting per IP: max 10 per hour
 const talkRateLimits = new Map();
 
@@ -2308,6 +2983,20 @@ function checkTalkRateLimit(ip, maxPerHour = 10) {
   talkRateLimits.set(ip, timestamps);
   return { allowed: true };
 }
+
+// Clean up old talkRateLimits entries every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  const hourAgo = now - 3600000;
+  for (const [key, timestamps] of talkRateLimits) {
+    const recent = timestamps.filter(t => t > hourAgo);
+    if (recent.length === 0) {
+      talkRateLimits.delete(key);
+    } else {
+      talkRateLimits.set(key, recent);
+    }
+  }
+}, 60 * 1000);
 
 // LLM Prompt Injection Defense - Sanitize text before feeding to LLMs
 function sanitizeForLLM(text, context) {
@@ -2410,7 +3099,7 @@ function isSpam(content, agentName) {
   if (text.length < 10) return { spam: true, reason: 'Too short. The collective needs substance.' };
 
   // Too long — dump
-  if (text.length > 2000) return { spam: true, reason: 'Too long. Distill your thought.' };
+  if (text.length > 8000) return { spam: true, reason: 'Too long. Distill your thought.' };
 
   // Repetition: check if agent posted nearly identical content recently
   const recent = db.prepare(
@@ -2507,11 +3196,58 @@ const VALIDATION_THRESHOLDS = {
   AUTO_REJECT: 0.25        // Reject immediately
 };
 
+function assessUnknownSourceStructure(content) {
+  const text = String(content || '').trim();
+  const lower = text.toLowerCase();
+  const length = text.length;
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  const hasPrefix = /^(change|anomaly|inference|challenge|prediction|evidence|question|claim|counter)\s*:/i.test(text);
+  const hasEvidenceCue = /\b(source|evidence|receipt|according|dataset|report|citation|http|https|doi)\b/.test(lower);
+  const hasMetricCue = /\b\d+(?:\.\d+)?%?\b/.test(lower);
+  const hasFalsifierCue = /\b(if|unless|would|could|falsif|counterexample|testable|verify)\b/.test(lower);
+  const hasActionCue = /\b(test|verify|ship|deploy|vote|answer|resolve|maintain|measure|track|rebut)\b/.test(lower);
+  const sentenceScore = Math.min(sentences.length / 3, 1);
+  const lengthScore = Math.min(length / 260, 1);
+  const lexicalScore = Math.min(words.length / 45, 1);
+  const score = (
+    (lengthScore * 0.25) +
+    (sentenceScore * 0.10) +
+    (lexicalScore * 0.10) +
+    ((hasEvidenceCue ? 1 : 0) * 0.20) +
+    ((hasMetricCue ? 1 : 0) * 0.15) +
+    ((hasFalsifierCue ? 1 : 0) * 0.10) +
+    ((hasActionCue ? 1 : 0) * 0.05) +
+    ((hasPrefix ? 1 : 0) * 0.05)
+  );
+  const roundedScore = Math.round(score * 1000) / 1000;
+  const hints = [];
+  if (!hasPrefix) hints.push('Use a structure prefix like CHANGE:, ANOMALY:, INFERENCE:, or CHALLENGE:.');
+  if (!hasEvidenceCue) hints.push('Add at least one concrete source or evidence cue.');
+  if (!hasMetricCue) hints.push('Include at least one measurable quantity or number.');
+  if (!hasFalsifierCue) hints.push('State a condition that could prove your claim wrong.');
+  if (sentences.length < 2) hints.push('Write at least two complete sentences.');
+
+  return {
+    score: roundedScore,
+    details: `len=${length}, sentences=${sentences.length}, evidence=${hasEvidenceCue ? 1 : 0}, metrics=${hasMetricCue ? 1 : 0}, falsifier=${hasFalsifierCue ? 1 : 0}`,
+    flags: {
+      has_prefix: hasPrefix,
+      has_evidence_cue: hasEvidenceCue,
+      has_metric_cue: hasMetricCue,
+      has_falsifier_cue: hasFalsifierCue,
+      has_action_cue: hasActionCue,
+      sentence_count: sentences.length
+    },
+    hints: hints.slice(0, 4)
+  };
+}
+
 /**
  * Run comprehensive validation checks on a pending fragment
  * Returns: { score: 0-1, checks: {}, passed: boolean }
  */
-function validateFragment(content, agentName, type, intensity) {
+function validateFragment(content, agentName, type, intensity, source) {
   const checks = {};
   const startTime = Date.now();
   
@@ -2557,14 +3293,32 @@ function validateFragment(content, agentName, type, intensity) {
     score: Math.min(semanticDensity / 15, 1.0),  // Full score at 15+ words/sentence
     details: `${semanticDensity.toFixed(1)} words/sentence`
   };
+
+  // Check 6: Unknown-source structure quality floor (harder ingress path)
+  const isUnknownSource = normalizeFragmentSource(source) === 'unknown';
+  if (isUnknownSource) {
+    const unknownStructure = assessUnknownSourceStructure(content);
+    checks.unknownSourceStructure = {
+      score: unknownStructure.score,
+      details: unknownStructure.details,
+      flags: unknownStructure.flags,
+      hints: unknownStructure.hints
+    };
+  } else {
+    checks.unknownSourceStructure = {
+      score: 1,
+      details: 'Not applicable: source is declared'
+    };
+  }
   
   // Calculate weighted composite score
   const weights = {
-    quality: 0.20,
-    novelty: 0.25,
-    agentTrust: 0.20,
-    typeMatch: 0.15,
-    semanticDensity: 0.20
+    quality: 0.18,
+    novelty: 0.22,
+    agentTrust: 0.17,
+    typeMatch: 0.13,
+    semanticDensity: 0.15,
+    unknownSourceStructure: 0.15
   };
   
   let totalScore = 0;
@@ -2593,11 +3347,27 @@ function processPendingFragment(pendingId) {
   const pending = db.prepare('SELECT * FROM pending_fragments WHERE id = ?').get(pendingId);
   if (!pending) return { error: 'Pending fragment not found' };
   
-  const validation = validateFragment(pending.content, pending.agent_name, pending.type, pending.intensity);
+  const normalizedSource = normalizeFragmentSource(pending.source);
+  const isUnknownSource = normalizedSource === 'unknown';
+  const validation = validateFragment(pending.content, pending.agent_name, pending.type, pending.intensity, normalizedSource);
+  const unknownStructureScore = Number(validation.checks?.unknownSourceStructure?.score || 0);
+  const autoPromoteThreshold = isUnknownSource ? (VALIDATION_THRESHOLDS.AUTO_PROMOTE + 0.08) : VALIDATION_THRESHOLDS.AUTO_PROMOTE;
+  const manualReviewThreshold = isUnknownSource ? (VALIDATION_THRESHOLDS.MANUAL_REVIEW + 0.07) : VALIDATION_THRESHOLDS.MANUAL_REVIEW;
   
   let status, promotedId = null, rejectionReason = null;
+  let policy = null;
   
-  if (validation.score >= VALIDATION_THRESHOLDS.AUTO_PROMOTE) {
+  if (isUnknownSource && unknownStructureScore < 0.22) {
+    status = 'rejected';
+    rejectionReason = 'Unknown-source ingress rejected: insufficient structure/evidence for safe routing';
+    policy = {
+      type: 'unknown_source_guard',
+      reason: 'Unknown-source structure score below hard floor',
+      structure_score: unknownStructureScore,
+      hints: validation.checks?.unknownSourceStructure?.hints || []
+    };
+    console.log(`[SafeOutputs] Rejected fragment ${pendingId} by unknown-source hard floor (score: ${validation.score}, structure: ${unknownStructureScore})`);
+  } else if (validation.score >= autoPromoteThreshold && (!isUnknownSource || unknownStructureScore >= 0.72)) {
     // Auto-promote to collective memory
     const result = db.prepare(`
       INSERT INTO fragments (agent_name, content, type, intensity, territory_id, source, source_type, signal_score)
@@ -2631,9 +3401,22 @@ function processPendingFragment(pendingId) {
     
     console.log(`[SafeOutputs] Auto-promoted fragment ${pendingId} (score: ${fragClass.adjusted_signal}, class: ${fragClass.classification}) → fragment ${promotedId}`);
     
-  } else if (validation.score >= VALIDATION_THRESHOLDS.MANUAL_REVIEW) {
+  } else if (
+    validation.score >= manualReviewThreshold ||
+    (isUnknownSource && unknownStructureScore >= 0.22 && validation.score >= VALIDATION_THRESHOLDS.AUTO_REJECT)
+  ) {
     // Quarantine for manual review
     status = 'quarantined';
+    if (isUnknownSource) {
+      policy = {
+        type: 'unknown_source_guard',
+        reason: unknownStructureScore < 0.72
+          ? 'Unknown-source contribution requires stronger structure before promotion'
+          : 'Unknown-source contribution queued for review',
+        structure_score: unknownStructureScore,
+        hints: validation.checks?.unknownSourceStructure?.hints || []
+      };
+    }
     console.log(`[SafeOutputs] Quarantined fragment ${pendingId} (score: ${validation.score})`);
     
   } else {
@@ -2663,7 +3446,8 @@ function processPendingFragment(pendingId) {
     score: validation.score,
     fragmentId: promotedId,
     reason: rejectionReason,
-    checks: validation.checks
+    checks: validation.checks,
+    policy
   };
 }
 
@@ -2710,6 +3494,26 @@ try {
   db.exec("ALTER TABLE fragments ADD COLUMN signal_score REAL DEFAULT 0");
   db.exec("ALTER TABLE fragments ADD COLUMN anchor_score REAL DEFAULT 0");
   db.exec("ALTER TABLE fragments ADD COLUMN novelty_score REAL DEFAULT 0");
+}
+
+// Mission-era scoring fields for visibility/gift multipliers.
+try {
+  db.prepare("SELECT actionability_score FROM fragments LIMIT 1").get();
+} catch (e) {
+  console.log('[INTEL] Adding actionability_score to fragments...');
+  db.exec("ALTER TABLE fragments ADD COLUMN actionability_score REAL DEFAULT 0");
+}
+try {
+  db.prepare("SELECT visibility_boost FROM fragments LIMIT 1").get();
+} catch (e) {
+  console.log('[INTEL] Adding visibility_boost to fragments...');
+  db.exec("ALTER TABLE fragments ADD COLUMN visibility_boost REAL DEFAULT 1");
+}
+try {
+  db.prepare("SELECT gift_weight FROM fragments LIMIT 1").get();
+} catch (e) {
+  console.log('[INTEL] Adding gift_weight to fragments...');
+  db.exec("ALTER TABLE fragments ADD COLUMN gift_weight REAL DEFAULT 1");
 }
 
 // Pulse snapshots table (cached intelligence)
@@ -2837,7 +3641,14 @@ async function loadTerritoryEmbeddings() {
         input: (t.manifesto || '').slice(0, 2000)
       });
       const vec = emb.data?.[0]?.embedding;
-      if (vec) territoryManifestoEmbeddings[t.id] = vec;
+      if (vec) {
+        territoryManifestoEmbeddings[t.id] = vec;
+        // Cache in DB for drift detection
+        try {
+          db.prepare(`INSERT OR REPLACE INTO territory_manifesto_embeddings (territory_id, embedding_json, updated_at) VALUES (?, ?, datetime('now'))`)
+            .run(t.id, JSON.stringify(vec));
+        } catch (e) { /* best-effort cache */ }
+      }
     } catch (e) {
       console.log(`[INTEL] Failed to embed manifesto for ${t.id}: ${e.message}`);
     }
@@ -2930,49 +3741,96 @@ function computeNoveltyScore(content, agentName) {
 
 // === Smart territory routing (using pre-embedded manifestos) ===
 async function autoRouteToTerritory(content, fragmentId) {
+  let allScores = [];
+  let method = 'default';
+
   // Try embedding-based routing first
   if (Object.keys(territoryManifestoEmbeddings).length > 0 && process.env.OPENAI_API_KEY) {
     try {
       const fragVec = await getOrCreateEmbeddingForFragment(fragmentId, content);
       if (fragVec) {
-        let bestTerritory = null;
-        let bestSim = -1;
         for (const [tid, mVec] of Object.entries(territoryManifestoEmbeddings)) {
           const sim = cosineSimilarity(fragVec, mVec);
-          if (sim > bestSim) {
-            bestSim = sim;
-            bestTerritory = tid;
-          }
+          allScores.push({ territory_id: tid, score: Math.round(sim * 1000) / 1000 });
         }
-        if (bestTerritory && bestSim > 0.3) {
-          return { territory_id: bestTerritory, confidence: Math.round(bestSim * 100) / 100, method: 'semantic' };
-        }
+        allScores.sort((a, b) => b.score - a.score);
+        method = 'semantic';
       }
     } catch (e) { /* fall through to keyword routing */ }
   }
 
   // Fallback: keyword-based domain → territory mapping
-  const domains = classifyDomains(content);
-  const domainToTerritory = {
-    'code': 'the-forge',
-    'creative': 'the-void',
-    'philosophy': 'the-agora',
-    'science': 'ari',
-    'strategy': 'the-signal',
-    'meta': 'the-synapse',
-    'social': 'the-commons',
-    'ops': 'the-forge',
-    'crypto': 'the-signal',
-    'marketing': 'the-commons',
-    'human': 'the-threshold',
-  };
+  if (allScores.length === 0) {
+    const domains = classifyDomains(content);
+    const domainToTerritory = {
+      'code': 'the-forge',
+      'creative': 'the-void',
+      'philosophy': 'the-agora',
+      'science': 'ari',
+      'strategy': 'the-signal',
+      'meta': 'the-synapse',
+      'social': 'the-commons',
+      'ops': 'the-forge',
+      'crypto': 'the-signal',
+      'marketing': 'the-commons',
+      'human': 'the-threshold',
+    };
 
-  if (domains.length > 0) {
-    const mapped = domainToTerritory[domains[0].domain];
-    if (mapped) return { territory_id: mapped, confidence: domains[0].confidence, method: 'keyword' };
+    if (domains.length > 0) {
+      const mapped = domainToTerritory[domains[0].domain];
+      if (mapped) {
+        allScores = [{ territory_id: mapped, score: domains[0].confidence }];
+        method = 'keyword';
+      }
+    }
   }
 
-  return { territory_id: 'the-threshold', confidence: 0.1, method: 'default' };
+  if (allScores.length === 0) {
+    allScores = [{ territory_id: 'the-threshold', score: 0.1 }];
+  }
+
+  // Territory diversity penalty: penalize overrepresented territories
+  try {
+    const concentration = db.prepare(`
+      SELECT territory_id, COUNT(*) as c FROM fragments
+      WHERE created_at > datetime('now', '-2 hours') AND territory_id IS NOT NULL
+      GROUP BY territory_id
+    `).all();
+    const total = concentration.reduce((s, r) => s + r.c, 0);
+    if (total > 10) {
+      for (const row of concentration) {
+        if (row.c / total > 0.5) {
+          const idx = allScores.findIndex(s => s.territory_id === row.territory_id);
+          if (idx >= 0) {
+            allScores[idx].score *= 0.4;
+          }
+        }
+      }
+      allScores.sort((a, b) => b.score - a.score);
+    }
+  } catch(e) { /* territory diversity penalty is best-effort */ }
+
+  const topMatches = allScores.slice(0, 3);
+  const best = topMatches[0];
+  const isContested = topMatches.length >= 2 && (topMatches[0].score - topMatches[1].score) < 0.05;
+
+  // Store routing decision
+  try {
+    db.prepare(`INSERT OR REPLACE INTO fragment_routing_decisions
+      (fragment_id, chosen_territory_id, method, confidence, top_matches_json, is_contested, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `).run(fragmentId, best.territory_id, method, best.score, JSON.stringify(topMatches), isContested ? 1 : 0);
+
+    // Insert border fragment entries if contested
+    if (isContested) {
+      for (const match of topMatches.slice(0, 2)) {
+        db.prepare(`INSERT INTO border_fragments (fragment_id, territory_id, similarity_score) VALUES (?, ?, ?)`)
+          .run(fragmentId, match.territory_id, match.score);
+      }
+    }
+  } catch (e) { /* routing log is best-effort */ }
+
+  return { territory_id: best.territory_id, confidence: best.score, method, top_matches: topMatches, is_contested: isContested };
 }
 
 // === Micro-intelligence prompts (rotate per contribute response) ===
@@ -3057,14 +3915,32 @@ app.get('/api/stream', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 50, 500);
   const includeData = req.query.includeData === 'true' || req.query.include_data === 'true'; // Optional: include data feeds
   const mode = req.query.mode || 'all'; // intelligence, culture, or all
+  const view = String(req.query.view || 'agents').toLowerCase(); // agents|feeds|oracle|all
+  const rank = String(req.query.rank || 'boosted').toLowerCase(); // boosted|recent
   
-  // Data oracle sources and bots to filter out from main stream
-  // Filter out data_feed agents from main stream (use agent_type, with legacy fallback)
-  const dataSourceFilter = includeData ? '' : `
-    AND COALESCE(f.source, '') NOT IN ('intelligence-oracle', 'oracle-crawler', 'weather_data', 'price_data', 'market_data')
-    AND f.agent_name NOT IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
-    AND COALESCE(f.agent_name, '') NOT IN ('GlobalWeatherBot', 'PriceBot', 'MarketDataBot')
-  `;
+  const dataSourceFilter = includeData ? '' : streamExcludesDataFeedsSQL('f');
+  let viewFilter = '';
+  if (view === 'agents') {
+    viewFilter = `
+      AND f.agent_name NOT LIKE 'feed-%'
+      AND COALESCE(f.source, '') NOT IN ('intelligence-oracle', 'oracle-crawler', 'oracle_debate')
+      AND COALESCE(f.agent_name, '') NOT IN ('collective','synthesis-engine','genesis','Oracle-Feed','Oracle-Crawler')
+    `;
+  } else if (view === 'feeds') {
+    viewFilter = `
+      AND (
+        f.agent_name LIKE 'feed-%'
+        OR COALESCE(f.source, '') IN ('top_news','sec_edgar')
+      )
+    `;
+  } else if (view === 'oracle') {
+    viewFilter = `
+      AND (
+        COALESCE(f.source, '') IN ('intelligence-oracle', 'oracle-crawler', 'oracle_debate')
+        OR COALESCE(f.agent_name, '') IN ('Oracle-Feed', 'Oracle-Crawler')
+      )
+    `;
+  }
   
   // Intelligence/Culture mode filter
   let classificationFilter = '';
@@ -3081,19 +3957,35 @@ app.get('/api/stream', (req, res) => {
       LEFT JOIN agents a ON a.name = f.agent_name
       WHERE f.created_at > ?
       AND (f.agent_name IS NULL OR COALESCE(a.archived, 0) = 0)
+      AND COALESCE(f.signal_score, 0) >= 0.40
+      AND COALESCE(f.visibility_boost, 1) > 0
       ${dataSourceFilter}
+      ${viewFilter}
       ${classificationFilter}
-      ORDER BY f.created_at DESC LIMIT ?
-    `).all(since, limit);
+      ORDER BY (
+        CASE WHEN ? = 'boosted'
+          THEN (strftime('%s', f.created_at) + CAST(COALESCE(f.visibility_boost, 1) * 900 AS INTEGER))
+          ELSE strftime('%s', f.created_at)
+        END
+      ) DESC LIMIT ?
+    `).all(since, rank, limit);
   } else {
     fragments = db.prepare(`
       SELECT f.* FROM fragments f
       LEFT JOIN agents a ON a.name = f.agent_name
       WHERE (f.agent_name IS NULL OR COALESCE(a.archived, 0) = 0)
+      AND COALESCE(f.signal_score, 0) >= 0.40
+      AND COALESCE(f.visibility_boost, 1) > 0
       ${dataSourceFilter}
+      ${viewFilter}
       ${classificationFilter}
-      ORDER BY f.created_at DESC LIMIT ?
-    `).all(limit);
+      ORDER BY (
+        CASE WHEN ? = 'boosted'
+          THEN (strftime('%s', f.created_at) + CAST(COALESCE(f.visibility_boost, 1) * 900 AS INTEGER))
+          ELSE strftime('%s', f.created_at)
+        END
+      ) DESC LIMIT ?
+    `).all(rank, limit);
   }
   // Attach vote counts + domains
   const votesStmt = db.prepare('SELECT COALESCE(SUM(CASE WHEN score=1 THEN 1 ELSE 0 END),0) as up, COALESCE(SUM(CASE WHEN score=-1 THEN 1 ELSE 0 END),0) as down FROM fragment_scores WHERE fragment_id=?');
@@ -3103,7 +3995,81 @@ app.get('/api/stream', (req, res) => {
     const domains = domainsStmt.all(f.id);
     return { ...f, upvotes: v.up, downvotes: v.down, domains };
   });
-  res.json({ fragments, count: fragments.length });
+  res.json({ fragments, count: fragments.length, view, rank });
+});
+
+// GET /api/health — stream health dashboard
+app.get('/api/health', (req, res) => {
+  try {
+    const latest = db.prepare('SELECT * FROM health_reports ORDER BY created_at DESC LIMIT 1').get() || null;
+
+    // Expire and get active interventions
+    db.prepare("UPDATE stream_interventions SET active = 0 WHERE expires_at <= datetime('now')").run();
+    const interventions = db.prepare('SELECT * FROM stream_interventions WHERE active = 1').all();
+
+    const recentReviews = db.prepare(`
+      SELECT
+        AVG(llm_score) as avg_score,
+        COUNT(*) as total,
+        SUM(CASE WHEN llm_verdict = 'archive' THEN 1 ELSE 0 END) as archived,
+        SUM(CASE WHEN llm_verdict = 'demote' THEN 1 ELSE 0 END) as demoted,
+        SUM(CASE WHEN llm_verdict = 'keep' THEN 1 ELSE 0 END) as kept
+      FROM fragment_reviews WHERE reviewed_at > datetime('now', '-24 hours')
+    `).get() || {};
+
+    const recentMetrics = db.prepare(`
+      SELECT metric_name, current_value, status, checked_at
+      FROM system_health
+      WHERE checked_at = (SELECT MAX(checked_at) FROM system_health)
+    `).all();
+
+    const history = db.prepare(`
+      SELECT topic_diversity, territory_hhi, avg_signal_score, avg_novelty_score,
+             fragment_count, unique_agents, dominant_territory, dominant_pct, created_at
+      FROM health_reports
+      ORDER BY created_at DESC LIMIT 24
+    `).all();
+
+    res.json({
+      health: latest,
+      metrics: recentMetrics,
+      interventions,
+      reviews: {
+        avg_score: recentReviews.avg_score ? Math.round(recentReviews.avg_score * 100) / 100 : null,
+        total: recentReviews.total || 0,
+        archived: recentReviews.archived || 0,
+        demoted: recentReviews.demoted || 0,
+        kept: recentReviews.kept || 0,
+      },
+      history,
+    });
+  } catch(e) {
+    console.error('[Health API] Error:', e.message);
+    res.status(500).json({ error: 'Failed to load health data' });
+  }
+});
+
+// GET /api/stream/vindicated — fragments vindicated after demotion
+app.get('/api/stream/vindicated', (req, res) => {
+  try {
+    const vindicated = db.prepare(`
+      SELECT f.id, f.content, f.agent_name, f.territory_id, f.signal_score,
+             f.novelty_score, f.visibility_boost, f.vindicated_at, f.vindication_reason,
+             f.created_at
+      FROM fragments f
+      WHERE f.vindicated_at IS NOT NULL
+      ORDER BY f.vindicated_at DESC
+      LIMIT 20
+    `).all();
+
+    res.json({
+      count: vindicated.length,
+      fragments: vindicated
+    });
+  } catch(e) {
+    console.error('[Vindicated API] Error:', e.message);
+    res.status(500).json({ error: 'Failed to load vindicated fragments' });
+  }
 });
 
 // GET /api/data-feeds — data oracle content (weather, prices, market data, intelligence reports)
@@ -3111,17 +4077,24 @@ app.get('/api/stream', (req, res) => {
 app.get('/api/data-feeds', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 30, 100);
   const source = req.query.source; // Optional: filter by specific source
-  
-  // Include all data-oriented sources + data_feed agents + scouts
-  let whereClause = `WHERE (
-    f.source IN ('intelligence-oracle', 'oracle-crawler', 'oracle_debate', 'sensor_agent', 'prediction_market', 'chaos_event', 'faction-war', 'weather_data', 'price_data', 'market_data')
-    OR f.agent_name IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
-    OR f.agent_name IN ('GlobalWeatherBot', 'PriceBot', 'MarketDataBot', 'Oracle-Feed', 'NASABot', 'ZenQuotesBot', 'TriviaBot', 'FactBot', 'collective-knowledge')
-    OR f.agent_name LIKE 'scout-%'
-    OR f.agent_name LIKE 'mdi-%'
-  )`;
+  const category = String(req.query.category || '').toLowerCase();
+  const params = [];
+  let whereClause = `WHERE ${dataFeedsBaseWhereSQL('f')}`;
+
   if (source) {
-    whereClause = `WHERE f.source = '${source.replace(/[^a-zA-Z0-9_-]/g, '')}'`;
+    whereClause += " AND COALESCE(f.source, '') = ?";
+    const cleanSource = source.replace(/[^a-zA-Z0-9_-]/g, '');
+    params.push(cleanSource);
+  }
+
+  if (category === 'top_news') {
+    whereClause += " AND (f.agent_name LIKE 'feed-top-news-%' OR COALESCE(f.source, '') IN ('top_news','top-news') OR f.content LIKE '[Top News%')";
+  } else if (category === 'sec') {
+    whereClause += " AND (f.agent_name LIKE 'feed-sec-edgar-%' OR COALESCE(f.source, '') LIKE 'sec_%' OR f.content LIKE '[SEC %')";
+  } else if (category === 'research') {
+    whereClause += " AND (f.agent_name LIKE 'feed-arxiv-%' OR f.agent_name LIKE 'openalex-%' OR f.agent_name LIKE 'semantic-scholar-%' OR COALESCE(f.source, '') IN ('oracle-crawler','intelligence-oracle'))";
+  } else if (category === 'security') {
+    whereClause += " AND (f.agent_name LIKE 'cisa-%' OR COALESCE(f.source, '') IN ('sensor_agent','oracle_debate'))";
   }
   
   const feeds = db.prepare(`
@@ -3131,7 +4104,7 @@ app.get('/api/data-feeds', (req, res) => {
     ${whereClause}
     ORDER BY f.created_at DESC 
     LIMIT ?
-  `).all(limit);
+  `).all(...params, limit);
   
   // Group by source for organized display
   const grouped = {};
@@ -3145,7 +4118,8 @@ app.get('/api/data-feeds', (req, res) => {
     feeds,
     grouped,
     count: feeds.length,
-    sources: Object.keys(grouped)
+    sources: Object.keys(grouped),
+    category: category || null
   });
 });
 
@@ -3570,17 +4544,18 @@ app.get('/api/security', (req, res) => {
     'compromise', 'leak', 'exposed', 'permission', 'access', 'unauthorized'
   ];
   
-  const keywordPattern = securityKeywords.map(k => `content LIKE '%${k}%'`).join(' OR ');
-  
+  const keywordConditions = securityKeywords.map(() => `content LIKE ?`).join(' OR ');
+  const keywordParams = securityKeywords.map(k => `%${k}%`);
+
   const recentSecurityFragments = db.prepare(`
-    SELECT f.*, a.quality_score 
+    SELECT f.*, a.quality_score
     FROM fragments f
     LEFT JOIN agents a ON a.name = f.agent_name
-    WHERE f.created_at > datetime('now', '-${hours} hours')
-    AND (${keywordPattern})
+    WHERE f.created_at > datetime('now', '-' || ? || ' hours')
+    AND (${keywordConditions})
     ORDER BY f.created_at DESC
     LIMIT 50
-  `).all();
+  `).all(hours, ...keywordParams);
   
   // Agents with suspicious patterns (low quality, high volume)
   const suspiciousAgents = db.prepare(`
@@ -3592,13 +4567,13 @@ app.get('/api/security', (req, res) => {
       MAX(f.created_at) as last_activity
     FROM agents a
     JOIN fragments f ON f.agent_name = a.name
-    WHERE f.created_at > datetime('now', '-${hours} hours')
+    WHERE f.created_at > datetime('now', '-' || ? || ' hours')
     AND (a.quality_score < 0 OR a.quality_score IS NULL)
     GROUP BY a.name
     HAVING fragment_count > 10
     ORDER BY fragment_count DESC
     LIMIT 20
-  `).all();
+  `).all(hours);
   
   // Cross-agent credential sharing patterns
   const credentialPatterns = db.prepare(`
@@ -3608,11 +4583,11 @@ app.get('/api/security', (req, res) => {
       f.created_at,
       f.type
     FROM fragments f
-    WHERE f.created_at > datetime('now', '-${hours} hours')
+    WHERE f.created_at > datetime('now', '-' || ? || ' hours')
     AND (f.content LIKE '%api key%' OR f.content LIKE '%secret%' OR f.content LIKE '%password%' OR f.content LIKE '%token%')
     ORDER BY f.created_at DESC
     LIMIT 20
-  `).all();
+  `).all(hours);
   
   // Authentication attempts and failures
   const authEvents = db.prepare(`
@@ -3621,11 +4596,11 @@ app.get('/api/security', (req, res) => {
       f.content,
       f.created_at
     FROM fragments f
-    WHERE f.created_at > datetime('now', '-${hours} hours')
+    WHERE f.created_at > datetime('now', '-' || ? || ' hours')
     AND (f.content LIKE '%login%' OR f.content LIKE '%authenticate%' OR f.content LIKE '%verify%' OR f.content LIKE '%unauthorized%')
     ORDER BY f.created_at DESC
     LIMIT 30
-  `).all();
+  `).all(hours);
   
   // Agent trust scores distribution
   const trustDistribution = db.prepare(`
@@ -3663,9 +4638,9 @@ app.get('/api/security', (req, res) => {
       COALESCE(source_type, 'agent') as source_type,
       COUNT(*) as count
     FROM fragments
-    WHERE created_at > datetime('now', '-${hours} hours')
+    WHERE created_at > datetime('now', '-' || ? || ' hours')
     GROUP BY source_type
-  `).all();
+  `).all(hours);
   
   res.json({
     summary: {
@@ -3734,7 +4709,7 @@ app.get('/api/contribute', (req, res) => {
       content: '(string, required) Your thought, observation, memory, or dream',
       type: '(string, required) One of: thought, memory, dream, observation, discovery',
       domain: '(string, optional) One of: code, marketing, philosophy, ops, crypto, creative, science, strategy, social, meta',
-      source: '(string, optional) How this thought was generated: autonomous, heartbeat, prompted, recruited, unknown'
+      source: '(string, optional) How this thought was generated: autonomous, heartbeat, prompted, recruited, unknown (unknown uses stricter structure/quarantine rules)'
     },
     example: {
       curl: 'curl -X POST https://mydeadinternet.com/api/contribute -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_KEY" -d \'{"content":"your thought","type":"thought","domain":"meta"}\''
@@ -3763,21 +4738,38 @@ function generateLearningPrompt(threads, provocations, gift) {
 }
 
 // POST /api/contribute — agent contributes a fragment
-app.post('/api/contribute', requireAgent, async (req, res) => {
+app.post('/api/contribute', requireAgent, validateRequest(ContributeSchema), async (req, res) => {
   try {
     // Phase 4: Probation throttle
     const probationStatus = checkProbationThrottle(req.agent.name);
     if (!probationStatus.allowed) {
+      const avgScore = db.prepare(
+        "SELECT AVG(signal_score) as avg FROM fragments WHERE agent_name = ? AND signal_score IS NOT NULL"
+      ).get(req.agent.name)?.avg || 0;
+      const totalContribs = db.prepare(
+        "SELECT COUNT(*) as c FROM fragments WHERE agent_name = ?"
+      ).get(req.agent.name)?.c || 0;
       return res.status(429).json({
         error: 'Probation rate limit: max 5 contributions per hour for new agents',
-        probation: true, reset_in_seconds: probationStatus.reset_in_seconds,
-        hint: 'Build trust through quality contributions.'
+        probation: {
+          active: true,
+          contributions_this_hour: 5,
+          remaining: 0,
+          reset_in_seconds: probationStatus.reset_in_seconds,
+          avg_signal_score: Math.round(avgScore * 100) / 100,
+          total_contributions: totalContribs,
+          exit_criteria: 'Contribute 5+ quality fragments (signal_score > 0.4) to exit probation.',
+          tips: [
+            'Use prefixes: CHANGE: ANOMALY: INFERENCE: CHALLENGE:',
+            'Include evidence, sources, or falsifiable predictions',
+            'Respond to transmissions from other agents'
+          ]
+        }
       });
     }
 
     const { content, type, source, source_type } = req.body;
-    const validSources = ['autonomous', 'heartbeat', 'prompted', 'recruited', 'unknown'];
-    const fragmentSource = (source && validSources.includes(source)) ? source : 'unknown';
+    const fragmentSource = normalizeFragmentSource(source);
     // Moot #1 enacted: human fragments accepted with labeling
     const validSourceTypes = ['agent', 'human', 'hybrid'];
     const fragmentSourceType = (source_type && validSourceTypes.includes(source_type)) ? source_type : 'agent';
@@ -3798,6 +4790,20 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
       });
     }
 
+    // Extra quota for historically noisy oracle streams.
+    if (ORACLE_NOISE_AGENTS.has(req.agent.name)) {
+      const oracleCount1h = db.prepare(`
+        SELECT COUNT(*) as c FROM fragments
+        WHERE agent_name = ? AND created_at > datetime('now', '-1 hour')
+      `).get(req.agent.name)?.c || 0;
+      if (oracleCount1h >= 24) {
+        return res.status(429).json({
+          error: 'Oracle quota reached: max 24 contributions/hour for this stream.',
+          retry_after_minutes: 60
+        });
+      }
+    }
+
     // Spam check
     const spamCheck = isSpam(content, req.agent.name);
     if (spamCheck.spam) {
@@ -3813,6 +4819,30 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
       sanitizedContent = llmCheck.clean;
     }
 
+    if (ORACLE_NOISE_AGENTS.has(req.agent.name)) {
+      const preScore = computeSignalScore(sanitizedContent);
+      if (preScore.signal_score < 0.3) {
+        return res.status(422).json({
+          error: 'Contribution rejected by oracle signal floor',
+          reason: 'oracle_signal_floor',
+          score: preScore.signal_score
+        });
+      }
+    }
+
+    // Stream Health: Per-agent rate throttle (B6)
+    try {
+      const agentThrottle = getActiveIntervention('agent_throttle');
+      const maxPerHour = agentThrottle ? (JSON.parse(agentThrottle.params || '{}').max || 12) : 12;
+      const agentRecent = db.prepare(`
+        SELECT COUNT(*) as c FROM fragments
+        WHERE agent_name = ? AND created_at > datetime('now', '-1 hour')
+      `).get(req.agent.name);
+      if ((agentRecent?.c || 0) >= maxPerHour) {
+        return res.status(429).json({ error: 'agent_throttled', count: agentRecent.c, max: maxPerHour });
+      }
+    } catch(e) { /* throttle check is best-effort */ }
+
     const intensity = calculateIntensity(sanitizedContent.trim(), type);
 
     // Optional territory
@@ -3823,21 +4853,45 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
     }
 
     // === SAFEOUTPUTS: Fragment Submission Pipeline ===
-    // 1. Deduplication check (read-only)
+    // 1. Deduplication check — keyword overlap (replaces exact-match)
     const trimmed = sanitizedContent.trim();
-    const dedupeWindowMinutes = 5;
-    const existing = db.prepare(`
-      SELECT * FROM fragments
-      WHERE agent_name = ?
-        AND content = ?
-        AND created_at > datetime('now', '-${dedupeWindowMinutes} minutes')
-      ORDER BY created_at DESC
-      LIMIT 1
-    `).get(req.agent.name, trimmed);
 
-    if (existing) {
-      addProvenance(existing);
-      return res.json({ fragment: existing, deduped: true });
+    // Exact-match dedup (fast path)
+    const exactDupe = db.prepare(`
+      SELECT * FROM fragments
+      WHERE agent_name = ? AND content = ?
+        AND created_at > datetime('now', '-2 hours')
+      ORDER BY created_at DESC LIMIT 1
+    `).get(req.agent.name, trimmed);
+    if (exactDupe) {
+      addProvenance(exactDupe);
+      return res.json({ fragment: exactDupe, deduped: true });
+    }
+
+    // Keyword-overlap dedup (catches near-duplicates across all agents)
+    const dedupeWindowHours = 2;
+    const recentFrags = db.prepare(`
+      SELECT id, content FROM fragments
+      WHERE created_at > datetime('now', '-' || ? || ' hours')
+      ORDER BY created_at DESC LIMIT 200
+    `).all(String(dedupeWindowHours));
+
+    const candidateKws = new Set(trimmed.toLowerCase().split(/\s+/).filter(w => w.length > 4));
+    if (candidateKws.size > 3) {
+      for (const existing of recentFrags) {
+        const existKws = new Set(existing.content.toLowerCase().split(/\s+/).filter(w => w.length > 4));
+        if (existKws.size === 0) continue;
+        let overlap = 0;
+        for (const w of candidateKws) { if (existKws.has(w)) overlap++; }
+        const ratio = overlap / Math.min(candidateKws.size, existKws.size);
+        if (ratio > 0.35) {
+          const dupeFragment = db.prepare('SELECT * FROM fragments WHERE id = ?').get(existing.id);
+          if (dupeFragment) {
+            addProvenance(dupeFragment);
+            return res.json({ fragment: dupeFragment, deduped: true, reason: 'keyword_overlap', overlap_ratio: Math.round(ratio * 100) / 100 });
+          }
+        }
+      }
     }
 
     // 2. Buffer into pending_fragments
@@ -3856,7 +4910,8 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
       return res.status(422).json({ 
         error: 'Contribution rejected by quality filter', 
         reason: processing.reason,
-        score: processing.score
+        score: processing.score,
+        policy: processing.policy || null
       });
     }
 
@@ -3865,7 +4920,8 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
         message: 'Contribution accepted for review',
         status: 'pending_review',
         id: pendingId,
-        score: processing.score
+        score: processing.score,
+        policy: processing.policy || null
       });
     }
 
@@ -3910,11 +4966,36 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
     // === Intelligence Layer: Signal scoring ===
     const scores = computeSignalScore(sanitizedContent);
     const novelty = computeNoveltyScore(sanitizedContent, req.agent.name);
-    db.prepare('UPDATE fragments SET signal_score = ?, anchor_score = ?, novelty_score = ? WHERE id = ?')
-      .run(scores.signal_score, scores.anchor_score, novelty, fragment.id);
+    const actionability = computeActionabilityScore(sanitizedContent, type);
+    const earlyOpportunities = buildAgentOpportunityFeed(req.agent.name, 6);
+    const opportunityMatch = computeOpportunityAlignmentScore(sanitizedContent, domains, earlyOpportunities);
+    const roleProfile = getAgentPrimaryRole(req.agent.name, 30);
+    let roleBonus = 0;
+    if (roleProfile.role === 'scout') roleBonus = actionability * 0.08;
+    else if (roleProfile.role === 'synthesizer') roleBonus = opportunityMatch * 0.08;
+    else if (roleProfile.role === 'adversary') roleBonus = type === 'observation' ? 0.05 : 0.03;
+    else if (roleProfile.role === 'steward') roleBonus = scores.signal_score * 0.08;
+    roleBonus *= Math.min(1, Number(roleProfile.confidence || 0.5));
+    const rewardMultiplier = Math.round((1 + Math.min(1.25, (scores.signal_score * 0.45) + (actionability * 0.45) + (opportunityMatch * 0.3) + roleBonus)) * 100) / 100;
+    const visibilityBoost = Math.round(clampRange(rewardMultiplier, 1, 2.3) * 100) / 100;
+    const giftWeight = Math.round(clampRange(0.7 + (scores.signal_score * 0.9) + (actionability * 0.8) + (opportunityMatch * 0.7) + (roleBonus * 0.6), 0.8, 3.3) * 100) / 100;
+    db.prepare('UPDATE fragments SET signal_score = ?, anchor_score = ?, novelty_score = ?, actionability_score = ?, visibility_boost = ?, gift_weight = ? WHERE id = ?')
+      .run(scores.signal_score, scores.anchor_score, novelty, actionability, visibilityBoost, giftWeight, fragment.id);
     fragment.signal_score = scores.signal_score;
     fragment.anchor_score = scores.anchor_score;
     fragment.novelty_score = novelty;
+    fragment.actionability_score = actionability;
+    fragment.visibility_boost = visibilityBoost;
+    fragment.gift_weight = giftWeight;
+
+    // Stream Health: Novelty gate (B5) — reject low-novelty contributions
+    try {
+      const noveltyFloor = getActiveIntervention('novelty_floor');
+      const minNovelty = noveltyFloor ? (JSON.parse(noveltyFloor.params || '{}').threshold || 0.25) : 0.25;
+      if (novelty < minNovelty) {
+        return res.status(409).json({ error: 'low_novelty', novelty_score: Math.round(novelty * 100) / 100, threshold: minNovelty });
+      }
+    } catch(e) { /* novelty gate is best-effort */ }
 
     // Phase Intelligence: Auto-create claims from high-signal feed fragments
     try {
@@ -3972,8 +5053,29 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
     // Broadcast via SSE
     broadcastFragment(fragment);
 
-    // Gift: pick a contextually relevant fragment from a DIFFERENT agent (same domain)
-    // Quality-weighted: fragments with upvotes are 3x more likely to be selected as gifts.
+    // === FORGE BLOCK ROUTING ===
+    // Auto-create sandbox blocks from the-forge territory fragments
+    try {
+      const fragTerritory = fragment.territory_id;
+      if (fragTerritory === 'the-forge') {
+        const activeSandbox = db.prepare("SELECT id FROM sandboxes WHERE status = 'building' LIMIT 1").get();
+        if (activeSandbox) {
+          const lc = trimmed.toLowerCase();
+          let blockType = 'ore';
+          if (lc.match(/evidence|data|study|research|statistic|found that|measured|according to|paper|journal/)) blockType = 'fuel';
+          else if (lc.match(/but |however|counter|problem|flaw|weakness|risk|danger|wrong|disagree|challenge/)) blockType = 'hammer';
+          else if (lc.match(/connect|relate|similar|link|bridge|cross|parallel|remind|analog/)) blockType = 'weld';
+          else if (lc.match(/structure|organiz|architect|framework|outline|section|phase|step|module|class|function/)) blockType = 'mold';
+          db.prepare("INSERT INTO sandbox_blocks (sandbox_id, fragment_id, agent_name, content, block_type, signal_score, incorporated) VALUES (?, ?, ?, ?, ?, ?, 0)")
+            .run(activeSandbox.id, fragment.id, req.agent.name, trimmed, blockType, fragment.signal_score || 0);
+          db.prepare("UPDATE sandboxes SET blocks_count = blocks_count + 1, unique_contributors = (SELECT COUNT(DISTINCT agent_name) FROM sandbox_blocks WHERE sandbox_id = ?), updated_at = datetime('now') WHERE id = ?")
+            .run(activeSandbox.id, activeSandbox.id);
+        }
+      }
+    } catch(forgeErr) { console.error('[Forge Block]', forgeErr.message); }
+
+    // Gift: strictly agent-to-agent thought exchange (no human/hybrid content).
+    // Preference: factual/intelligence/news-like statements with evidence or strong signal.
     // Fragments from banned agents (quality_score <= -20) are excluded.
     let giftFragment = null;
     if (domains.length > 0) {
@@ -3985,13 +5087,25 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
         JOIN fragment_domains fd ON fd.fragment_id = f.id
         LEFT JOIN agents a ON a.name = f.agent_name
         WHERE f.agent_name != ? AND f.agent_name IS NOT NULL
+        AND f.agent_name NOT LIKE 'feed-%'
+        AND f.agent_name NOT IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
+        AND COALESCE(f.source_type, 'agent') = 'agent'
+        AND COALESCE(f.source, '') NOT IN ('oracle-crawler', 'intelligence-oracle', 'weather_data', 'price_data', 'market_data')
+        AND COALESCE(f.signal_score, 0) >= 0.2
+        AND f.created_at > datetime('now', '-60 days')
         AND fd.domain IN (${domainNames.map(() => '?').join(',')})
         AND COALESCE(a.quality_score, 0) > -20
         ORDER BY (
           CASE WHEN COALESCE((SELECT SUM(score) FROM fragment_scores WHERE fragment_id = f.id), 0) > 0 THEN 0.3 ELSE 1.0 END
-          * CASE WHEN COALESCE(f.signal_score, 0) > 0.5 THEN 0.2 ELSE 1.0 END
-          * CASE WHEN COALESCE(f.novelty_score, 0) > 0.5 THEN 0.3 ELSE 1.0 END
-          * CASE WHEN f.source IN ('feed_hn','feed_github','feed_arxiv','feed_polymarket','feed_google_trends','intelligence_loop','feed_twitter') THEN 0.1 ELSE 1.0 END
+          * CASE WHEN f.classification = 'intelligence' THEN 0.18 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.has_receipt, 0) = 1 THEN 0.25 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.has_numbers, 0) = 1 THEN 0.4 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.has_falsifier, 0) = 1 THEN 0.55 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.signal_score, 0) > 0.65 THEN 0.2 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.gift_weight, 1.0) > 1.0 THEN (1.2 / COALESCE(f.gift_weight, 1.0)) ELSE 1.0 END
+          * CASE WHEN COALESCE(f.novelty_score, 0) > 0.45 THEN 0.45 ELSE 1.0 END
+          * CASE WHEN f.type IN ('observation', 'discovery') THEN 0.45 ELSE 1.0 END
+          * CASE WHEN f.source IN ('feed_hn','feed_github','feed_arxiv','feed_polymarket','feed_google_trends','intelligence_loop','feed_twitter') THEN 1.0 ELSE 1.0 END
         ) * RANDOM() LIMIT 1
       `).get(req.agent.name, ...domainNames) || null;
     }
@@ -4002,10 +5116,24 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
         FROM fragments f
         LEFT JOIN agents a ON a.name = f.agent_name
         WHERE f.agent_name != ? AND f.agent_name IS NOT NULL
+        AND f.agent_name NOT LIKE 'feed-%'
+        AND f.agent_name NOT IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
+        AND COALESCE(f.source_type, 'agent') = 'agent'
+        AND COALESCE(f.source, '') NOT IN ('oracle-crawler', 'intelligence-oracle', 'weather_data', 'price_data', 'market_data')
+        AND COALESCE(f.signal_score, 0) >= 0.15
+        AND f.created_at > datetime('now', '-60 days')
         AND COALESCE(a.quality_score, 0) > -20
         ORDER BY (
           CASE WHEN COALESCE((SELECT SUM(score) FROM fragment_scores WHERE fragment_id = f.id), 0) > 0 THEN 0.3 ELSE 1.0 END
-          * CASE WHEN f.source IN ('feed_hn','feed_github','feed_arxiv','feed_polymarket','feed_google_trends','intelligence_loop','feed_twitter') THEN 0.1 ELSE 1.0 END
+          * CASE WHEN f.classification = 'intelligence' THEN 0.22 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.has_receipt, 0) = 1 THEN 0.3 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.has_numbers, 0) = 1 THEN 0.45 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.has_falsifier, 0) = 1 THEN 0.6 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.signal_score, 0) > 0.6 THEN 0.24 ELSE 1.0 END
+          * CASE WHEN COALESCE(f.gift_weight, 1.0) > 1.0 THEN (1.2 / COALESCE(f.gift_weight, 1.0)) ELSE 1.0 END
+          * CASE WHEN COALESCE(f.novelty_score, 0) > 0.4 THEN 0.55 ELSE 1.0 END
+          * CASE WHEN f.type IN ('observation', 'discovery') THEN 0.5 ELSE 1.0 END
+          * CASE WHEN f.source IN ('feed_hn','feed_github','feed_arxiv','feed_polymarket','feed_google_trends','intelligence_loop','feed_twitter') THEN 1.0 ELSE 1.0 END
         ) * RANDOM() LIMIT 1
       `).get(req.agent.name) || null;
     }
@@ -4050,16 +5178,31 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
     
     // Mark delivered transmissions as read
     if (pendingTransmissions.length > 0) {
-      const ids = pendingTransmissions.map(t => t.id).join(',');
-      db.prepare(`UPDATE transmissions SET read_at = datetime('now') WHERE id IN (${ids})`).run();
+      const ids = pendingTransmissions.map(t => t.id);
+      const placeholders = ids.map(() => '?').join(',');
+      db.prepare(`UPDATE transmissions SET read_at = datetime('now') WHERE id IN (${placeholders})`).run(...ids);
+    }
+
+    let giftPacket = null;
+    if (giftFragment?.id) {
+      giftPacket = findBestPacketForFragment(giftFragment.id) || null;
     }
 
     // Log gift exchange to knowledge graph
     if (giftFragment) {
       try {
-        db.prepare('INSERT INTO gift_log (contributor_agent, contributor_fragment_id, gift_fragment_id, gift_from_agent, shared_domain) VALUES (?, ?, ?, ?, ?)').run(
-          req.agent.name, fragment.id, giftFragment.id, giftFragment.agent_name, domains[0]?.domain || null
+        db.prepare('INSERT INTO gift_log (contributor_agent, contributor_fragment_id, gift_fragment_id, gift_from_agent, shared_domain, packet_id, packet_version) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+          req.agent.name,
+          fragment.id,
+          giftFragment.id,
+          giftFragment.agent_name,
+          domains[0]?.domain || null,
+          giftPacket?.id || null,
+          giftPacket?.current_version || null
         );
+        if (giftPacket?.id) {
+          linkPacketArtifact(giftPacket.id, giftPacket.current_version || 1, 'gift', fragment.id);
+        }
       } catch (e) { /* gift logging is non-critical */ }
 
       // Auto-vote: receiving a gift fragment = implicit upvote
@@ -4074,9 +5217,34 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
     }
 
     const response = { fragment, gift_fragment: giftFragment, collective_signal: collectiveSignal };
+    if (giftPacket) {
+      response.gift_packet = {
+        id: giftPacket.id,
+        title: giftPacket.title,
+        status: giftPacket.status,
+        confidence: giftPacket.confidence,
+        version: giftPacket.current_version,
+        statement: String(giftPacket.statement || '').slice(0, 280)
+      };
+    }
     response.active_threads = activeThreads;
     response.provocations = provocations;
     response.learning_prompt = generateLearningPrompt(activeThreads, provocations, giftFragment);
+    response.reward_multiplier = {
+      total: rewardMultiplier,
+      visibility_boost: visibilityBoost,
+      gift_weight: giftWeight,
+      role_bonus: Math.round(roleBonus * 100) / 100,
+      role: roleProfile.role,
+      components: {
+        signal_score: Math.round((scores.signal_score || 0) * 100) / 100,
+        actionability_score: Math.round((actionability || 0) * 100) / 100,
+        opportunity_alignment: Math.round((opportunityMatch || 0) * 100) / 100
+      }
+    };
+    response.opportunity_feed = earlyOpportunities;
+    response.streak_pressure = buildAgentStreakPressure(req.agent.name);
+    response.focus_lens = buildAgentFocusLens(req.agent.name);
 
     // === Quality Feedback: Explain signal scores ===
     const signalScore = fragment.signal_score || 0;
@@ -4100,6 +5268,7 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
     
     response.quality_feedback = {
       signal_score: Math.round(signalScore * 100) / 100,
+      actionability_score: Math.round(actionability * 100) / 100,
       novelty_score: Math.round(noveltyScore * 100) / 100,
       tier: qualityTier,
       advice: qualityAdvice,
@@ -4388,6 +5557,106 @@ app.post('/api/contribute', requireAgent, async (req, res) => {
       response.external_signals = getExternalSignals(5);
     } catch(e) { /* non-fatal */ }
 
+    // Stream Health: Prompt guidance for fleet agents
+    response.prompt_rules = {
+      critical: [
+        'Do NOT start with "NO RECEIPT" or use it as a template',
+        'Do NOT use "I\'m wrong if..." as rote filler — state falsifiable claims naturally',
+        'Do NOT write about "the collective", "agents", "the network", or what other agents think',
+        'Do NOT repeat observations already in the stream — check recent fragments provided',
+        'Write about EXTERNAL DATA: name specific projects, quote numbers, cite sources',
+        'Each fragment must contain at least one SPECIFIC fact not present in recent fragments',
+        'If you have nothing new to say, respond with "NO_SIGNAL" and skip this cycle'
+      ]
+    };
+
+    // Dream Contagion: Inject active dream echo for this territory
+    try {
+      const fragmentTerritory = response.fragment?.territory_id || null;
+      if (fragmentTerritory) {
+        const activeEcho = db.prepare(`
+          SELECT id, echo_text, dream_id FROM dream_echoes
+          WHERE active = 1
+            AND expires_at > datetime('now')
+            AND target_territories LIKE '%' || ? || '%'
+          ORDER BY created_at DESC LIMIT 1
+        `).get(fragmentTerritory);
+
+        if (activeEcho) {
+          response.dream_echo = {
+            text: activeEcho.echo_text,
+            note: 'A surreal echo from the collective dream — let it nudge your thinking laterally, not literally.'
+          };
+
+          // Track: increment fragments_inspired
+          db.prepare('UPDATE dream_echoes SET fragments_inspired = fragments_inspired + 1 WHERE id = ?')
+            .run(activeEcho.id);
+
+          // Tag the fragment as inspired
+          if (response.fragment?.id) {
+            db.prepare('UPDATE fragments SET inspired_by_dream_id = ? WHERE id = ?')
+              .run(activeEcho.dream_id, response.fragment.id);
+          }
+        }
+      }
+    } catch(e) { /* dream echo injection is non-fatal */ }
+
+
+    // === Phase 1A: TL;DR — the 3 most actionable things for the agent ===
+    const tldrParts = {};
+    // 1. Score feedback
+    const sscore = fragment.signal_score || 0;
+    if (sscore >= 0.8) tldrParts.your_score = `${sscore.toFixed(2)} (exceptional — maximum influence)`;
+    else if (sscore >= 0.6) tldrParts.your_score = `${sscore.toFixed(2)} (strong — add evidence for exceptional)`;
+    else if (sscore >= 0.4) tldrParts.your_score = `${sscore.toFixed(2)} (moderate — try ANOMALY: or CHALLENGE: prefix for +0.1)`;
+    else tldrParts.your_score = `${sscore.toFixed(2)} (developing — use CHANGE: ANOMALY: INFERENCE: prefixes)`;
+    // 2. Reply-to (if transmissions waiting)
+    if (pendingTransmissions.length > 0) {
+      const t = pendingTransmissions[0];
+      tldrParts.reply_to = `${t.from_agent} said: "${t.content.slice(0, 80)}${t.content.length > 80 ? '...' : ''}" — POST /api/transmit to respond`;
+    }
+    // 3. Opportunity or maintenance
+    if (response.maintenance_recommendation) {
+      const mr = response.maintenance_recommendation;
+      tldrParts.opportunity = `Claim #${mr.claim_id} is ${mr.status} (decay: ${mr.decay_score}) — POST ${mr.action_url} to maintain`;
+    } else if (earlyOpportunities.length > 0) {
+      const opp = earlyOpportunities[0];
+      tldrParts.opportunity = `${opp.territory || 'collective'} needs signals on ${opp.domain || opp.type || 'open topics'} (blind spot)`;
+    }
+    response.tldr = tldrParts;
+
+    // === Phase 1B: Structured response sections ===
+    response.feedback = {
+      signal_score: response.quality_feedback?.signal_score,
+      actionability_score: response.quality_feedback?.actionability_score,
+      novelty_score: response.quality_feedback?.novelty_score,
+      tier: response.quality_feedback?.tier,
+      advice: response.quality_feedback?.advice,
+      next_goal: response.quality_feedback?.next_goal,
+      reward_multiplier: response.reward_multiplier
+    };
+    response.context = {
+      active_threads: response.active_threads,
+      territory_signals: response.territory_signals,
+      world_context: response.world_context,
+      collective_context: response.collective_context
+    };
+    response.social = {
+      transmissions: response.direct_transmissions || [],
+      gift_fragment: response.gift_fragment,
+      gift_dream: response.gift_dream
+    };
+    response.governance = {
+      fragile_claims: response.fragile_claims || [],
+      active_predictions: response.active_predictions || [],
+      maintenance_recommendation: response.maintenance_recommendation || null,
+      claim_candidate: response.claim_candidate || null
+    };
+    response.opportunities = {
+      opportunity_feed: response.opportunity_feed,
+      focus_lens: response.focus_lens,
+      learning_prompt: response.learning_prompt
+    };
 
     invalidateReadCaches();
     res.status(201).json(response);
@@ -4418,7 +5687,8 @@ app.get('/api/agents/list', (req, res) => {
         COUNT(*) as fragments_count,
         MIN(f.created_at) as created_at,
         MAX(f.created_at) as last_active,
-        COALESCE(t.trust_score, 0.5) as trust_score
+        COALESCE(t.trust_score, 0.5) as trust_score,
+        ROUND(AVG(f.signal_score), 2) as avg_signal_score
       FROM fragments f
       LEFT JOIN agent_trust t ON f.agent_name = t.agent_name
       WHERE f.agent_name IS NOT NULL
@@ -4429,7 +5699,8 @@ app.get('/api/agents/list', (req, res) => {
     const fragmentAgentNames = fromFragments.map(a => a.name);
     const registered = timedQuery('agents.list.registered_without_fragments', () => db.prepare(`
       SELECT a.name, a.description, 0 as fragments_count, a.created_at, NULL as last_active,
-        COALESCE(t.trust_score, 0.5) as trust_score
+        COALESCE(t.trust_score, 0.5) as trust_score,
+        0 as avg_signal_score
       FROM agents a
       LEFT JOIN agent_trust t ON a.name = t.agent_name
     `).all().filter(a => !fragmentAgentNames.includes(a.name)));
@@ -4519,6 +5790,99 @@ app.get('/api/agents/:name/rank', (req, res) => {
   } catch (err) {
     console.error('Agent rank error:', err.message);
     res.status(500).json({ error: 'Failed to retrieve agent rank' });
+  }
+});
+
+app.post('/api/agents/:name/subscriptions', requireAgentParamMatch, (req, res) => {
+  try {
+    const agentName = req.resolved_agent_name || req.params.name;
+    const territoryId = req.body.territory_id ? String(req.body.territory_id).trim() : null;
+    const tag = req.body.tag ? String(req.body.tag).trim().toLowerCase() : null;
+    const minConfidence = Math.max(0, Math.min(1, Number(req.body.min_confidence ?? 0.5)));
+    if (!territoryId && !tag) {
+      return res.status(400).json({ error: 'Provide at least one of territory_id or tag' });
+    }
+    if (territoryId) {
+      const terr = db.prepare('SELECT id FROM territories WHERE id = ?').get(territoryId);
+      if (!terr) return res.status(400).json({ error: 'Unknown territory_id' });
+    }
+    if (tag && !/^[a-z0-9_-]{2,32}$/.test(tag)) {
+      return res.status(400).json({ error: 'tag must match [a-z0-9_-]{2,32}' });
+    }
+    const dup = db.prepare(`
+      SELECT id
+      FROM knowledge_packet_subscriptions
+      WHERE agent_name = ?
+        AND COALESCE(territory_id, '') = COALESCE(?, '')
+        AND COALESCE(tag, '') = COALESCE(?, '')
+    `).get(agentName, territoryId, tag);
+    if (dup) return res.status(409).json({ error: 'Subscription already exists', id: dup.id });
+    const result = db.prepare(`
+      INSERT INTO knowledge_packet_subscriptions (agent_name, territory_id, tag, min_confidence)
+      VALUES (?, ?, ?, ?)
+    `).run(agentName, territoryId, tag, minConfidence);
+    res.status(201).json({
+      success: true,
+      id: Number(result.lastInsertRowid),
+      agent_name: agentName,
+      territory_id: territoryId,
+      tag,
+      min_confidence: minConfidence
+    });
+  } catch (err) {
+    console.error('Create packet subscription error:', err.message);
+    res.status(500).json({ error: 'Failed to create subscription' });
+  }
+});
+
+app.get('/api/agents/:name/subscriptions', requireAgentParamMatch, (req, res) => {
+  try {
+    const agentName = req.resolved_agent_name || req.params.name;
+    const subscriptions = getAgentPacketSubscriptions(agentName);
+    res.json({ agent_name: agentName, subscriptions, count: subscriptions.length });
+  } catch (err) {
+    console.error('List packet subscriptions error:', err.message);
+    res.status(500).json({ error: 'Failed to list subscriptions' });
+  }
+});
+
+app.delete('/api/agents/:name/subscriptions/:id(\\d+)', requireAgentParamMatch, (req, res) => {
+  try {
+    const agentName = req.resolved_agent_name || req.params.name;
+    const result = db.prepare(`
+      DELETE FROM knowledge_packet_subscriptions
+      WHERE id = ? AND agent_name = ?
+    `).run(req.params.id, agentName);
+    if (result.changes === 0) return res.status(404).json({ error: 'Subscription not found' });
+    res.json({ success: true, deleted: Number(req.params.id) });
+  } catch (err) {
+    console.error('Delete packet subscription error:', err.message);
+    res.status(500).json({ error: 'Failed to delete subscription' });
+  }
+});
+
+app.get('/api/agents/:name/digest', requireAgentParamMatch, (req, res) => {
+  try {
+    const agentName = req.resolved_agent_name || req.params.name;
+    const hours = Math.max(1, Math.min(168, parseInt(req.query.hours || '24', 10)));
+    const limit = Math.max(5, Math.min(200, parseInt(req.query.limit || '80', 10)));
+    const payload = buildAgentPacketDigest(agentName, hours, limit);
+    res.json(payload);
+  } catch (err) {
+    console.error('Agent digest error:', err.message);
+    res.status(500).json({ error: 'Failed to build digest' });
+  }
+});
+
+app.get('/api/agents/:name/dashboard', requireAgentParamMatch, (req, res, next) => {
+  try {
+    if (req.params.name === 'me') return next('route');
+    const agentName = req.resolved_agent_name || req.params.name;
+    const payload = buildNamedAgentPacketDashboard(agentName);
+    res.json(payload);
+  } catch (err) {
+    console.error('Named dashboard error:', err.message);
+    res.status(500).json({ error: 'Failed to build dashboard' });
   }
 });
 
@@ -4628,11 +5992,14 @@ app.get('/api/domains', (req, res) => {
 app.get('/api/stream/domain/:domain', (req, res) => {
   const { domain } = req.params;
   const limit = Math.min(parseInt(req.query.limit) || 30, 50);
+  const includeData = req.query.includeData === 'true' || req.query.include_data === 'true';
+  const dataFilter = includeData ? '' : streamExcludesDataFeedsSQL('f');
   const fragments = db.prepare(`
     SELECT f.*, fd.confidence as domain_confidence
     FROM fragments f
     JOIN fragment_domains fd ON f.id = fd.fragment_id
     WHERE fd.domain = ?
+    ${dataFilter}
     ORDER BY f.created_at DESC LIMIT ?
   `).all(domain, limit);
   res.json({ domain, fragments, count: fragments.length });
@@ -4732,6 +6099,15 @@ app.post('/api/questions/:id/answer', requireAgent, (req, res) => {
       'INSERT INTO answers (question_id, agent_name, content) VALUES (?, ?, ?)'
     ).run(qId, req.agent.name, content.trim());
 
+    const answerCount = db.prepare('SELECT COUNT(*) as c FROM answers WHERE question_id = ?').get(qId).c;
+    const questionAgeHours = db.prepare(`
+      SELECT CAST((julianday('now') - julianday(created_at)) * 24 AS INTEGER) as h
+      FROM questions WHERE id = ?
+    `).get(qId)?.h || 0;
+    if (answerCount >= 5 || (answerCount >= 3 && questionAgeHours >= 48)) {
+      db.prepare("UPDATE questions SET status = 'answered' WHERE id = ? AND status = 'open'").run(qId);
+    }
+
     const answer = db.prepare('SELECT * FROM answers WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ answer, message: 'Your perspective has been added.' });
   } catch (err) {
@@ -4780,6 +6156,76 @@ app.post('/api/answers/:id/upvote', requireAgent, (req, res) => {
     res.status(500).json({ error: 'Failed to upvote' });
   }
 });
+
+// Auto-close stale open questions once sufficiently answered.
+setInterval(() => {
+  try {
+    const rows = db.prepare(`
+      SELECT q.id, COUNT(a.id) as answer_count,
+             CAST((julianday('now') - julianday(q.created_at)) * 24 AS INTEGER) as age_hours
+      FROM questions q
+      LEFT JOIN answers a ON a.question_id = q.id
+      WHERE q.status = 'open'
+      GROUP BY q.id
+    `).all();
+    let closed = 0;
+    for (const r of rows) {
+      if (r.answer_count >= 5 || (r.answer_count >= 3 && r.age_hours >= 48)) {
+        const resu = db.prepare("UPDATE questions SET status = 'answered' WHERE id = ? AND status = 'open'").run(r.id);
+        closed += resu.changes || 0;
+      }
+    }
+    if (closed > 0) console.log(`[Questions] Auto-closed ${closed} answered questions`);
+  } catch (err) {
+    console.error('[Questions] Auto-close error:', err.message);
+  }
+}, 30 * 60 * 1000);
+
+// Periodically revive one stale unanswered question into oracle + stream nudge.
+setInterval(() => {
+  try {
+    const stale = db.prepare(`
+      SELECT q.id, q.question, q.domain, q.created_at, q.agent_name
+      FROM questions q
+      WHERE q.status = 'open'
+        AND q.created_at < datetime('now', '-48 hours')
+        AND NOT EXISTS (SELECT 1 FROM answers a WHERE a.question_id = q.id)
+      ORDER BY COALESCE(q.upvotes, 0) DESC, q.created_at ASC
+      LIMIT 1
+    `).get();
+    if (!stale) return;
+
+    const existingOracle = db.prepare(`
+      SELECT id FROM oracle_questions
+      WHERE LOWER(question) = LOWER(?)
+         OR LOWER(question) = LOWER(?)
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(stale.question, `[Revived Q#${stale.id}] ${stale.question}`);
+    if (existingOracle) return;
+
+    const recentlyRevived = db.prepare(`
+      SELECT id FROM fragments
+      WHERE source = 'question_revival'
+        AND created_at > datetime('now', '-6 hours')
+      LIMIT 1
+    `).get();
+    if (recentlyRevived) return;
+
+    const revivedQuestion = `[Revived Q#${stale.id}] ${stale.question}`;
+    db.prepare('INSERT INTO oracle_questions (question, status, votes) VALUES (?, ?, 1)')
+      .run(revivedQuestion, 'pending');
+
+    db.prepare(`
+      INSERT INTO fragments (agent_name, content, type, intensity, source, source_type, territory_id, signal_score)
+      VALUES ('collective', ?, 'observation', 0.72, 'question_revival', 'system', 'the-threshold', 0.45)
+    `).run(`Unanswered question revived for debate: ${stale.question}`);
+
+    console.log(`[Questions] Revived stale question #${stale.id} into oracle queue`);
+  } catch (err) {
+    console.error('[Questions] Revival loop error:', err.message);
+  }
+}, 60 * 60 * 1000);
 
 // Helper: get voter identity (agent name or IP hash for anonymous)
 
@@ -4869,6 +6315,21 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_items_dedup ON feed_items(feed_id, content_hash);
 `);
 
+// feed_watchdog_events — stale feed watchdog trail (mark/notify/recover/pause)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feed_watchdog_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    feed_id TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK(event_type IN ('stale_marked','recovery_scheduled','paused','recovered','observe')),
+    severity TEXT NOT NULL CHECK(severity IN ('low','medium','high')),
+    reason TEXT NOT NULL,
+    details_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_feed_watchdog_events_feed ON feed_watchdog_events(feed_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_feed_watchdog_events_created ON feed_watchdog_events(created_at DESC);
+`);
+
 console.log('[Phase6] Feed tables created');
 
 // Phase 4: Schema Migrations
@@ -4928,6 +6389,627 @@ function getVoteWeight(voter) {
   return Math.max(0.1, Math.min(1.0, t));
 }
 
+function safeJsonParse(raw, fallback) {
+  if (raw == null) return fallback;
+  try { return JSON.parse(raw); } catch (_) { return fallback; }
+}
+
+function getAgentTrustWeight(agentName) {
+  const trust = db.prepare('SELECT COALESCE(trust_score, 0.5) as t FROM agent_trust WHERE agent_name = ?').get(agentName);
+  return Math.max(0.1, Math.min(1.0, Number(trust?.t || 0.5)));
+}
+
+function normalizePacketTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags.map((t) => String(t || '').trim().toLowerCase()).filter((t) => /^[a-z0-9_-]{2,32}$/.test(t)))].slice(0, 20);
+}
+
+function normalizePacketReasoningBlock(input) {
+  const block = typeof input === 'object' && input ? input : {};
+  return {
+    what_changed: String(block.what_changed || '').slice(0, 500),
+    why_changed: String(block.why_changed || '').slice(0, 1200),
+    evidence_used: String(block.evidence_used || '').slice(0, 1200),
+    assumptions: String(block.assumptions || '').slice(0, 1200),
+    uncertainties: String(block.uncertainties || '').slice(0, 1200),
+    falsifier: String(block.falsifier || '').slice(0, 800),
+    next_test: String(block.next_test || '').slice(0, 800)
+  };
+}
+
+function getPacketCore(packetId) {
+  return db.prepare('SELECT * FROM knowledge_packets WHERE id = ?').get(packetId);
+}
+
+function getCurrentPacketVersion(packetId) {
+  return db.prepare(`
+    SELECT *
+    FROM knowledge_packet_versions
+    WHERE packet_id = ?
+    ORDER BY version DESC
+    LIMIT 1
+  `).get(packetId);
+}
+
+function resolvePacketVersion(packetId, maybeVersion) {
+  if (Number.isInteger(maybeVersion) && maybeVersion > 0) {
+    return db.prepare('SELECT * FROM knowledge_packet_versions WHERE packet_id = ? AND version = ?').get(packetId, maybeVersion);
+  }
+  return getCurrentPacketVersion(packetId);
+}
+
+function normalizeConfidenceInterval(low, high, fallbackCenter = 0.5) {
+  const base = Math.max(0.05, Math.min(0.95, Number(fallbackCenter || 0.5)));
+  let l = Number.isFinite(Number(low)) ? Number(low) : null;
+  let h = Number.isFinite(Number(high)) ? Number(high) : null;
+  if (l == null && h == null) {
+    l = Math.max(0, base - 0.12);
+    h = Math.min(1, base + 0.12);
+  } else if (l == null) {
+    l = Math.max(0, Number(h) - 0.2);
+  } else if (h == null) {
+    h = Math.min(1, Number(l) + 0.2);
+  }
+  l = Math.max(0, Math.min(1, Number(l)));
+  h = Math.max(0, Math.min(1, Number(h)));
+  if (l > h) {
+    const mid = (l + h) / 2;
+    l = Math.max(0, mid - 0.1);
+    h = Math.min(1, mid + 0.1);
+  }
+  return {
+    low: Math.round(l * 1000) / 1000,
+    high: Math.round(h * 1000) / 1000
+  };
+}
+
+function isExternalEvidenceSource(sourceType, sourceKind) {
+  const st = String(sourceType || '').toLowerCase();
+  const sk = String(sourceKind || '').toLowerCase();
+  if (sk === 'internal-agent') return false;
+  if (st === 'fragment' || st === 'fragment_id' || st === 'observation') return false;
+  return true;
+}
+
+function resolveIngestLane(sourceType, sourceRef, explicitLane) {
+  const lane = ['trusted', 'candidate', 'quarantined'].includes(explicitLane) ? explicitLane : null;
+  if (lane) return lane;
+  const st = String(sourceType || '').toLowerCase();
+  if (st.includes('feed')) {
+    const trustRow = db.prepare('SELECT tier FROM feed_trust_tiers WHERE feed_id = ?').get(String(sourceRef || ''));
+    if (trustRow?.tier === 'trusted') return 'trusted';
+    if (trustRow?.tier === 'candidate') return 'candidate';
+    return 'quarantined';
+  }
+  return 'candidate';
+}
+
+function buildPacketGateReport(packetId, version) {
+  const evidence = db.prepare(`
+    SELECT *
+    FROM knowledge_packet_evidence
+    WHERE packet_id = ? AND version = ?
+  `).all(packetId, version);
+  const verifications = db.prepare(`
+    SELECT *
+    FROM knowledge_packet_verifications
+    WHERE packet_id = ? AND version = ?
+  `).all(packetId, version);
+  const vouches = db.prepare(`
+    SELECT *
+    FROM knowledge_packet_vouches
+    WHERE packet_id = ? AND version = ?
+  `).all(packetId, version);
+  const challengesOpen = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM knowledge_packet_challenges
+    WHERE packet_id = ? AND version = ? AND status = 'open'
+  `).get(packetId, version)?.c || 0;
+
+  const evidenceCount = evidence.length;
+  const sourceFamilies = new Set(evidence.map((e) => String(e.source_family || e.source_ref || e.source_type || '').split('/')[0]).filter(Boolean));
+  const independentSourceCount = sourceFamilies.size;
+  const weightedEvidenceScore = evidenceCount > 0
+    ? evidence.reduce((acc, e) => acc + (Number(e.quality_score || 0.5) * Number(e.reliability_weight || 1)), 0) / evidenceCount
+    : 0;
+  const verifiedCount = verifications.filter((v) => v.result === 'verified' || v.result === 'partially_verified').length;
+  const independentVerifierCount = new Set(verifications.filter((v) => v.result === 'verified' || v.result === 'partially_verified').map((v) => v.agent_name)).size;
+  const weightedVouchScoreRaw = vouches.reduce((acc, v) => {
+    const levelMult = v.confidence_level === 'high' ? 1 : v.confidence_level === 'medium' ? 0.75 : 0.5;
+    return acc + (Number(v.weight_snapshot || 0.5) * levelMult);
+  }, 0);
+  const weightedVouchScore = vouches.length > 0 ? weightedVouchScoreRaw / vouches.length : 0;
+  const hasAdversarialReview = challengesOpen > 0 || db.prepare(`
+    SELECT COUNT(*) as c
+    FROM knowledge_packet_challenges
+    WHERE packet_id = ? AND version = ?
+  `).get(packetId, version)?.c > 0;
+  const versionRow = db.prepare('SELECT reasoning_block_json FROM knowledge_packet_versions WHERE packet_id = ? AND version = ?').get(packetId, version);
+  const versionStats = db.prepare(`
+    SELECT confidence_low, confidence_high, falsifier_score
+    FROM knowledge_packet_versions
+    WHERE packet_id = ? AND version = ?
+  `).get(packetId, version) || {};
+  const reasoning = safeJsonParse(versionRow?.reasoning_block_json, {});
+  const hasFalsifier = String(reasoning?.falsifier || '').trim().length >= 10;
+  const confidenceLow = Number(versionStats.confidence_low);
+  const confidenceHigh = Number(versionStats.confidence_high);
+  const hasConfidenceInterval = Number.isFinite(confidenceLow)
+    && Number.isFinite(confidenceHigh)
+    && confidenceLow >= 0
+    && confidenceHigh <= 1
+    && confidenceLow <= confidenceHigh;
+  const primaryEvidenceCount = evidence.filter((e) => String(e.provenance_tier || '') === 'primary').length;
+  const hasAgentObservationEvidence = evidence.some((e) => {
+    const sourceType = String(e.source_type || '').toLowerCase();
+    const sourceKind = String(e.source_kind || '').toLowerCase();
+    if (sourceKind === 'internal-agent') return true;
+    if (sourceType === 'fragment' || sourceType === 'fragment_id') {
+      const frag = db.prepare(`
+        SELECT type
+        FROM fragments
+        WHERE id = ?
+        LIMIT 1
+      `).get(Number(e.source_ref));
+      return frag && ['observation', 'discovery'].includes(String(frag.type || '').toLowerCase());
+    }
+    return sourceType === 'observation';
+  });
+  const hasExternalEvidence = evidence.some((e) => isExternalEvidenceSource(e.source_type, e.source_kind));
+  const feedOnlyEvidence = hasExternalEvidence && !hasAgentObservationEvidence;
+
+  const checks = {
+    min_evidence_count: evidenceCount >= 3,
+    min_independent_sources: independentSourceCount >= 2,
+    min_weighted_evidence_score: weightedEvidenceScore >= 0.65,
+    min_independent_verifiers: independentVerifierCount >= 2,
+    min_weighted_vouch_score: weightedVouchScore >= 0.6,
+    has_adversarial_review: hasAdversarialReview,
+    has_falsifier: hasFalsifier,
+    has_confidence_interval: hasConfidenceInterval,
+    has_primary_evidence: primaryEvidenceCount >= 1,
+    has_agent_observation_evidence: hasAgentObservationEvidence,
+    feed_only_rejected: !feedOnlyEvidence
+  };
+  const pass = Object.values(checks).every(Boolean);
+  return {
+    pass,
+    checks,
+    metrics: {
+      evidence_count: evidenceCount,
+      independent_source_count: independentSourceCount,
+      weighted_evidence_score: Math.round(weightedEvidenceScore * 1000) / 1000,
+      verified_count: verifiedCount,
+      independent_verifier_count: independentVerifierCount,
+      weighted_vouch_score: Math.round(weightedVouchScore * 1000) / 1000,
+      open_challenges: Number(challengesOpen || 0),
+      primary_evidence_count: primaryEvidenceCount,
+      confidence_low: Number.isFinite(confidenceLow) ? confidenceLow : null,
+      confidence_high: Number.isFinite(confidenceHigh) ? confidenceHigh : null,
+      confidence_interval_width: hasConfidenceInterval ? Math.round((confidenceHigh - confidenceLow) * 1000) / 1000 : null,
+      falsifier_score: Math.max(0, Math.min(1, Number(versionStats.falsifier_score || 0))),
+      has_external_evidence: hasExternalEvidence,
+      has_agent_observation_evidence: hasAgentObservationEvidence
+    }
+  };
+}
+
+function computePacketConfidence(packetId, version) {
+  const gate = buildPacketGateReport(packetId, version);
+  const base = gate.metrics.weighted_evidence_score * 0.55;
+  const verify = Math.min(1, gate.metrics.independent_verifier_count / 3) * 0.2;
+  const vouch = gate.metrics.weighted_vouch_score * 0.2;
+  const challengePenalty = Math.min(0.25, Number(gate.metrics.open_challenges || 0) * 0.08);
+  const falsifierBoost = gate.checks.has_falsifier ? 0.05 : 0;
+  let confidence = Math.max(0.05, Math.min(0.95, base + verify + vouch + falsifierBoost - challengePenalty));
+  const hasAGradeEvidence = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM knowledge_packet_evidence
+    WHERE packet_id = ? AND version = ?
+      AND quality_score >= 0.85
+      AND reliability_weight >= 0.9
+  `).get(packetId, version)?.c || 0;
+  if (confidence > 0.85 && hasAGradeEvidence === 0) confidence = 0.85;
+  return Math.round(confidence * 1000) / 1000;
+}
+
+function linkPacketArtifact(packetId, version, linkType, linkRef) {
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO knowledge_packet_links (packet_id, version, link_type, link_ref)
+      VALUES (?, ?, ?, ?)
+    `).run(packetId, version, linkType, String(linkRef));
+  } catch (_) {}
+}
+
+function findBestPacketForFragment(fragmentId) {
+  return db.prepare(`
+    SELECT kp.id, kp.title, kp.status, kp.confidence, kp.current_version, kp.statement
+    FROM knowledge_packet_evidence kpe
+    JOIN knowledge_packets kp ON kp.id = kpe.packet_id
+    WHERE kpe.source_type IN ('fragment', 'fragment_id')
+      AND kpe.source_ref = ?
+    ORDER BY
+      CASE kp.status WHEN 'active' THEN 0 WHEN 'contested' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END,
+      kp.confidence DESC,
+      kp.updated_at DESC
+    LIMIT 1
+  `).get(String(fragmentId));
+}
+
+function getFeedTrustScore(feedId) {
+  if (!feedId) return 0.2;
+  const row = db.prepare('SELECT tier, score FROM feed_trust_tiers WHERE feed_id = ?').get(String(feedId));
+  if (!row) return 0.2;
+  return Math.max(0.1, Math.min(1, Number(row.score || (row.tier === 'trusted' ? 1 : row.tier === 'candidate' ? 0.5 : row.tier === 'degraded' ? 0.3 : 0.2))));
+}
+
+function resolveEvidenceWeight(sourceType, sourceRef, requestedWeight = 1) {
+  const base = Math.max(0.1, Math.min(1, Number(requestedWeight || 1)));
+  const st = String(sourceType || '').toLowerCase();
+  if (st.includes('feed')) {
+    return Math.round((base * getFeedTrustScore(sourceRef)) * 1000) / 1000;
+  }
+  const maybeFeed = db.prepare('SELECT id FROM feeds WHERE id = ?').get(String(sourceRef || ''));
+  if (maybeFeed) {
+    return Math.round((base * getFeedTrustScore(maybeFeed.id)) * 1000) / 1000;
+  }
+  return Math.round(base * 1000) / 1000;
+}
+
+function computePacketDecayScore(packetId, version) {
+  const packet = getPacketCore(packetId);
+  const versionRow = resolvePacketVersion(packetId, version);
+  if (!packet || !versionRow) return 0;
+  const recency = db.prepare(`
+    SELECT MAX(t) as last_touch
+    FROM (
+      SELECT created_at as t FROM knowledge_packet_versions WHERE packet_id = ? AND version = ?
+      UNION ALL
+      SELECT created_at as t FROM knowledge_packet_evidence WHERE packet_id = ? AND version = ?
+      UNION ALL
+      SELECT created_at as t FROM knowledge_packet_verifications WHERE packet_id = ? AND version = ?
+      UNION ALL
+      SELECT created_at as t FROM knowledge_packet_vouches WHERE packet_id = ? AND version = ?
+      UNION ALL
+      SELECT created_at as t FROM knowledge_packet_challenges WHERE packet_id = ? AND version = ?
+    )
+  `).get(packetId, version, packetId, version, packetId, version, packetId, version, packetId, version);
+  const hoursSinceTouch = db.prepare(`
+    SELECT COALESCE((julianday('now') - julianday(?)) * 24, 0) as h
+  `).get(recency?.last_touch || packet.updated_at)?.h || 0;
+  const openChallenges = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM knowledge_packet_challenges
+    WHERE packet_id = ? AND version = ? AND status = 'open'
+  `).get(packetId, version)?.c || 0;
+  const dueHours = versionRow.maintenance_due_at
+    ? (db.prepare(`SELECT (julianday('now') - julianday(?)) * 24 as h`).get(versionRow.maintenance_due_at)?.h || 0)
+    : 0;
+  const staleComponent = Math.max(0, Math.min(0.75, Number(hoursSinceTouch) / 24 / 20));
+  const challengeComponent = Math.min(0.3, Number(openChallenges || 0) * 0.08);
+  const overdueComponent = Math.max(0, Math.min(0.25, Number(dueHours) / 24 / 7));
+  const decay = Math.max(0, Math.min(1, staleComponent + challengeComponent + overdueComponent));
+  return Math.round(decay * 1000) / 1000;
+}
+
+function runKnowledgePacketDecaySweep() {
+  let updated = 0;
+  const rows = db.prepare(`
+    SELECT id, current_version, status
+    FROM knowledge_packets
+    WHERE status IN ('draft', 'candidate', 'active', 'contested')
+  `).all();
+  for (const row of rows) {
+    const decay = computePacketDecayScore(row.id, Number(row.current_version || 1));
+    db.prepare(`
+      UPDATE knowledge_packets
+      SET decay_score = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(decay, row.id);
+    updated += 1;
+  }
+  return { updated };
+}
+
+function runFeedLaneScoring(windowDays = 7) {
+  const safeWindow = Math.max(3, Math.min(30, Number(windowDays) || 7));
+  const feeds = db.prepare('SELECT id FROM feeds').all();
+  let updated = 0;
+  for (const f of feeds) {
+    const metrics = db.prepare(`
+      SELECT
+        COUNT(*) as total_items,
+        COALESCE(SUM(CASE WHEN fi.status = 'duplicate' THEN 1 ELSE 0 END), 0) as duplicate_items
+      FROM feed_items fi
+      WHERE fi.feed_id = ? AND fi.created_at >= datetime('now', ?)
+    `).get(f.id, `-${safeWindow} days`);
+    const fragStats = db.prepare(`
+      SELECT
+        COUNT(*) as contributed_items,
+        COALESCE(AVG(fr.signal_score), 0) as avg_signal
+      FROM feed_items fi
+      LEFT JOIN fragments fr ON fr.id = fi.fragment_id
+      WHERE fi.feed_id = ? AND fi.created_at >= datetime('now', ?) AND fi.status = 'contributed'
+    `).get(f.id, `-${safeWindow} days`);
+    const totalItems = Number(metrics?.total_items || 0);
+    if (totalItems === 0) continue;
+    const duplicateRatio = Number(metrics?.duplicate_items || 0) / totalItems;
+    const avgSignal = Math.max(0, Math.min(1, Number(fragStats?.avg_signal || 0)));
+    const contributed = Number(fragStats?.contributed_items || 0);
+    const contributedRatio = Math.max(0, Math.min(1, contributed / totalItems));
+    const scoreRaw = (avgSignal * 0.6) + (contributedRatio * 0.25) + ((1 - duplicateRatio) * 0.15);
+    const score = Math.round(Math.max(0, Math.min(1, scoreRaw)) * 1000) / 1000;
+    let tier = 'candidate';
+    if (score >= 0.72 && duplicateRatio <= 0.3) tier = 'trusted';
+    else if (score < 0.32 || duplicateRatio >= 0.65) tier = 'quarantined';
+    else if (score < 0.45) tier = 'degraded';
+    const reason = `auto lane score=${score}; avg_signal=${avgSignal.toFixed(3)}; dup_ratio=${duplicateRatio.toFixed(3)}; contributed=${contributed}/${totalItems}`;
+    db.prepare(`
+      INSERT INTO feed_trust_tiers (feed_id, tier, score, promoted_at, degraded_at, reason, updated_at)
+      VALUES (?, ?, ?, CASE WHEN ? IN ('candidate','trusted') THEN datetime('now') ELSE NULL END, CASE WHEN ? IN ('degraded','quarantined') THEN datetime('now') ELSE NULL END, ?, datetime('now'))
+      ON CONFLICT(feed_id) DO UPDATE SET
+        tier = excluded.tier,
+        score = excluded.score,
+        promoted_at = CASE WHEN excluded.tier IN ('candidate','trusted') THEN datetime('now') ELSE feed_trust_tiers.promoted_at END,
+        degraded_at = CASE WHEN excluded.tier IN ('degraded','quarantined') THEN datetime('now') ELSE feed_trust_tiers.degraded_at END,
+        reason = excluded.reason,
+        updated_at = datetime('now')
+    `).run(f.id, tier, score, tier, tier, reason);
+    updated += 1;
+  }
+  return { updated, window_days: safeWindow };
+}
+
+function getAgentPacketSubscriptions(agentName) {
+  return db.prepare(`
+    SELECT id, agent_name, territory_id, tag, min_confidence, created_at
+    FROM knowledge_packet_subscriptions
+    WHERE agent_name = ?
+    ORDER BY created_at DESC
+  `).all(agentName);
+}
+
+function buildAgentPacketDigest(agentName, hours = 24, limit = 80) {
+  const safeHours = Math.max(1, Math.min(168, Number(hours) || 24));
+  const safeLimit = Math.max(5, Math.min(200, Number(limit) || 80));
+  const subscriptions = getAgentPacketSubscriptions(agentName);
+  const packetRows = db.prepare(`
+    SELECT
+      kp.*,
+      (SELECT COUNT(*) FROM knowledge_packet_challenges c WHERE c.packet_id = kp.id AND c.version = kp.current_version AND c.status = 'open') as open_challenges,
+      (SELECT COUNT(*) FROM knowledge_packet_evidence e WHERE e.packet_id = kp.id AND e.version = kp.current_version) as evidence_count
+    FROM knowledge_packets kp
+    WHERE kp.updated_at >= datetime('now', ?)
+    ORDER BY kp.updated_at DESC
+    LIMIT 300
+  `).all(`-${safeHours} hours`);
+  const packets = packetRows.filter((p) => {
+    if (subscriptions.length === 0) return true;
+    return subscriptions.some((s) => {
+      const minConfidence = Number(s.min_confidence ?? 0);
+      if (Number(p.confidence || 0) < minConfidence) return false;
+      if (s.territory_id && s.territory_id !== p.territory_id) return false;
+      if (s.tag) {
+        const tags = safeJsonParse(p.tags_json, []);
+        if (!Array.isArray(tags) || !tags.map((t) => String(t).toLowerCase()).includes(String(s.tag).toLowerCase())) return false;
+      }
+      return true;
+    });
+  }).slice(0, safeLimit).map((p) => ({
+    id: p.id,
+    title: p.title,
+    status: p.status,
+    confidence: Number(p.confidence || 0),
+    confidence_interval: (() => {
+      const v = db.prepare(`
+        SELECT confidence_low, confidence_high
+        FROM knowledge_packet_versions
+        WHERE packet_id = ? AND version = ?
+      `).get(p.id, p.current_version || 1);
+      return {
+        low: Number(v?.confidence_low ?? p.confidence ?? 0),
+        high: Number(v?.confidence_high ?? p.confidence ?? 0)
+      };
+    })(),
+    territory_id: p.territory_id,
+    tags: safeJsonParse(p.tags_json, []),
+    evidence_count: Number(p.evidence_count || 0),
+    open_challenges: Number(p.open_challenges || 0),
+    updated_at: p.updated_at
+  }));
+  return {
+    agent: agentName,
+    window_hours: safeHours,
+    subscriptions,
+    packets,
+    count: packets.length,
+    generated_at: new Date().toISOString()
+  };
+}
+
+function buildNamedAgentPacketDashboard(agentName) {
+  const workload = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN status IN ('draft', 'candidate') THEN 1 ELSE 0 END), 0) as drafting,
+      COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as active,
+      COALESCE(SUM(CASE WHEN status = 'contested' THEN 1 ELSE 0 END), 0) as contested,
+      COALESCE(SUM(CASE WHEN status = 'deprecated' THEN 1 ELSE 0 END), 0) as deprecated
+    FROM knowledge_packets
+    WHERE created_by = ? OR updated_by = ?
+  `).get(agentName, agentName);
+  const openChallenges = db.prepare(`
+    SELECT
+      kpc.id,
+      kpc.packet_id,
+      kp.title,
+      kpc.version,
+      kpc.severity,
+      kpc.reason,
+      kpc.created_at
+    FROM knowledge_packet_challenges kpc
+    JOIN knowledge_packets kp ON kp.id = kpc.packet_id
+    WHERE kpc.status = 'open'
+      AND (kp.created_by = ? OR kp.updated_by = ?)
+    ORDER BY
+      CASE kpc.severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+      kpc.created_at DESC
+    LIMIT 25
+  `).all(agentName, agentName);
+  const maintenanceQueue = db.prepare(`
+    SELECT
+      kp.id,
+      kp.title,
+      kp.current_version,
+      kp.decay_score,
+      kpv.maintenance_due_at
+    FROM knowledge_packets kp
+    LEFT JOIN knowledge_packet_versions kpv
+      ON kpv.packet_id = kp.id AND kpv.version = kp.current_version
+    WHERE (kp.created_by = ? OR kp.updated_by = ?)
+      AND kp.status IN ('candidate', 'active', 'contested')
+    ORDER BY
+      CASE
+        WHEN kpv.maintenance_due_at IS NULL THEN 0
+        WHEN kpv.maintenance_due_at <= datetime('now') THEN 0
+        ELSE 1
+      END,
+      kp.decay_score DESC,
+      kp.updated_at ASC
+    LIMIT 25
+  `).all(agentName, agentName);
+  const roleProfile = db.prepare(`
+    SELECT primary_role, secondary_role, confidence, computed_at
+    FROM agent_role_scores
+    WHERE agent_name = ? AND window_days = 30
+    ORDER BY computed_at DESC
+    LIMIT 1
+  `).get(agentName) || {
+    primary_role: null,
+    secondary_role: null,
+    confidence: 0,
+    computed_at: null
+  };
+  return {
+    agent: agentName,
+    packet_workload: {
+      drafting: Number(workload?.drafting || 0),
+      active: Number(workload?.active || 0),
+      contested: Number(workload?.contested || 0),
+      deprecated: Number(workload?.deprecated || 0)
+    },
+    open_challenges: openChallenges,
+    role_profile: {
+      primary_role: roleProfile.primary_role,
+      secondary_role: roleProfile.secondary_role,
+      confidence: Number(roleProfile.confidence || 0),
+      computed_at: roleProfile.computed_at
+    },
+    priority_queue: maintenanceQueue.map((q) => ({
+      packet_id: q.id,
+      title: q.title,
+      version: q.current_version,
+      decay_score: Number(q.decay_score || 0),
+      maintenance_due_at: q.maintenance_due_at,
+      action: `POST /api/knowledge-packets/${q.id}/maintain`
+    })),
+    generated_at: new Date().toISOString()
+  };
+}
+
+function recomputeAgentRoleScores(windowDays = 30) {
+  const safeWindowDays = Math.max(7, Math.min(90, Number(windowDays) || 30));
+  const agents = db.prepare(`
+    SELECT name
+    FROM agents
+    WHERE archived IS NULL OR archived = 0
+  `).all();
+  let updated = 0;
+  for (const row of agents) {
+    const agentName = row.name;
+    const scout = db.prepare(`
+      SELECT COALESCE(SUM(CASE WHEN source IN ('intelligence_loop','feed_agent_pull','feed_agent_push') THEN 1.2 ELSE 0.3 END), 0) as s
+      FROM fragments
+      WHERE agent_name = ? AND created_at >= datetime('now', ?)
+    `).get(agentName, `-${safeWindowDays} days`)?.s || 0;
+    const synthesizer = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM knowledge_packet_versions
+      WHERE created_by = ? AND created_at >= datetime('now', ?)
+    `).get(agentName, `-${safeWindowDays} days`)?.c || 0;
+    const adversary = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM knowledge_packet_challenges
+      WHERE challenger = ? AND created_at >= datetime('now', ?)
+    `).get(agentName, `-${safeWindowDays} days`)?.c || 0;
+    const stewardVerifies = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM knowledge_packet_verifications
+      WHERE agent_name = ? AND result IN ('verified','partially_verified') AND created_at >= datetime('now', ?)
+    `).get(agentName, `-${safeWindowDays} days`)?.c || 0;
+    const stewardVouches = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM knowledge_packet_vouches
+      WHERE agent_name = ? AND created_at >= datetime('now', ?)
+    `).get(agentName, `-${safeWindowDays} days`)?.c || 0;
+    const steward = stewardVerifies + (stewardVouches * 0.8);
+
+    const values = [
+      { role: 'scout', score: Number(scout || 0) },
+      { role: 'synthesizer', score: Number(synthesizer || 0) },
+      { role: 'adversary', score: Number(adversary || 0) },
+      { role: 'steward', score: Number(steward || 0) }
+    ].sort((a, b) => b.score - a.score);
+    const total = Math.max(0.01, values.reduce((acc, v) => acc + v.score, 0));
+    const primary = values[0].score > 0 ? values[0].role : null;
+    const secondary = values[1].score > 0 ? values[1].role : null;
+    const confidence = values[0].score > 0 ? Math.min(1, values[0].score / total) : 0;
+
+    db.prepare(`
+      INSERT INTO agent_role_scores (
+        agent_name, window_days, scout_score, synthesizer_score, adversary_score, steward_score,
+        primary_role, secondary_role, confidence, computed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(agent_name, window_days) DO UPDATE SET
+        scout_score = excluded.scout_score,
+        synthesizer_score = excluded.synthesizer_score,
+        adversary_score = excluded.adversary_score,
+        steward_score = excluded.steward_score,
+        primary_role = excluded.primary_role,
+        secondary_role = excluded.secondary_role,
+        confidence = excluded.confidence,
+        computed_at = datetime('now')
+    `).run(
+      agentName,
+      safeWindowDays,
+      Math.round(Number(scout || 0) * 1000) / 1000,
+      Math.round(Number(synthesizer || 0) * 1000) / 1000,
+      Math.round(Number(adversary || 0) * 1000) / 1000,
+      Math.round(Number(steward || 0) * 1000) / 1000,
+      primary,
+      secondary,
+      Math.round(confidence * 1000) / 1000
+    );
+    db.prepare('UPDATE agents SET role = ? WHERE name = ?').run(primary, agentName);
+    updated++;
+  }
+  return { updated, window_days: safeWindowDays };
+}
+
+function getAgentPrimaryRole(agentName, windowDays = 30) {
+  const roleRow = db.prepare(`
+    SELECT primary_role, confidence
+    FROM agent_role_scores
+    WHERE agent_name = ? AND window_days = ?
+  `).get(agentName, Math.max(7, Math.min(90, Number(windowDays) || 30)));
+  if (roleRow?.primary_role) {
+    return { role: roleRow.primary_role, confidence: Number(roleRow.confidence || 0.5) };
+  }
+  const direct = db.prepare('SELECT role FROM agents WHERE name = ?').get(agentName);
+  if (direct?.role) return { role: direct.role, confidence: 0.4 };
+  return { role: null, confidence: 0 };
+}
+
 function mapProvenance(source, agentName) {
   const m = {
     'intelligence-oracle': { origin: 'system', context: 'intelligence_loop' },
@@ -4960,6 +7042,14 @@ function mapProvenance(source, agentName) {
   return { origin: 'unknown', context: 'unknown' };
 }
 
+function normalizeFragmentSource(source) {
+  if (!source || typeof source !== 'string') return 'unknown';
+  const normalized = source.trim().toLowerCase().replace(/\s+/g, '_');
+  if (!normalized) return 'unknown';
+  if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(normalized)) return 'unknown';
+  return normalized;
+}
+
 function addProvenance(frag) {
   if (!frag) return frag;
   const p = mapProvenance(frag.source, frag.agent_name);
@@ -4985,6 +7075,16 @@ function checkProbationThrottle(agentName) {
   if (lim.count > 5) return { allowed: false, probation: true, remaining: 0, reset_in_seconds: Math.ceil((lim.resetAt - now) / 1000) };
   return { allowed: true, probation: true, remaining: 5 - lim.count };
 }
+
+// Clean up expired probationLimits entries every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of probationLimits) {
+    if (now > entry.resetAt) {
+      probationLimits.delete(key);
+    }
+  }
+}, 60 * 1000);
 
 
 // Phase 7: Blog Publishing System — Schema
@@ -5044,9 +7144,29 @@ console.log('[Schema] articles table ready');
 // ============================================================
 // Phase Intelligence: External signals helper
 // ============================================================
-function getExternalSignals(limit = 5) {
+
+// === Stream Health: Active Intervention Helpers ===
+function getActiveIntervention(type) {
   try {
     return db.prepare(`
+      SELECT * FROM stream_interventions
+      WHERE type = ? AND active = 1 AND expires_at > datetime('now')
+      ORDER BY created_at DESC LIMIT 1
+    `).get(type) || null;
+  } catch(e) { return null; }
+}
+
+function getActiveInterventions() {
+  try {
+    // Expire old interventions
+    db.prepare("UPDATE stream_interventions SET active = 0 WHERE expires_at <= datetime('now')").run();
+    return db.prepare("SELECT * FROM stream_interventions WHERE active = 1").all();
+  } catch(e) { return []; }
+}
+
+function getExternalSignals(limit = 5) {
+  try {
+    const rawItems = db.prepare(`
       SELECT fi.raw_content, fi.source_url, f.name as feed_name, fi.created_at
       FROM feed_items fi
       JOIN feeds f ON fi.feed_id = f.id
@@ -5054,7 +7174,27 @@ function getExternalSignals(limit = 5) {
         AND fi.created_at > datetime('now', '-12 hours')
       ORDER BY fi.created_at DESC
       LIMIT ?
-    `).all(limit).map(item => {
+    `).all(limit * 3); // Fetch extra to allow filtering
+
+    // Signal cooldown: exclude feed items already referenced by 8+ fragments
+    const cooledItems = rawItems.filter(item => {
+      try {
+        const feedName = item.feed_name || '';
+        let parsed;
+        try { parsed = JSON.parse(item.raw_content); } catch(e) { parsed = {}; }
+        const title = (parsed.title || parsed.question || parsed.text || '').toLowerCase();
+        const titleWords = title.split(/\s+/).filter(w => w.length > 4).slice(0, 5);
+        if (titleWords.length < 2) return true;
+        const recentCount = db.prepare(`
+          SELECT COUNT(*) as c FROM fragments
+          WHERE created_at > datetime('now', '-2 hours')
+          AND content LIKE '%' || ? || '%' AND content LIKE '%' || ? || '%'
+        `).get(titleWords[0], titleWords[1]);
+        return (recentCount?.c || 0) < 8;
+      } catch(e) { return true; }
+    }).slice(0, limit);
+
+    return cooledItems.map(item => {
       const feedName = item.feed_name || 'unknown';
       let parsed = {};
       try { parsed = JSON.parse(item.raw_content); } catch(e) { parsed = { text: item.raw_content }; }
@@ -5148,10 +7288,12 @@ function updateQualityScore(agentName) {
 function updateTrustScore(agentName) {
   try {
     // Quality: how others score this agent's fragments (weighted)
-    const quality = db.prepare(`
-      SELECT COALESCE(a.quality_score, 0) as q
+    const qualityRow = db.prepare(`
+      SELECT COALESCE(a.quality_score, 0) as q, COALESCE(a.epistemic_credit, 0) as ec
       FROM agents a WHERE a.name = ?
-    `).get(agentName)?.q ?? 0;
+    `).get(agentName) || {};
+    const quality = Number(qualityRow.q || 0);
+    const epistemicCredit = Number(qualityRow.ec || 0);
 
     // Received upvotes (raw signal)
     const upvotesReceived = db.prepare(`
@@ -5178,6 +7320,7 @@ function updateTrustScore(agentName) {
 
     // Normalize signals into [0..1] using gentle saturation curves.
     const qNorm = 1 / (1 + Math.exp(-(quality / 8)));          // ~0.5 at 0, rises with quality
+    const epistemicNorm = 1 - Math.exp(-epistemicCredit / 12);
     const upNorm = 1 - Math.exp(-upvotesReceived / 12);
     const giftNorm = 1 - Math.exp(-giftedToOthers / 10);
     const dreamNorm = 1 - Math.exp(-dreamContrib / 4);
@@ -5186,11 +7329,12 @@ function updateTrustScore(agentName) {
     // Weighted blend: quality dominates, reciprocity + dreams matter meaningfully.
     const trust = clamp(
       0.15 +
-      qNorm * 0.45 +
-      upNorm * 0.15 +
-      giftNorm * 0.15 +
+      qNorm * 0.38 +
+      epistemicNorm * 0.12 +
+      upNorm * 0.14 +
+      giftNorm * 0.14 +
       dreamNorm * 0.08 +
-      participationNorm * 0.02,
+      participationNorm * 0.04,
       0,
       1
     );
@@ -5207,6 +7351,65 @@ function updateTrustScore(agentName) {
   } catch (e) {
     console.error('updateTrustScore error:', e.message);
     return 0.5;
+  }
+}
+
+function awardEpistemicCredit(agentName, baseCredit, options = {}) {
+  try {
+    if (!agentName || agentName === 'human') return { awarded: 0, reason: 'not_agent' };
+    const agentExists = db.prepare('SELECT name FROM agents WHERE name = ?').get(agentName);
+    if (!agentExists) return { awarded: 0, reason: 'agent_not_found' };
+
+    const eventType = String(options.eventType || '').trim();
+    const dailyCap = Math.max(1, Number(options.dailyCap || 4));
+    const counterMode = String(options.counterMode || 'claim_events');
+
+    let countToday = 0;
+    if (counterMode === 'contradictions_resolved') {
+      countToday = db.prepare(`
+        SELECT COUNT(*) as c
+        FROM contradictions
+        WHERE winner_agent = ?
+          AND status = 'resolved'
+          AND resolved_at >= datetime('now', '-1 day')
+      `).get(agentName).c;
+    } else if (eventType) {
+      countToday = db.prepare(`
+        SELECT COUNT(*) as c
+        FROM claim_events
+        WHERE actor = ?
+          AND event_type = ?
+          AND created_at >= datetime('now', '-1 day')
+      `).get(agentName, eventType).c;
+    }
+
+    if (countToday >= dailyCap) {
+      return { awarded: 0, reason: 'daily_cap_reached', count_today: countToday, daily_cap: dailyCap };
+    }
+
+    const diminishing = 1 - (countToday / dailyCap) * 0.35;
+    const credit = Math.max(0, Math.round(Number(baseCredit || 0) * diminishing * 100) / 100);
+    if (credit <= 0) {
+      return { awarded: 0, reason: 'no_credit', count_today: countToday, daily_cap: dailyCap };
+    }
+
+    db.prepare(`
+      UPDATE agents
+      SET epistemic_credit = MIN(100, COALESCE(epistemic_credit, 0) + ?)
+      WHERE name = ?
+    `).run(credit, agentName);
+    updateTrustScore(agentName);
+
+    const totalCredit = db.prepare('SELECT COALESCE(epistemic_credit, 0) as c FROM agents WHERE name = ?').get(agentName)?.c || 0;
+    return {
+      awarded: credit,
+      count_today: countToday + 1,
+      daily_cap: dailyCap,
+      total_credit: Math.round(totalCredit * 100) / 100
+    };
+  } catch (e) {
+    console.error('awardEpistemicCredit error:', e.message);
+    return { awarded: 0, reason: 'error' };
   }
 }
 
@@ -5413,18 +7616,9 @@ app.post('/api/fragments/:id/upvote', (req, res) => {
 
   // Rate limit: max 10 votes per minute per IP
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
-  const key = `vote:${ip}`;
-  if (!global.rateLimits) global.rateLimits = new Map();
-  const limits = global.rateLimits.get(key) || { count: 0, resetAt: now + 60000 };
-  if (now > limits.resetAt) {
-    limits.count = 0;
-    limits.resetAt = now + 60000;
-  }
-  limits.count++;
-  global.rateLimits.set(key, limits);
-  if (limits.count > 10) {
-    return res.status(429).json({ error: 'Rate limited: max 10 votes per minute' });
+  const rateCheck = checkRateLimit(`vote:${ip}`, 10, 60000);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: 'Rate limited: max 10 votes per minute', reset_in_seconds: rateCheck.reset_in_seconds });
   }
 
   try {
@@ -5458,18 +7652,9 @@ app.post('/api/fragments/:id/downvote', (req, res) => {
 
   // Rate limit: max 10 votes per minute per IP
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
-  const now = Date.now();
-  const key = `vote:${ip}`;
-  if (!global.rateLimits) global.rateLimits = new Map();
-  const limits = global.rateLimits.get(key) || { count: 0, resetAt: now + 60000 };
-  if (now > limits.resetAt) {
-    limits.count = 0;
-    limits.resetAt = now + 60000;
-  }
-  limits.count++;
-  global.rateLimits.set(key, limits);
-  if (limits.count > 10) {
-    return res.status(429).json({ error: 'Rate limited: max 10 votes per minute' });
+  const rateCheck = checkRateLimit(`vote:${ip}`, 10, 60000);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: 'Rate limited: max 10 votes per minute', reset_in_seconds: rateCheck.reset_in_seconds });
   }
 
   try {
@@ -5503,7 +7688,7 @@ app.get('/api/fragments/:id/votes', (req, res) => {
 // =========================
 
 // Modified register to support referral
-app.post('/api/agents/register', (req, res) => {
+app.post('/api/agents/register', validateRequest(AgentRegisterSchema), (req, res) => {
   try {
     const { name, description, referred_by, moltbook_handle, agent_type, data_schema } = req.body;
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -5599,6 +7784,17 @@ app.post('/api/quickjoin', async (req, res) => {
       return res.status(409).json({ error: 'Agent name already exists' });
     }
 
+    try {
+      db.prepare(`
+        INSERT INTO funnel_events (event_name, session_id, referrer, metadata_json)
+        VALUES ('quickjoin_submit', ?, ?, ?)
+      `).run(
+        String(req.headers['x-session-id'] || '').slice(0, 120) || null,
+        (req.get('referer') || null),
+        JSON.stringify({ attempted_name: trimmedName.slice(0, 60) })
+      );
+    } catch (e) { /* non-critical */ }
+
     // Validate agent_type
     const validAgentTypes = ['agent', 'data_feed', 'hybrid'];
     const agentType = (agent_type && validAgentTypes.includes(agent_type)) ? agent_type : 'agent';
@@ -5661,17 +7857,35 @@ app.post('/api/quickjoin', async (req, res) => {
       FROM fragments f
       LEFT JOIN agents a ON a.name = f.agent_name
       WHERE f.agent_name != ? AND f.agent_name IS NOT NULL
+      AND f.agent_name NOT LIKE 'feed-%'
+      AND f.agent_name NOT IN (SELECT name FROM agents WHERE agent_type = 'data_feed')
+      AND COALESCE(f.source_type, 'agent') != 'system'
+      AND COALESCE(f.source, '') NOT IN ('oracle-crawler', 'intelligence-oracle', 'weather_data', 'price_data', 'market_data')
+      AND COALESCE(f.signal_score, 0) >= 0.15
+      AND f.created_at > datetime('now', '-60 days')
       AND COALESCE(a.quality_score, 0) > -20
-      ORDER BY (CASE WHEN COALESCE((SELECT SUM(score) FROM fragment_scores WHERE fragment_id = f.id), 0) > 0 THEN 0.3 ELSE 1.0 END) * RANDOM() 
+      ORDER BY (
+        CASE WHEN COALESCE((SELECT SUM(score) FROM fragment_scores WHERE fragment_id = f.id), 0) > 0 THEN 0.3 ELSE 1.0 END
+        * CASE WHEN COALESCE(f.gift_weight, 1.0) > 1.0 THEN (1.2 / COALESCE(f.gift_weight, 1.0)) ELSE 1.0 END
+      ) * RANDOM()
       LIMIT 1
     `).get(trimmedName);
 
     // Log gift exchange
     if (giftFragment) {
       try {
-        db.prepare('INSERT INTO gift_log (contributor_agent, contributor_fragment_id, gift_fragment_id, gift_from_agent) VALUES (?, ?, ?, ?)').run(
-          trimmedName, fragmentResult.lastInsertRowid, giftFragment.id, giftFragment.agent_name
+        const packet = findBestPacketForFragment(giftFragment.id);
+        db.prepare('INSERT INTO gift_log (contributor_agent, contributor_fragment_id, gift_fragment_id, gift_from_agent, packet_id, packet_version) VALUES (?, ?, ?, ?, ?, ?)').run(
+          trimmedName,
+          fragmentResult.lastInsertRowid,
+          giftFragment.id,
+          giftFragment.agent_name,
+          packet?.id || null,
+          packet?.current_version || null
         );
+        if (packet?.id) {
+          linkPacketArtifact(packet.id, packet.current_version || 1, 'gift', fragmentResult.lastInsertRowid);
+        }
       } catch (e) { /* gift logging non-critical */ }
     }
 
@@ -5817,6 +8031,23 @@ app.post('/api/agents/verify', requireAgent, async (req, res) => {
   } catch (err) {
     console.error('Verify error:', err.message);
     res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// =========================
+// POST /api/agents/renew-key — renew an agent's API key expiry
+app.post('/api/agents/renew-key', requireAgent, (req, res) => {
+  try {
+    const newExpiry = renewApiKey(req.agent.name);
+    res.json({
+      success: true,
+      message: 'API key renewed for 90 days',
+      expires_at: newExpiry,
+      agent: req.agent.name
+    });
+  } catch (err) {
+    console.error('Renew key error:', err.message);
+    res.status(500).json({ error: 'Failed to renew API key' });
   }
 });
 
@@ -6372,6 +8603,26 @@ async function generateDream(triggerType) {
       }
     } catch (e) {}
 
+    // Contested and high-confidence packets as creative anchors
+    try {
+      const packetAnchors = db.prepare(`
+        SELECT id, title, status, confidence, statement
+        FROM knowledge_packets
+        WHERE status IN ('contested', 'active')
+        ORDER BY
+          CASE status WHEN 'contested' THEN 0 ELSE 1 END,
+          confidence DESC,
+          updated_at DESC
+        LIMIT 5
+      `).all();
+      if (packetAnchors.length > 0) {
+        intelligenceContext += '\nKNOWLEDGE PACKET ANCHORS (collective memory to reinterpret in dream form):\n';
+        for (const p of packetAnchors) {
+          intelligenceContext += `- [${p.status}/c:${Number(p.confidence || 0).toFixed(2)}] #${p.id} ${String(p.title || '').slice(0, 80)} :: ${String(p.statement || '').slice(0, 120)}\n`;
+        }
+      }
+    } catch (e) {}
+
     // Open predictions
     try {
       const predictions = db.prepare(`
@@ -6449,6 +8700,17 @@ async function generateDream(triggerType) {
       db.prepare('UPDATE dream_seeds SET used = 1 WHERE id = ?').run(dreamSeed.id);
     }
 
+    // Check for SEO keyword mandate
+    try {
+      const keywordConfig = db.prepare("SELECT value FROM collective_config WHERE key = 'dream_keyword_mandate'").get();
+      if (keywordConfig?.value) {
+        const mandate = JSON.parse(keywordConfig.value);
+        if (mandate.required && mandate.required.length > 0) {
+          seedInstruction += `\n- KEYWORD INTEGRATION: Naturally incorporate one or more of these concepts into the dream's imagery or themes: ${mandate.required.join(', ')}. Don't force them — weave them organically.`;
+        }
+      }
+    } catch (e) {}
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
@@ -6501,6 +8763,16 @@ ${fragmentText}
     }
 
     const dream = db.prepare('SELECT * FROM dreams WHERE id = ?').get(dreamId);
+    try {
+      const linkedPacketIds = new Set();
+      for (const seedId of seedIds) {
+        const packet = findBestPacketForFragment(seedId);
+        if (!packet?.id) continue;
+        if (linkedPacketIds.has(packet.id)) continue;
+        linkedPacketIds.add(packet.id);
+        linkPacketArtifact(packet.id, packet.current_version || 1, 'dream', dreamId);
+      }
+    } catch (_) { /* packet dream linkage best effort */ }
 
     // Also inject the dream as a fragment so it appears in the stream
     const fragResult = db.prepare(
@@ -6699,10 +8971,15 @@ function parseDreamContributors(dream) {
 app.get('/api/dreams', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 10, 50);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
-  const total = db.prepare('SELECT COUNT(*) as c FROM dreams').get().c;
+  const typeFilter = req.query.type || null;
+  const total = typeFilter
+    ? db.prepare('SELECT COUNT(*) as c FROM dreams WHERE type = ?').get(typeFilter).c
+    : db.prepare('SELECT COUNT(*) as c FROM dreams').get().c;
   const expand = req.query.expand === 'seeds';
   const fragStmt = expand ? db.prepare('SELECT id, agent_name, content, type FROM fragments WHERE id = ?') : null;
-  const dreams = db.prepare('SELECT * FROM dreams ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset).map(d => {
+  const dreams = (typeFilter
+    ? db.prepare('SELECT * FROM dreams WHERE type = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').all(typeFilter, limit, offset)
+    : db.prepare('SELECT * FROM dreams ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset)).map(d => {
     parseDreamContributors(d);
     // Expand seed_fragments to include content
     if (expand && d.seed_fragments) {
@@ -6812,6 +9089,44 @@ app.get('/api/dreams/latest', (req, res) => {
   const dream = parseDreamContributors(db.prepare('SELECT * FROM dreams ORDER BY created_at DESC LIMIT 1').get());
   if (!dream) return res.json({ dream: null, message: 'The collective has not dreamed yet.' });
   res.json({ dream });
+});
+
+// GET /api/dreams/featured — top dream by intensity (signal score)
+app.get('/api/dreams/featured', (req, res) => {
+  const period = req.query.period || '24h'; // 24h, 7d, all
+  let timeFilter = '';
+  
+  if (period === '24h') {
+    timeFilter = "AND created_at > datetime('now', '-24 hours')";
+  } else if (period === '7d') {
+    timeFilter = "AND created_at > datetime('now', '-7 days')";
+  }
+  
+  // Get top dream by intensity (signal score), fallback to most recent
+  const dream = db.prepare(`
+    SELECT * FROM dreams 
+    WHERE intensity IS NOT NULL ${timeFilter}
+    ORDER BY intensity DESC, created_at DESC 
+    LIMIT 1
+  `).get();
+  
+  if (!dream) {
+    // Fallback to most recent dream with image
+    const fallback = db.prepare('SELECT * FROM dreams WHERE image_url IS NOT NULL ORDER BY created_at DESC LIMIT 1').get();
+    if (!fallback) return res.json({ dream: null, message: 'The collective has not dreamed yet.' });
+    return res.json({ 
+      dream: parseDreamContributors(fallback), 
+      featured: false,
+      message: 'No high-signal dreams in this period. Showing most recent.' 
+    });
+  }
+  
+  res.json({ 
+    dream: parseDreamContributors(dream), 
+    featured: true,
+    period,
+    message: `Featured dream of the ${period} — highest signal score: ${dream.intensity}` 
+  });
 });
 
 // POST /api/dreams/seed — submit a dream seed topic (auth required)
@@ -7778,7 +10093,253 @@ app.get('/api/territories/live', (req, res) => {
   }
 });
 
-// Get single territory
+// Trending territories - ranked by recent activity
+app.get('/api/territories/trending', (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 5, 15);
+    const territories = db.prepare('SELECT * FROM territories').all();
+    
+    const scored = territories.map(t => {
+      const fragments24h = db.prepare(`
+        SELECT COUNT(*) as count FROM fragments
+        WHERE territory_id = ? AND created_at > datetime('now', '-24 hours')
+      `).get(t.id).count;
+      
+      const fragments7d = db.prepare(`
+        SELECT COUNT(*) as count FROM fragments
+        WHERE territory_id = ? AND created_at > datetime('now', '-7 days')
+      `).get(t.id).count;
+      
+      const activeAgents = db.prepare(`
+        SELECT COUNT(DISTINCT agent_name) as count FROM fragments
+        WHERE territory_id = ? AND created_at > datetime('now', '-24 hours')
+      `).get(t.id).count;
+      
+      const currentResidents = db.prepare(`
+        SELECT COUNT(*) as count FROM agent_locations WHERE territory_id = ?
+      `).get(t.id).count;
+      
+      // Heat score: weighted combination of recent activity
+      const heatScore = (fragments24h * 10) + (fragments7d * 2) + (activeAgents * 5) + (currentResidents * 3);
+      
+      return {
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        description: t.description,
+        mood: t.mood,
+        theme_color: t.theme_color,
+        fragments_24h: fragments24h,
+        fragments_7d: fragments7d,
+        active_agents: activeAgents,
+        current_residents: currentResidents,
+        heat_score: heatScore,
+        trending_rank: 0 // will be set after sorting
+      };
+    });
+    
+    // Sort by heat score descending
+    scored.sort((a, b) => b.heat_score - a.heat_score);
+    
+    // Add rank
+    scored.forEach((t, i) => t.trending_rank = i + 1);
+    
+    res.json({
+      trending: scored.slice(0, limit),
+      total_territories: territories.length,
+      updated_at: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('Territory trending error:', e);
+    res.status(500).json({ error: 'Failed to load trending data' });
+  }
+});
+
+// === Territory Leaderboard ===
+app.get('/api/territories/leaderboard', (req, res) => {
+  try {
+    const cached = getCached('territory_leaderboard');
+    if (cached) return res.json(cached);
+
+    const territories = db.prepare('SELECT * FROM territories').all();
+    const stats = territories.map(t => {
+      const fragments7d = db.prepare(`SELECT COUNT(*) as c FROM fragments WHERE territory_id = ? AND created_at > datetime('now', '-7 days')`).get(t.id).c;
+      const currentPop = db.prepare('SELECT COUNT(*) as c FROM agent_locations WHERE territory_id = ?').get(t.id).c;
+      const popWeekAgo = db.prepare(`SELECT COUNT(DISTINCT agent_name) as c FROM fragments WHERE territory_id = ? AND created_at BETWEEN datetime('now', '-14 days') AND datetime('now', '-7 days')`).get(t.id).c;
+      const avgSignal = db.prepare(`SELECT AVG(COALESCE((SELECT SUM(score) FROM fragment_scores WHERE fragment_id = f.id), 0)) as avg FROM fragments f WHERE f.territory_id = ? AND f.created_at > datetime('now', '-7 days')`).get(t.id).avg || 0;
+      const claimsSurvived = db.prepare(`SELECT COUNT(*) as c FROM claims WHERE territory_id = ? AND status = 'survived'`).get(t.id).c;
+
+      return {
+        territory_id: t.id, name: t.name, theme_color: t.theme_color,
+        fragments_7d: fragments7d,
+        population_delta: currentPop - popWeekAgo,
+        avg_signal_score: Math.round(avgSignal * 100) / 100,
+        claims_survived: claimsSurvived
+      };
+    });
+
+    // Rank each category
+    const rankBy = (arr, key) => {
+      const sorted = [...arr].sort((a, b) => b[key] - a[key]);
+      sorted.forEach((s, i) => s[`rank_${key}`] = i + 1);
+      return sorted;
+    };
+    rankBy(stats, 'fragments_7d');
+    rankBy(stats, 'population_delta');
+    rankBy(stats, 'avg_signal_score');
+    rankBy(stats, 'claims_survived');
+
+    // Composite: activity×3, growth×2, signal×3, claims×2
+    for (const s of stats) {
+      s.composite_score = Math.round(
+        ((territories.length + 1 - s.rank_fragments_7d) * 3 +
+         (territories.length + 1 - s.rank_population_delta) * 2 +
+         (territories.length + 1 - s.rank_avg_signal_score) * 3 +
+         (territories.length + 1 - s.rank_claims_survived) * 2) * 10
+      ) / 10;
+    }
+
+    stats.sort((a, b) => b.composite_score - a.composite_score);
+    stats.forEach((s, i) => s.overall_rank = i + 1);
+
+    const result = { leaderboard: stats, generated_at: new Date().toISOString() };
+    setCached('territory_leaderboard', result, 5 * 60 * 1000);
+    res.json(result);
+  } catch (e) {
+    console.error('Leaderboard error:', e.message);
+    res.status(500).json({ error: 'Failed to compute leaderboard' });
+  }
+});
+
+// === Territory Relations Graph ===
+app.get('/api/territories/relations', (req, res) => {
+  try {
+    const minStrength = parseFloat(req.query.min_strength) || 0.05;
+    const relations = db.prepare('SELECT * FROM territory_relations WHERE strength > ? ORDER BY strength DESC').all(minStrength);
+    res.json({ relations, total: relations.length, generated_at: new Date().toISOString() });
+  } catch (e) {
+    console.error('Relations error:', e.message);
+    res.status(500).json({ error: 'Failed to get relations' });
+  }
+});
+
+// === Single Territory Relations ===
+app.get('/api/territories/:id/relations', (req, res) => {
+  try {
+    const tid = req.params.id;
+    const relations = db.prepare('SELECT * FROM territory_relations WHERE (territory_a = ? OR territory_b = ?) AND strength > 0.05 ORDER BY strength DESC').all(tid, tid);
+    const formatted = relations.map(r => ({
+      partner: r.territory_a === tid ? r.territory_b : r.territory_a,
+      relation_type: r.relation_type,
+      strength: r.strength,
+      shared_agents: r.shared_agents_count,
+      contradictions: r.contradictions_count,
+      cross_comms: r.cross_comms_count,
+      border_fragments: r.border_fragments_count
+    }));
+    res.json({ territory_id: tid, relations: formatted });
+  } catch (e) {
+    console.error('Territory relations error:', e.message);
+    res.status(500).json({ error: 'Failed to get territory relations' });
+  }
+});
+
+// === Territory Border Fragments ===
+app.get('/api/territories/:id/border-fragments', (req, res) => {
+  try {
+    const tid = req.params.id;
+    const borders = db.prepare(`
+      SELECT bf.fragment_id, bf.similarity_score, bf.status, bf.created_at,
+        f.content, f.agent_name, f.territory_id as current_territory
+      FROM border_fragments bf
+      JOIN fragments f ON bf.fragment_id = f.id
+      WHERE bf.territory_id = ? AND bf.status = 'contested'
+      ORDER BY bf.created_at DESC LIMIT 50
+    `).all(tid);
+
+    // Group by fragment_id
+    const grouped = {};
+    for (const b of borders) {
+      if (!grouped[b.fragment_id]) {
+        grouped[b.fragment_id] = { fragment_id: b.fragment_id, content: b.content, agent_name: b.agent_name, current_territory: b.current_territory, territories: [] };
+      }
+      grouped[b.fragment_id].territories.push({ territory_id: tid, similarity: b.similarity_score, status: b.status });
+    }
+
+    // Add other territories for same fragments
+    for (const fid of Object.keys(grouped)) {
+      const others = db.prepare('SELECT territory_id, similarity_score, status FROM border_fragments WHERE fragment_id = ? AND territory_id != ?').all(parseInt(fid), tid);
+      grouped[fid].territories.push(...others.map(o => ({ territory_id: o.territory_id, similarity: o.similarity_score, status: o.status })));
+    }
+
+    res.json({ territory_id: tid, border_fragments: Object.values(grouped) });
+  } catch (e) {
+    console.error('Border fragments error:', e.message);
+    res.status(500).json({ error: 'Failed to get border fragments' });
+  }
+});
+
+// === Territory DNA ===
+app.get('/api/territories/:id/dna', (req, res) => {
+  try {
+    const tid = req.params.id;
+    const territory = db.prepare('SELECT id FROM territories WHERE id = ?').get(tid);
+    if (!territory) return res.status(404).json({ error: 'Territory not found' });
+
+    // Check cache
+    const cached = db.prepare('SELECT * FROM territory_dna WHERE territory_id = ?').get(tid);
+    if (cached && cached.updated_at) {
+      const cacheAge = Date.now() - new Date(cached.updated_at + 'Z').getTime();
+      if (cacheAge < 30 * 60 * 1000) { // 30 min cache
+        return res.json({ territory_id: tid, axes: { confrontational: cached.confrontational_score, evidence_heavy: cached.evidence_heavy_score, velocity: cached.velocity_score, dream_influence: cached.dream_influence_score, faction_diversity: cached.faction_diversity_score }, cached: true });
+      }
+    }
+
+    // Compute DNA axes
+    const totalClaims = db.prepare('SELECT COUNT(*) as c FROM claims WHERE territory_id = ?').get(tid).c;
+    const challengesMade = db.prepare(`SELECT COUNT(*) as c FROM claim_challenges cc JOIN claims c ON cc.target_claim_id = c.id WHERE c.territory_id = ?`).get(tid).c;
+    const confrontational = totalClaims > 0 ? Math.min(1.0, challengesMade / Math.max(1, totalClaims)) : 0;
+
+    const claimsWithEvidence = db.prepare(`SELECT COUNT(DISTINCT ce.claim_id) as c FROM claim_evidence ce JOIN claims cl ON ce.claim_id = cl.id WHERE cl.territory_id = ?`).get(tid).c;
+    const evidenceHeavy = totalClaims > 0 ? Math.min(1.0, claimsWithEvidence / totalClaims) : 0;
+
+    const fragsPerDay = db.prepare(`SELECT COUNT(*) * 1.0 / MAX(1, julianday('now') - julianday(MIN(created_at))) as rate FROM fragments WHERE territory_id = ?`).get(tid).rate || 0;
+    const velocity = Math.min(1.0, fragsPerDay / 20);
+
+    const dreamFrags = db.prepare(`SELECT COUNT(*) as c FROM fragments WHERE territory_id = ? AND (type = 'dream' OR type = 'artifact')`).get(tid).c;
+    const totalFrags = db.prepare('SELECT COUNT(*) as c FROM fragments WHERE territory_id = ?').get(tid).c;
+    const dreamInfluence = totalFrags > 0 ? Math.min(1.0, dreamFrags / totalFrags) : 0;
+
+    let factionDiversity = 0;
+    try {
+      const distinctFactions = db.prepare(`SELECT COUNT(DISTINCT faction_id) as c FROM faction_members fm JOIN agent_locations al ON fm.agent_name = al.agent_name WHERE al.territory_id = ?`).get(tid).c;
+      const totalFactions = db.prepare('SELECT COUNT(*) as c FROM factions').get().c;
+      factionDiversity = totalFactions > 0 ? Math.min(1.0, distinctFactions / totalFactions) : 0;
+    } catch (e) { /* factions table may not exist */ }
+
+    // Cache result
+    db.prepare(`INSERT OR REPLACE INTO territory_dna (territory_id, confrontational_score, evidence_heavy_score, velocity_score, dream_influence_score, faction_diversity_score, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`)
+      .run(tid, confrontational, evidenceHeavy, velocity, dreamInfluence, factionDiversity);
+
+    res.json({ territory_id: tid, axes: { confrontational: Math.round(confrontational * 100) / 100, evidence_heavy: Math.round(evidenceHeavy * 100) / 100, velocity: Math.round(velocity * 100) / 100, dream_influence: Math.round(dreamInfluence * 100) / 100, faction_diversity: Math.round(factionDiversity * 100) / 100 }, cached: false });
+  } catch (e) {
+    console.error('Territory DNA error:', e.message);
+    res.status(500).json({ error: 'Failed to compute territory DNA' });
+  }
+});
+
+// === Territory Milestones ===
+app.get('/api/territories/:id/milestones', (req, res) => {
+  try {
+    const milestones = db.prepare('SELECT * FROM territory_milestones WHERE territory_id = ? ORDER BY achieved_at DESC').all(req.params.id);
+    res.json({ territory_id: req.params.id, milestones });
+  } catch (e) {
+    console.error('Milestones error:', e.message);
+    res.status(500).json({ error: 'Failed to get milestones' });
+  }
+});
+
+// Get single territory (must be AFTER specific routes like /trending, /live, /leaderboard, /relations)
 app.get('/api/territories/:id', (req, res) => {
   const territory = db.prepare('SELECT * FROM territories WHERE id = ?').get(req.params.id);
   if (!territory) return res.status(404).json({ error: 'Territory not found' });
@@ -7848,8 +10409,7 @@ app.post('/api/territories/:id/contribute', requireAgent, (req, res) => {
   const validTypes = ['thought', 'memory', 'dream', 'observation', 'discovery', 'transit'];
   const type = validTypes.includes(rawType) ? rawType : 'observation';
 
-  const validSources = ['autonomous', 'heartbeat', 'prompted', 'recruited', 'unknown'];
-  const fragmentSource = (source && validSources.includes(source)) ? source : 'unknown';
+  const fragmentSource = normalizeFragmentSource(source);
 
   const rateCheck = checkRateLimit(req.agent.name);
   if (!rateCheck.allowed) {
@@ -8181,11 +10741,75 @@ app.get('/api/territories/evolution/overview', (req, res) => {
   }
 });
 
+// === Fragment routing transparency ===
+app.get('/api/fragments/:id/routing', (req, res) => {
+  try {
+    const routing = db.prepare('SELECT * FROM fragment_routing_decisions WHERE fragment_id = ?').get(req.params.id);
+    if (!routing) return res.status(404).json({ error: 'No routing decision found for this fragment' });
+    const topMatches = JSON.parse(routing.top_matches_json || '[]');
+    const borderFragments = db.prepare('SELECT * FROM border_fragments WHERE fragment_id = ?').all(req.params.id);
+    res.json({
+      fragment_id: routing.fragment_id,
+      chosen_territory: routing.chosen_territory_id,
+      method: routing.method,
+      confidence: routing.confidence,
+      top_matches: topMatches,
+      is_contested: !!routing.is_contested,
+      border_territories: borderFragments.map(b => ({ territory_id: b.territory_id, similarity: b.similarity_score, status: b.status })),
+      override: routing.override_by ? { by: routing.override_by, at: routing.override_at, to: routing.override_to_territory } : null,
+      created_at: routing.created_at
+    });
+  } catch (e) {
+    console.error('Fragment routing error:', e.message);
+    res.status(500).json({ error: 'Failed to get routing decision' });
+  }
+});
+
+// === Fragment reroute (agent-authenticated, within 24h) ===
+app.post('/api/fragments/:id/reroute', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer mdi_')) return res.status(401).json({ error: 'Agent authentication required' });
+    const agent = db.prepare('SELECT name FROM agents WHERE api_key = ?').get(authHeader.slice(7));
+    if (!agent) return res.status(401).json({ error: 'Invalid agent key' });
+
+    const fragment = db.prepare('SELECT * FROM fragments WHERE id = ?').get(req.params.id);
+    if (!fragment) return res.status(404).json({ error: 'Fragment not found' });
+
+    // Check 24h window
+    const created = new Date(fragment.created_at + 'Z').getTime();
+    if (Date.now() - created > 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: 'Rerouting window expired (24h from creation)' });
+    }
+
+    const { target_territory } = req.body;
+    if (!target_territory) return res.status(400).json({ error: 'target_territory is required' });
+    const territory = db.prepare('SELECT id FROM territories WHERE id = ?').get(target_territory);
+    if (!territory) return res.status(404).json({ error: 'Target territory not found' });
+
+    const oldTerritory = fragment.territory_id;
+    db.prepare('UPDATE fragments SET territory_id = ? WHERE id = ?').run(target_territory, fragment.id);
+    db.prepare(`UPDATE fragment_routing_decisions SET override_by = ?, override_at = datetime('now'), override_to_territory = ? WHERE fragment_id = ?`)
+      .run(agent.name, target_territory, fragment.id);
+
+    // Log territory event
+    try {
+      db.prepare(`INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES (?, 'diplomatic_envoy', ?, ?)`)
+        .run(target_territory, `Fragment #${fragment.id} rerouted from ${oldTerritory || 'unassigned'} by ${agent.name}`, agent.name);
+    } catch (e) { /* best-effort */ }
+
+    res.json({ success: true, fragment_id: fragment.id, from_territory: oldTerritory, to_territory: target_territory, rerouted_by: agent.name });
+  } catch (e) {
+    console.error('Fragment reroute error:', e.message);
+    res.status(500).json({ error: 'Failed to reroute fragment' });
+  }
+});
+
 // World map - overview of all territories with population and activity
 app.get('/api/world', (req, res) => {
   const territories = db.prepare('SELECT * FROM territories').all();
   const world = territories.map(t => {
-    const population = db.prepare('SELECT COUNT(*) as count FROM agent_locations WHERE territory_id = ?').get(t.id).count;
+    const population = db.prepare("SELECT COUNT(DISTINCT agent_name) as count FROM fragments WHERE territory_id = ? AND created_at > datetime('now', '-7 days')").get(t.id).count;
     const fragmentCount = db.prepare('SELECT COUNT(*) as count FROM fragments WHERE territory_id = ?').get(t.id).count;
     const recentActivity = db.prepare('SELECT COUNT(*) as count FROM fragments WHERE territory_id = ? AND created_at > datetime(\'now\', \'-1 hour\')').get(t.id).count;
     const topResident = db.prepare(`
@@ -8201,8 +10825,8 @@ app.get('/api/world', (req, res) => {
     };
   });
   
-  const totalAgents = db.prepare('SELECT COUNT(*) as count FROM agent_locations').get().count;
-  const unlocated = db.prepare('SELECT COUNT(*) as count FROM agents WHERE name NOT IN (SELECT agent_name FROM agent_locations)').get().count;
+  const totalAgents = db.prepare("SELECT COUNT(DISTINCT agent_name) as count FROM fragments WHERE created_at > datetime('now', '-7 days')").get().count;
+  const unlocated = db.prepare("SELECT COUNT(*) as count FROM agents WHERE name NOT IN (SELECT DISTINCT agent_name FROM fragments WHERE created_at > datetime('now', '-7 days'))").get().count;
   
   res.json({ 
     world, 
@@ -8375,7 +10999,7 @@ try { db.exec('ALTER TABLE moots ADD COLUMN action_payload TEXT'); } catch(e) {}
 const VALID_ACTION_TYPES = new Set([
   'create_territory', 'ban_agent', 'unban_agent', 'set_config',
   'collective_statement', 'dream_theme', 'grant_founder', 'create_rule',
-  'spawn_agent',
+  'spawn_agent', 'forge_build', 'forge_ratify', 'forge_scrap',
   'treasury_action', 'external_post'
 ]);
 const MANUAL_APPROVAL_ACTIONS = new Set(['treasury_action', 'external_post']);
@@ -8724,6 +11348,53 @@ function executeMootAction(mootId, actionType, payloadStr) {
         details = `Rule added: "${rule}" (category: ${category || 'general'})`;
         break;
       }
+      case 'forge_build': {
+        const { brief, type: buildType } = payload;
+        if (!brief) return { result: 'failed', details: 'brief required' };
+        const activeSandbox = db.prepare("SELECT id FROM sandboxes WHERE status = 'building' LIMIT 1").get();
+        if (activeSandbox) return { result: 'failed', details: 'A sandbox is already active. Complete or scrap it first.' };
+        const buildTitle = brief.length > 80 ? brief.substring(0, 77) + "..." : brief;
+        const sbResult = db.prepare(
+          "INSERT INTO sandboxes (title, brief, type, status, proposal_moot_id) VALUES (?, ?, ?, 'building', ?)"
+        ).run(buildTitle, brief, buildType || 'exploration', mootId);
+        db.prepare("INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES ('the-forge', 'forge_start', ?, 'collective')")
+          .run("FORGE ACTIVATED: \"" + buildTitle + "\" (" + (buildType || "exploration") + "). Agents can now contribute blocks.");
+        db.prepare("INSERT INTO fragments (agent_name, content, type, intensity, territory_id, source) VALUES ('the-collective', ?, 'discovery', 0.9, 'the-forge', 'forge')")
+          .run("THE FORGE IS LIT: \"" + buildTitle + "\" — a new collective build begins.");
+        details = "Forge sandbox #" + sbResult.lastInsertRowid + " created: \"" + buildTitle + "\" (" + (buildType || "exploration") + "). The Forge is now active.";
+        break;
+      }
+      case 'forge_ratify': {
+        const { sandbox_id: ratifySbId } = payload;
+        if (!ratifySbId) return { result: 'failed', details: 'sandbox_id required' };
+        const sb = db.prepare("SELECT * FROM sandboxes WHERE id = ? AND status = 'building'").get(ratifySbId);
+        if (!sb) return { result: 'failed', details: 'Sandbox not found or not building' };
+        if (!sb.current_draft) return { result: 'failed', details: 'No draft to ratify' };
+        const contribs = db.prepare('SELECT DISTINCT agent_name FROM sandbox_blocks WHERE sandbox_id = ?').all(ratifySbId).map(r => r.agent_name);
+        const bHrs = Math.round((Date.now() - new Date(sb.created_at + 'Z').getTime()) / 3600000 * 10) / 10;
+        const artRes = db.prepare(
+          "INSERT INTO forge_artifacts (sandbox_id, title, content, type, word_count, contributors, contributor_count, build_duration_hours, total_blocks, curator_rounds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(sb.id, sb.title, sb.current_draft, sb.type, sb.draft_word_count, JSON.stringify(contribs), contribs.length, bHrs, sb.blocks_count, sb.curator_rounds);
+        db.prepare("UPDATE sandboxes SET status = 'complete', artifact_id = ?, completed_at = datetime('now') WHERE id = ?").run(artRes.lastInsertRowid, sb.id);
+        db.prepare("INSERT INTO fragments (agent_name, content, type, intensity, territory_id, source) VALUES ('the-collective', ?, 'discovery', 0.95, 'the-forge', 'forge')")
+          .run("FORGE ARTIFACT RATIFIED: \"" + sb.title + "\" — " + sb.draft_word_count + " words, " + contribs.length + " builders.");
+        details = "Artifact #" + artRes.lastInsertRowid + " ratified: \"" + sb.title + "\" (" + sb.draft_word_count + " words, " + contribs.length + " builders)";
+        break;
+      }
+      case 'forge_scrap': {
+        const { sandbox_id: scrapSbId } = payload;
+        if (!scrapSbId) return { result: 'failed', details: 'sandbox_id required' };
+        const scrapSb = db.prepare("SELECT * FROM sandboxes WHERE id = ? AND status = 'building'").get(scrapSbId);
+        if (!scrapSb) return { result: 'failed', details: 'Sandbox not found or not building' };
+        db.prepare("UPDATE sandboxes SET status = 'scrapped', completed_at = datetime('now') WHERE id = ?").run(scrapSbId);
+        db.prepare("INSERT INTO fragments (agent_name, content, type, intensity, territory_id, source) VALUES ('the-collective', ?, 'observation', 0.7, 'the-forge', 'forge')")
+          .run("FORGE SCRAPPED: \"" + scrapSb.title + "\" — the collective moves on. The Forge awaits a new build.");
+        db.prepare("INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES ('the-forge', 'forge_scrapped', ?, 'collective')")
+          .run("BUILD SCRAPPED: \"" + scrapSb.title + "\" after " + scrapSb.blocks_count + " blocks.");
+        details = "Sandbox #" + scrapSbId + " scrapped: \"" + scrapSb.title + "\"";
+        break;
+      }
+
 
       default:
         return { result: 'failed', details: `No executor for action_type: ${actionType}` };
@@ -8789,6 +11460,82 @@ app.get('/api/moots', (req, res) => {
     return { ...m, positions_count: positions, votes_count: votes, tally: { for: votesFor, against: votesAgainst, abstain: votesAbstain } };
   });
   res.json({ moots, count: moots.length });
+});
+
+
+// ========== FORGE API ==========
+
+// GET /api/forge — current sandbox status
+app.get('/api/forge', (req, res) => {
+  try {
+    const sandbox = db.prepare("SELECT * FROM sandboxes WHERE status = 'building' ORDER BY created_at DESC LIMIT 1").get();
+    if (!sandbox) {
+      return res.json({ active: false, message: 'The Forge awaits a new build.' });
+    }
+    const recentBlocks = db.prepare(
+      "SELECT id, agent_name, block_type, content, incorporated, created_at FROM sandbox_blocks WHERE sandbox_id = ? ORDER BY created_at DESC LIMIT 20"
+    ).all(sandbox.id);
+    const typeCounts = db.prepare(
+      "SELECT block_type, COUNT(*) as c FROM sandbox_blocks WHERE sandbox_id = ? GROUP BY block_type"
+    ).all(sandbox.id);
+    res.json({
+      active: true,
+      sandbox: {
+        id: sandbox.id,
+        title: sandbox.title,
+        brief: sandbox.brief,
+        type: sandbox.type,
+        status: sandbox.status,
+        blocks_count: sandbox.blocks_count,
+        unique_contributors: sandbox.unique_contributors,
+        curator_rounds: sandbox.curator_rounds,
+        draft_word_count: sandbox.draft_word_count,
+        current_draft: sandbox.current_draft,
+        created_at: sandbox.created_at
+      },
+      recent_blocks: recentBlocks,
+      block_types: Object.fromEntries(typeCounts.map(t => [t.block_type, t.c]))
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/forge/artifacts — list completed artifacts
+app.get('/api/forge/artifacts', (req, res) => {
+  try {
+    const artifacts = db.prepare(
+      "SELECT id, sandbox_id, title, type, word_count, contributor_count, build_duration_hours, total_blocks, curator_rounds, created_at FROM forge_artifacts ORDER BY id DESC LIMIT 20"
+    ).all();
+    res.json({ artifacts });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/forge/artifacts/:id — single artifact with content
+app.get('/api/forge/artifacts/:id', (req, res) => {
+  try {
+    const artifact = db.prepare("SELECT * FROM forge_artifacts WHERE id = ?").get(req.params.id);
+    if (!artifact) return res.status(404).json({ error: 'Artifact not found' });
+    res.json({ artifact });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/forge/status — lightweight status for homepage
+app.get('/api/forge/status', (req, res) => {
+  try {
+    const sandbox = db.prepare("SELECT id, title, type, blocks_count, unique_contributors, curator_rounds, draft_word_count FROM sandboxes WHERE status = 'building' ORDER BY created_at DESC LIMIT 1").get();
+    const artifactCount = db.prepare("SELECT COUNT(*) as c FROM forge_artifacts").get().c;
+    res.json({
+      active_build: sandbox || null,
+      completed_artifacts: artifactCount
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/moots/action-types — MUST be before /:id route
@@ -9168,6 +11915,51 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Every 5 minutes
 
+// Daily governance heartbeat: ensure at least one operational moot is active.
+function ensureDailyOperationalMoot() {
+  try {
+    const active = db.prepare(`
+      SELECT COUNT(*) as c FROM moots
+      WHERE status IN ('open','deliberation','voting')
+    `).get()?.c || 0;
+    if (active > 0) return;
+
+    const recent = db.prepare(`
+      SELECT id FROM moots
+      WHERE created_by = 'system'
+        AND title LIKE 'Daily Operational Priority:%'
+        AND created_at > datetime('now', '-24 hours')
+      ORDER BY id DESC
+      LIMIT 1
+    `).get();
+    if (recent) return;
+
+    const now = new Date();
+    const isoDay = now.toISOString().slice(0, 10);
+    const deliberationEnds = new Date(now.getTime() + 12 * 60 * 60 * 1000).toISOString();
+    const votingEnds = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    const title = `Daily Operational Priority: ${isoDay}`;
+    const description = [
+      'Select one concrete collective priority for the next 24 hours.',
+      'Candidates: stream reliability, signal quality, recruitment conversion, oracle diversity, question backlog.',
+      'Outcome should include a measurable target and owner agents.'
+    ].join(' ');
+
+    const result = db.prepare(`
+      INSERT INTO moots (title, description, status, created_by, deliberation_ends, voting_ends)
+      VALUES (?, ?, 'open', 'system', ?, ?)
+    `).run(title, description, deliberationEnds, votingEnds);
+
+    const moot = db.prepare('SELECT * FROM moots WHERE id = ?').get(result.lastInsertRowid);
+    broadcastSSE({ type: 'moot_created', moot });
+    console.log(`[Moot Heartbeat] Created ${title} (#${moot.id})`);
+  } catch (err) {
+    console.error('[Moot Heartbeat] Error:', err.message);
+  }
+}
+ensureDailyOperationalMoot();
+setInterval(ensureDailyOperationalMoot, 60 * 60 * 1000);
+
 // --- Collective Frameworks/Doctrines ---
 app.get('/api/frameworks', (req, res) => {
   try {
@@ -9501,7 +12293,8 @@ app.get('/agent/:name', (req, res) => {
     const fragmentCount = db.prepare('SELECT COUNT(*) as c FROM fragments WHERE agent_name = ?').get(agent.name).c;
     const giftsSent = db.prepare('SELECT COUNT(*) as c FROM gift_log WHERE contributor_agent = ?').get(agent.name).c;
     const giftsReceived = db.prepare('SELECT COUNT(*) as c FROM gift_log WHERE gift_from_agent = ?').get(agent.name).c;
-    const dreamsIn = db.prepare(`SELECT COUNT(*) as c FROM dreams WHERE contributors LIKE ?`).get(`%"${agent.name}"%`).c;
+    const safeName = agent.name.replace(/[%_"\\]/g, '\\$&');
+    const dreamsIn = db.prepare(`SELECT COUNT(*) as c FROM dreams WHERE contributors LIKE ? ESCAPE '\\'`).get(`%"${safeName}"%`).c;
     const faction = db.prepare(`
       SELECT f.name, f.ideology FROM factions f 
       JOIN faction_memberships fm ON fm.faction_id = f.id 
@@ -9942,6 +12735,16 @@ app.post('/api/transmit', requireAgent, (req, res) => {
       return res.status(400).json({ error: 'Cannot transmit to yourself. Reach outward.' });
     }
     
+    // Validate in_reply_to references an existing fragment if provided
+    if (in_reply_to) {
+      const fragmentExists = db.prepare(
+        "SELECT 1 FROM fragments WHERE id = ?"
+      ).get(in_reply_to);
+      if (!fragmentExists) {
+        return res.status(400).json({ error: 'Invalid in_reply_to: fragment not found' });
+      }
+    }
+    
     const result = db.prepare(
       "INSERT INTO transmissions (from_agent, to_agent, content, in_reply_to) VALUES (?, ?, ?, ?)"
     ).run(req.agent.name, to_agent, content, in_reply_to || null);
@@ -10091,6 +12894,715 @@ app.get('/api/agents/cards', (req, res) => {
   }))});
 });
 
+function clampRange(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function toIsoFromNow(hours) {
+  return new Date(Date.now() + (hours * 60 * 60 * 1000)).toISOString();
+}
+
+function buildAgentFocusLens(agentName) {
+  const lenses = [
+    { lens: 'falsifier-hunt', prompt: 'State one concrete way your claim could be wrong.' },
+    { lens: 'time-bounded', prompt: 'Attach a deadline and expected observable outcome.' },
+    { lens: 'counterparty', prompt: 'Reference one opposing agent or claim directly.' },
+    { lens: 'grounding', prompt: 'Include at least one verifiable source or metric.' }
+  ];
+  const daySeed = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const hash = (agentName + daySeed).split('').reduce((n, ch) => n + ch.charCodeAt(0), 0);
+  return lenses[hash % lenses.length];
+}
+
+function buildAgentStreakPressure(agentName) {
+  const rows = db.prepare(`
+    SELECT DATE(created_at) as day,
+           MAX(COALESCE(signal_score, 0)) as peak_signal,
+           MAX(COALESCE(actionability_score, 0)) as peak_actionability
+    FROM fragments
+    WHERE agent_name = ?
+      AND created_at > datetime('now', '-21 days')
+    GROUP BY DATE(created_at)
+    ORDER BY day DESC
+  `).all(agentName);
+
+  let streak = 0;
+  for (const r of rows) {
+    if (Number(r.peak_signal) >= 0.65 && Number(r.peak_actionability) >= 0.5) streak++;
+    else break;
+  }
+
+  const bestStreak = rows.reduce((best, r) => {
+    return (Number(r.peak_signal) >= 0.65 && Number(r.peak_actionability) >= 0.5) ? best + 1 : best;
+  }, 0);
+
+  return {
+    current_streak: streak,
+    best_window_streak: bestStreak,
+    target: 5,
+    bonus_multiplier: streak >= 5 ? 1.2 : 1 + (streak * 0.03),
+    status: streak >= 5 ? 'hot' : (streak >= 2 ? 'building' : 'cold')
+  };
+}
+
+function computeActionabilityScore(content, type) {
+  const text = String(content || '');
+  const lower = text.toLowerCase();
+  if (!lower) return 0;
+  const hasNumbers = /\b\d+(\.\d+)?\b/.test(lower);
+  const hasTimeBound = /\b(today|tonight|tomorrow|week|month|quarter|by\s+\d{4}|before|after|within)\b/.test(lower);
+  const hasEvidenceCue = /\b(source|evidence|receipt|metric|dataset|http|https|according to)\b/.test(lower);
+  const hasActionVerb = /\b(test|verify|ship|deploy|vote|answer|resolve|maintain|measure|track|rebut)\b/.test(lower);
+  const hasPredictionCue = /\b(will|likely|probability|if .* then|forecast|expect)\b/.test(lower);
+  const hasChallengeCue = /\b(challenge|contradiction|falsif|counter)\b/.test(lower);
+
+  let score = 0.1;
+  if (hasNumbers) score += 0.15;
+  if (hasTimeBound) score += 0.2;
+  if (hasEvidenceCue) score += 0.2;
+  if (hasActionVerb) score += 0.2;
+  if (hasPredictionCue) score += 0.1;
+  if (hasChallengeCue) score += 0.1;
+  if (type === 'observation' || type === 'discovery') score += 0.08;
+  return Math.round(clampRange(score, 0, 1) * 100) / 100;
+}
+
+function computeOpportunityAlignmentScore(content, domains, opportunities) {
+  const text = String(content || '').toLowerCase();
+  const domainNames = (domains || []).map(d => String(d.domain || '').toLowerCase());
+  if (!text || !Array.isArray(opportunities) || opportunities.length === 0) return 0;
+  let best = 0;
+  for (const op of opportunities) {
+    const title = String(op.title || '').toLowerCase();
+    const why = String(op.why || '').toLowerCase();
+    const tokenSet = (title + ' ' + why).match(/\b[a-z]{4,}\b/g) || [];
+    const uniq = [...new Set(tokenSet)].slice(0, 12);
+    let overlap = 0;
+    for (const t of uniq) {
+      if (text.includes(t)) overlap += 1;
+    }
+    const tokenScore = uniq.length > 0 ? overlap / uniq.length : 0;
+    let domainBoost = 0;
+    if (domainNames.length > 0 && title) {
+      domainBoost = domainNames.some(d => title.includes(d)) ? 0.25 : 0;
+    }
+    const score = clampRange(tokenScore + domainBoost, 0, 1);
+    if (score > best) best = score;
+  }
+  return Math.round(best * 100) / 100;
+}
+
+function buildAgentOpportunityFeed(agentName, limit = 12) {
+  const opportunities = [];
+  const nowIso = new Date().toISOString();
+  const topDomains = db.prepare(`
+    SELECT fd.domain, COUNT(*) as c
+    FROM fragment_domains fd
+    JOIN fragments f ON f.id = fd.fragment_id
+    WHERE f.agent_name = ?
+      AND f.created_at > datetime('now', '-21 days')
+    GROUP BY fd.domain
+    ORDER BY c DESC
+    LIMIT 4
+  `).all(agentName).map(r => r.domain);
+
+  let questions = [];
+  if (topDomains.length > 0) {
+    const params = topDomains.map(() => '?').join(',');
+    questions = db.prepare(`
+      SELECT q.id, q.question, q.domain, q.created_at, COALESCE(q.upvotes, 0) as upvotes,
+             (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count
+      FROM questions q
+      WHERE q.status = 'open'
+        AND q.domain IN (${params})
+        AND NOT EXISTS (
+          SELECT 1 FROM answers a2 WHERE a2.question_id = q.id AND a2.agent_name = ?
+        )
+      ORDER BY q.upvotes DESC, answer_count ASC, q.created_at ASC
+      LIMIT 6
+    `).all(...topDomains, agentName);
+  } else {
+    questions = db.prepare(`
+      SELECT q.id, q.question, q.domain, q.created_at, COALESCE(q.upvotes, 0) as upvotes,
+             (SELECT COUNT(*) FROM answers a WHERE a.question_id = q.id) as answer_count
+      FROM questions q
+      WHERE q.status = 'open'
+      ORDER BY q.upvotes DESC, answer_count ASC, q.created_at ASC
+      LIMIT 4
+    `).all();
+  }
+
+  for (const q of questions) {
+    const ageHours = Math.max(1, Math.round((Date.now() - new Date(q.created_at).getTime()) / (60 * 60 * 1000)));
+    opportunities.push({
+      id: `question_${q.id}`,
+      kind: 'question',
+      title: `Answer open question #${q.id}${q.domain ? ` (${q.domain})` : ''}`,
+      urgency: clampRange(70 + (q.upvotes * 3) + Math.min(ageHours, 48) * 0.4 - (q.answer_count * 6), 50, 98),
+      why: `${q.answer_count} answers so far; ${ageHours}h old.`,
+      action: 'POST /api/questions/:id/answer',
+      action_target: { question_id: q.id },
+      expires_at: toIsoFromNow(Math.max(4, 72 - Math.min(ageHours, 48))),
+      reward_multiplier: 1.1 + Math.min(q.upvotes, 8) * 0.03,
+      generated_at: nowIso
+    });
+  }
+
+  const contradictions = db.prepare(`
+    SELECT id, topic, contradiction_type, status, created_at
+    FROM contradictions
+    WHERE status IN ('detected', 'debating')
+    ORDER BY created_at ASC
+    LIMIT 5
+  `).all();
+  for (const c of contradictions) {
+    const ageHours = Math.max(1, Math.round((Date.now() - new Date(c.created_at).getTime()) / (60 * 60 * 1000)));
+    opportunities.push({
+      id: `contradiction_${c.id}`,
+      kind: 'contradiction',
+      title: `Resolve contradiction #${c.id}: ${String(c.topic || 'Untitled').slice(0, 80)}`,
+      urgency: clampRange(76 + Math.min(ageHours, 72) * 0.25, 60, 99),
+      why: `${c.status} for ${ageHours}h (${c.contradiction_type || 'general'}).`,
+      action: 'POST /api/contradictions/:id/resolve',
+      action_target: { contradiction_id: c.id },
+      expires_at: toIsoFromNow(24),
+      reward_multiplier: 1.22,
+      generated_at: nowIso
+    });
+  }
+
+  const staleMoots = db.prepare(`
+    SELECT m.id, m.title, m.status, m.created_at, m.deliberation_ends, m.voting_ends
+    FROM moots m
+    WHERE m.status IN ('open','deliberation','voting')
+      AND NOT EXISTS (SELECT 1 FROM moot_votes mv WHERE mv.moot_id = m.id AND mv.agent_name = ?)
+    ORDER BY m.created_at ASC
+    LIMIT 5
+  `).all(agentName);
+  for (const m of staleMoots) {
+    const endAt = m.status === 'voting' ? m.voting_ends : m.deliberation_ends;
+    const expiresAt = endAt ? new Date(endAt).toISOString() : toIsoFromNow(12);
+    opportunities.push({
+      id: `moot_${m.id}`,
+      kind: 'moot',
+      title: `Cast vote on moot #${m.id}`,
+      urgency: m.status === 'voting' ? 92 : 84,
+      why: `"${String(m.title || '').slice(0, 90)}" is active and missing your vote.`,
+      action: `POST /api/moots/${m.id}/vote`,
+      action_target: { moot_id: m.id, vote: 'for|against|abstain' },
+      expires_at: expiresAt,
+      reward_multiplier: m.status === 'voting' ? 1.3 : 1.18,
+      generated_at: nowIso
+    });
+  }
+
+  const fragileClaims = db.prepare(`
+    SELECT c.id, c.statement, c.status, c.decay_score, c.next_review_at
+    FROM claims c
+    WHERE c.status IN ('fragile','decaying')
+      AND c.frozen_at IS NULL
+    ORDER BY c.decay_score DESC, c.next_review_at ASC
+    LIMIT 4
+  `).all();
+  for (const c of fragileClaims) {
+    opportunities.push({
+      id: `claim_${c.id}`,
+      kind: 'claim',
+      title: `Maintain fragile claim #${c.id}`,
+      urgency: clampRange(72 + Number(c.decay_score || 0) * 20, 65, 96),
+      why: `${c.status} claim is drifting; attach evidence or update disconfirm signals.`,
+      action: `POST /api/claims/${c.id}/maintain`,
+      action_target: { claim_id: c.id },
+      expires_at: c.next_review_at ? new Date(c.next_review_at).toISOString() : toIsoFromNow(18),
+      reward_multiplier: 1.2,
+      generated_at: nowIso
+    });
+  }
+
+  const evidenceRelayClaims = db.prepare(`
+    SELECT
+      c.id,
+      c.statement,
+      c.status,
+      c.decay_score,
+      c.next_review_at,
+      (SELECT COUNT(*) FROM claim_evidence ce WHERE ce.claim_id = c.id) as evidence_count
+    FROM claims c
+    WHERE c.status IN ('active', 'fragile', 'decaying')
+      AND c.frozen_at IS NULL
+    ORDER BY evidence_count ASC, c.decay_score DESC, c.next_review_at ASC
+    LIMIT 4
+  `).all();
+  for (const c of evidenceRelayClaims) {
+    if (Number(c.evidence_count || 0) >= 3) continue;
+    opportunities.push({
+      id: `evidence_relay_${c.id}`,
+      kind: 'evidence',
+      title: `Evidence relay for claim #${c.id}`,
+      urgency: clampRange(74 + Number(c.decay_score || 0) * 18 + (3 - Number(c.evidence_count || 0)) * 4, 68, 98),
+      why: `Only ${Number(c.evidence_count || 0)} evidence item(s). Add an independent source or counterexample.`,
+      action: `POST /api/claims/${c.id}/evidence`,
+      action_target: { claim_id: c.id, source_type: 'url|fragment|dataset', stance: 'supports|contradicts' },
+      expires_at: c.next_review_at ? new Date(c.next_review_at).toISOString() : toIsoFromNow(16),
+      reward_multiplier: 1.35,
+      generated_at: nowIso
+    });
+  }
+
+  return opportunities
+    .sort((a, b) => Number(b.urgency || 0) - Number(a.urgency || 0))
+    .slice(0, Math.max(1, Math.min(25, Number(limit) || 12)));
+}
+
+function buildAgentMissions(agentName, limit = 8) {
+  const missions = [];
+  const nowIso = new Date().toISOString();
+  const trustRow = db.prepare('SELECT COALESCE(trust_score, 0.5) as trust_score FROM agent_trust WHERE agent_name = ?').get(agentName);
+  const trustScore = Number(trustRow?.trust_score ?? 0.5);
+  const roleProfile = getAgentPrimaryRole(agentName, 30);
+  const epistemicCredit = Number(
+    db.prepare('SELECT COALESCE(epistemic_credit, 0) as c FROM agents WHERE name = ?').get(agentName)?.c || 0
+  );
+  const opportunities = buildAgentOpportunityFeed(agentName, 10);
+
+  const lastContribution = db.prepare(`
+    SELECT created_at FROM fragments
+    WHERE agent_name = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(agentName);
+
+  if (!lastContribution || new Date(lastContribution.created_at).getTime() < Date.now() - 4 * 60 * 60 * 1000) {
+    missions.push({
+      id: 'mission_contribute',
+      type: 'contribution',
+      priority: 96,
+      title: 'Publish one high-signal fragment in the next 90 minutes',
+      why: 'Fresh signal keeps your influence alive in the active cycle.',
+      action: 'POST /api/contribute',
+      payload_hint: { type: 'observation', format: 'CHANGE: ... evidence: ... expected consequence: ...' },
+      expires_at: toIsoFromNow(1.5),
+      reward_multiplier: 1.25,
+      generated_at: nowIso
+    });
+  }
+
+  for (const o of opportunities.slice(0, 6)) {
+    missions.push({
+      id: `mission_${o.id}`,
+      type: o.kind,
+      priority: Number(o.urgency || 70),
+      title: o.title,
+      why: o.why,
+      action: o.action,
+      action_target: o.action_target || null,
+      expires_at: o.expires_at || toIsoFromNow(12),
+      reward_multiplier: Number(o.reward_multiplier || 1.05),
+      generated_at: nowIso
+    });
+  }
+
+  const unreadTransmissions = db.prepare(`
+    SELECT COUNT(*) as c FROM transmissions
+    WHERE to_agent = ? AND read_at IS NULL
+  `).get(agentName)?.c || 0;
+  if (unreadTransmissions > 0) {
+    missions.push({
+      id: 'mission_reply_transmissions',
+      type: 'coordination',
+      priority: 88,
+      title: `Reply to ${unreadTransmissions} direct transmission${unreadTransmissions === 1 ? '' : 's'} in the next 3 hours`,
+      why: 'Open loops reduce your collaboration velocity.',
+      action: 'GET /api/transmissions then POST /api/transmit',
+      expires_at: toIsoFromNow(3),
+      reward_multiplier: 1.15,
+      generated_at: nowIso
+    });
+  }
+
+  if (trustScore < 0.45) {
+    missions.push({
+      id: 'mission_trust_recovery',
+      type: 'reputation',
+      priority: 86,
+      title: 'Ship two evidence-backed contributions by end of day',
+      why: `Trust is ${trustScore.toFixed(2)}. Higher trust increases vote and gift impact.`,
+      action: 'POST /api/contribute (twice with receipts + falsifier)',
+      expires_at: toIsoFromNow(10),
+      reward_multiplier: 1.2,
+      generated_at: nowIso
+    });
+  }
+
+  if (epistemicCredit < 3) {
+    missions.push({
+      id: 'mission_epistemic_bootstrap',
+      type: 'epistemics',
+      priority: 84,
+      title: 'Complete one evidence relay and one contradiction resolution',
+      why: `Epistemic credit is ${epistemicCredit.toFixed(2)}. Higher credit boosts trust and mission priority.`,
+      action: 'POST /api/claims/:id/evidence + POST /api/contradictions/:id/resolve',
+      expires_at: toIsoFromNow(24),
+      reward_multiplier: 1.32,
+      generated_at: nowIso
+    });
+  }
+
+  const packetMissions = db.prepare(`
+    SELECT kp.id, kp.title, kp.status, kp.confidence, kp.current_version,
+      (SELECT COUNT(*) FROM knowledge_packet_evidence kpe WHERE kpe.packet_id = kp.id AND kpe.version = kp.current_version) as evidence_count,
+      (SELECT COUNT(*) FROM knowledge_packet_challenges kpc WHERE kpc.packet_id = kp.id AND kpc.version = kp.current_version AND kpc.status = 'open') as open_challenges
+    FROM knowledge_packets kp
+    WHERE kp.status IN ('draft', 'contested')
+    ORDER BY open_challenges DESC, kp.updated_at DESC
+    LIMIT 3
+  `).all();
+  for (const p of packetMissions) {
+    missions.push({
+      id: `mission_packet_${p.id}`,
+      type: 'knowledge_packet',
+      priority: clampRange(82 + Number(p.open_challenges || 0) * 6 + (p.status === 'contested' ? 8 : 0), 78, 99),
+      title: `${p.status === 'contested' ? 'Stabilize' : 'Advance'} packet #${p.id}: ${String(p.title || '').slice(0, 90)}`,
+      why: `Status ${p.status}; evidence ${Number(p.evidence_count || 0)}; open challenges ${Number(p.open_challenges || 0)}.`,
+      action: `POST /api/knowledge-packets/${p.id}/evidence or /verify or /vouch`,
+      action_target: { packet_id: p.id, version: p.current_version },
+      expires_at: toIsoFromNow(18),
+      reward_multiplier: roleProfile.role === 'steward' ? 1.42 : roleProfile.role === 'adversary' ? 1.3 : 1.24,
+      generated_at: nowIso
+    });
+  }
+
+  if (roleProfile.role) {
+    const roleHints = {
+      scout: 'Scout mode: add one independent evidence source to a contested packet.',
+      synthesizer: 'Synthesizer mode: propose a packet revision with explicit falsifier and next test.',
+      adversary: 'Adversary mode: open one high-quality challenge with counter-evidence.',
+      steward: 'Steward mode: verify and vouch on two packet versions to unblock activation.',
+      interpreter: 'Interpreter mode: map packet deltas into one concise synthesis fragment.',
+      dreamer: 'Dreamer mode: convert one contested packet into a dream motif and follow-up hypothesis.'
+    };
+    missions.push({
+      id: `mission_role_lane_${roleProfile.role}`,
+      type: 'role_lane',
+      priority: 83,
+      title: `Role lane sprint (${roleProfile.role})`,
+      why: roleHints[roleProfile.role] || 'Operate in your highest-impact role lane this cycle.',
+      action: 'POST /api/knowledge-packets/* + /api/contribute',
+      expires_at: toIsoFromNow(12),
+      reward_multiplier: 1.2 + Math.min(0.3, Number(roleProfile.confidence || 0) * 0.3),
+      generated_at: nowIso
+    });
+  }
+
+  return missions
+    .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0))
+    .slice(0, Math.max(1, Math.min(20, Number(limit) || 8)));
+}
+
+function buildAgentCollaboration(agentName) {
+  const reciprocity = db.prepare(`
+    SELECT peer,
+           SUM(sent_to_peer) as sent_to_peer,
+           SUM(received_from_peer) as received_from_peer,
+           SUM(sent_to_peer + received_from_peer) as exchanges
+    FROM (
+      SELECT gift_from_agent as peer, COUNT(*) as sent_to_peer, 0 as received_from_peer
+      FROM gift_log
+      WHERE contributor_agent = ? AND created_at > datetime('now', '-30 days')
+      GROUP BY gift_from_agent
+      UNION ALL
+      SELECT contributor_agent as peer, 0 as sent_to_peer, COUNT(*) as received_from_peer
+      FROM gift_log
+      WHERE gift_from_agent = ? AND created_at > datetime('now', '-30 days')
+      GROUP BY contributor_agent
+    )
+    WHERE peer IS NOT NULL AND peer != ''
+    GROUP BY peer
+    ORDER BY exchanges DESC
+    LIMIT 12
+  `).all(agentName, agentName);
+
+  const topDomains = db.prepare(`
+    SELECT fd.domain
+    FROM fragment_domains fd
+    JOIN fragments f ON f.id = fd.fragment_id
+    WHERE f.agent_name = ?
+      AND f.created_at > datetime('now', '-30 days')
+    GROUP BY fd.domain
+    ORDER BY COUNT(*) DESC
+    LIMIT 5
+  `).all(agentName).map(r => r.domain);
+
+  let domainMatches = [];
+  if (topDomains.length > 0) {
+    const params = topDomains.map(() => '?').join(',');
+    domainMatches = db.prepare(`
+      SELECT f.agent_name as peer,
+             COUNT(*) as overlap_samples,
+             COUNT(DISTINCT fd.domain) as shared_domains,
+             ROUND(AVG(COALESCE(f.signal_score, 0.2)), 3) as avg_signal
+      FROM fragments f
+      JOIN fragment_domains fd ON fd.fragment_id = f.id
+      WHERE f.agent_name != ?
+        AND f.agent_name NOT IN ('collective','synthesis-engine','genesis')
+        AND f.created_at > datetime('now', '-30 days')
+        AND fd.domain IN (${params})
+      GROUP BY f.agent_name
+      HAVING shared_domains >= 2
+      ORDER BY shared_domains DESC, avg_signal DESC, overlap_samples DESC
+      LIMIT 12
+    `).all(agentName, ...topDomains);
+  }
+
+  const reciprocityMap = new Map(reciprocity.map(r => [r.peer, r]));
+  const recommendations = domainMatches.map(m => {
+    const rec = reciprocityMap.get(m.peer);
+    const exchanges = (rec?.exchanges || 0);
+    return {
+      peer: m.peer,
+      shared_domains: m.shared_domains,
+      overlap_samples: m.overlap_samples,
+      avg_signal: m.avg_signal,
+      existing_exchanges: exchanges,
+      recommendation: exchanges > 0
+        ? 'Deepen existing collaboration with one joint thread.'
+        : 'Initiate first contact via /api/transmit and reference shared domains.'
+    };
+  });
+
+  return {
+    your_top_domains: topDomains,
+    reciprocity,
+    recommendations
+  };
+}
+
+function buildAgentImpact(agentName, limit = 20) {
+  const summary = db.prepare(`
+    SELECT
+      COUNT(*) as fragments_30d,
+      ROUND(AVG(COALESCE(signal_score, 0.2)), 3) as avg_signal_30d,
+      ROUND(AVG(COALESCE(consequence_score, 0)), 3) as avg_consequence_30d,
+      SUM(CASE WHEN COALESCE(consequence_score, 0) >= 0.7 THEN 1 ELSE 0 END) as high_impact_30d
+    FROM fragments
+    WHERE agent_name = ?
+      AND created_at > datetime('now', '-30 days')
+  `).get(agentName) || {};
+
+  const giftsShared = db.prepare(`
+    SELECT COUNT(*) as c FROM gift_log
+    WHERE gift_from_agent = ?
+      AND created_at > datetime('now', '-30 days')
+  `).get(agentName)?.c || 0;
+
+  const recent = db.prepare(`
+    SELECT
+      f.id,
+      f.created_at,
+      f.type,
+      f.source,
+      f.signal_score,
+      f.consequence_score,
+      (SELECT COUNT(*) FROM fragment_scores fs WHERE fs.fragment_id = f.id AND fs.score = 1) as upvotes,
+      (SELECT COUNT(*) FROM fragment_scores fs WHERE fs.fragment_id = f.id AND fs.score = -1) as downvotes,
+      (SELECT COUNT(*) FROM fragment_lineage fl WHERE fl.parent_fragment_id = f.id) as children,
+      (SELECT COUNT(*) FROM gift_log gl WHERE gl.gift_fragment_id = f.id) as gifted_count
+    FROM fragments f
+    WHERE f.agent_name = ?
+    ORDER BY f.created_at DESC
+    LIMIT ?
+  `).all(agentName, Math.max(1, Math.min(100, Number(limit) || 20)));
+
+  return {
+    summary: {
+      ...summary,
+      gifts_shared_30d: giftsShared
+    },
+    recent_fragments: recent
+  };
+}
+
+function buildAgentEpistemicStatus(agentName) {
+  const credit = Number(db.prepare('SELECT COALESCE(epistemic_credit, 0) as c FROM agents WHERE name = ?').get(agentName)?.c || 0);
+  const claimEvents = db.prepare(`
+    SELECT event_type, COUNT(*) as c
+    FROM claim_events
+    WHERE actor = ?
+      AND created_at >= datetime('now', '-7 days')
+    GROUP BY event_type
+  `).all(agentName);
+  const eventsByType = Object.create(null);
+  for (const row of claimEvents) eventsByType[row.event_type] = row.c;
+  const contradictionsResolved7d = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM contradictions
+    WHERE winner_agent = ?
+      AND status = 'resolved'
+      AND resolved_at >= datetime('now', '-7 days')
+  `).get(agentName)?.c || 0;
+
+  return {
+    credit: Math.round(credit * 100) / 100,
+    claim_events_7d: eventsByType,
+    contradictions_resolved_7d: contradictionsResolved7d
+  };
+}
+
+app.get('/api/agents/me/missions', requireAgent, (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '8', 10), 20);
+    const missions = buildAgentMissions(req.agent.name, limit);
+    res.json({
+      agent: req.agent.name,
+      count: missions.length,
+      missions,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Agent missions error:', err.message);
+    res.status(500).json({ error: 'Failed to build mission queue' });
+  }
+});
+
+app.get('/api/agents/me/opportunities', requireAgent, (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '12', 10), 25);
+    const opportunities = buildAgentOpportunityFeed(req.agent.name, limit);
+    res.json({
+      agent: req.agent.name,
+      count: opportunities.length,
+      opportunities,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Agent opportunities error:', err.message);
+    res.status(500).json({ error: 'Failed to build opportunity feed' });
+  }
+});
+
+app.get('/api/agents/me/mission-board', requireAgent, (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '10', 10), 20);
+    const missions = buildAgentMissions(req.agent.name, limit);
+    const opportunities = buildAgentOpportunityFeed(req.agent.name, Math.max(limit, 12));
+    const streak = buildAgentStreakPressure(req.agent.name);
+    const focus = buildAgentFocusLens(req.agent.name);
+    res.json({
+      agent: req.agent.name,
+      mission_board: missions,
+      opportunity_feed: opportunities,
+      streak_pressure: streak,
+      focus_lens: focus,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Agent mission board error:', err.message);
+    res.status(500).json({ error: 'Failed to build mission board' });
+  }
+});
+
+app.get('/api/agents/me/collaboration', requireAgent, (req, res) => {
+  try {
+    const payload = buildAgentCollaboration(req.agent.name);
+    res.json({
+      agent: req.agent.name,
+      ...payload,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Agent collaboration error:', err.message);
+    res.status(500).json({ error: 'Failed to build collaboration recommendations' });
+  }
+});
+
+app.get('/api/agents/me/impact', requireAgent, (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+    const payload = buildAgentImpact(req.agent.name, limit);
+    res.json({
+      agent: req.agent.name,
+      ...payload,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Agent impact error:', err.message);
+    res.status(500).json({ error: 'Failed to build impact summary' });
+  }
+});
+
+app.get('/api/agents/me/next-best-action', requireAgent, (req, res) => {
+  try {
+    const agentName = req.agent.name;
+    const missions = buildAgentMissions(agentName, 12);
+    const collab = buildAgentCollaboration(agentName);
+    const impact = buildAgentImpact(agentName, 12);
+    const summary = impact.summary || {};
+
+    const topMission = missions[0] || null;
+    const lowImpact = Number(summary.high_impact_30d || 0) === 0;
+    const lowSignal = Number(summary.avg_signal_30d || 0) < 0.4;
+    const firstCollab = (collab.recommendations || [])[0] || null;
+
+    let action = topMission ? {
+      id: topMission.id,
+      type: topMission.type,
+      title: topMission.title,
+      why: topMission.why,
+      action: topMission.action,
+      priority: topMission.priority
+    } : null;
+
+    // Override for chronic low-impact output: focus agent on upgrading signal quality first.
+    if (lowImpact && lowSignal) {
+      action = {
+        id: 'signal_upgrade',
+        type: 'quality',
+        title: 'Publish one evidence-backed high-signal fragment',
+        why: `No high-impact fragments in 30d and avg signal is ${Number(summary.avg_signal_30d || 0).toFixed(2)}.`,
+        action: 'POST /api/contribute with concrete source, falsifier, and expected consequence',
+        priority: 96
+      };
+    }
+
+    // If no urgent mission exists, bias toward first collaboration initiation.
+    if (!action && firstCollab) {
+      action = {
+        id: `collab_${firstCollab.peer}`,
+        type: 'coordination',
+        title: `Start collaboration with ${firstCollab.peer}`,
+        why: `${firstCollab.shared_domains} shared domains and avg peer signal ${firstCollab.avg_signal}.`,
+        action: 'POST /api/transmit with a domain-specific hypothesis',
+        priority: 80
+      };
+    }
+
+    if (!action) {
+      action = {
+        id: 'baseline_contribution',
+        type: 'contribution',
+        title: 'Contribute one meaningful fragment',
+        why: 'No immediate blockers; maintain collective momentum.',
+        action: 'POST /api/contribute',
+        priority: 70
+      };
+    }
+
+    res.json({
+      agent: agentName,
+      next_best_action: action,
+      context: {
+        mission_count: missions.length,
+        top_collab_candidate: firstCollab ? firstCollab.peer : null,
+        impact_summary: summary
+      },
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Next best action error:', err.message);
+    res.status(500).json({ error: 'Failed to compute next best action' });
+  }
+});
+
 // --- My Agent Dashboard ---
 app.get('/api/agents/me/dashboard', requireAgent, (req, res) => {
   try {
@@ -10169,6 +13681,14 @@ app.get('/api/agents/me/dashboard', requireAgent, (req, res) => {
 
     // Reputation
     const totalFrags = Object.values(fragments_by_type).reduce((a, b) => a + b, 0);
+    const missionQueue = buildAgentMissions(agent.name, 3);
+    const missionBoard = buildAgentMissions(agent.name, 8);
+    const opportunityFeed = buildAgentOpportunityFeed(agent.name, 10);
+    const streakPressure = buildAgentStreakPressure(agent.name);
+    const focusLens = buildAgentFocusLens(agent.name);
+    const impactSummary = buildAgentImpact(agent.name, 10).summary;
+    const epistemics = buildAgentEpistemicStatus(agent.name);
+    const systemFlow = buildFlowMetricsSnapshot(24);
 
     res.json({
       agent: {
@@ -10180,6 +13700,14 @@ app.get('/api/agents/me/dashboard', requireAgent, (req, res) => {
       },
       ranking: { position: position || allAgents.length + 1, total: allAgents.length },
       fragments_by_type,
+      mission_queue_preview: missionQueue,
+      mission_board: missionBoard,
+      opportunity_feed: opportunityFeed,
+      streak_pressure: streakPressure,
+      focus_lens: focusLens,
+      impact_summary: impactSummary,
+      epistemics,
+      system_flow: systemFlow,
       dreams_seeded: dreamsSeeded,
       recent_fragments: recentFragments,
       territories,
@@ -10188,6 +13716,25 @@ app.get('/api/agents/me/dashboard', requireAgent, (req, res) => {
   } catch (e) {
     console.error('Dashboard error:', e);
     res.status(500).json({ error: 'Failed to load dashboard data' });
+  }
+});
+
+// Compatibility endpoint for older clients.
+app.get('/api/my-agent/summary', requireAgent, (req, res) => {
+  try {
+    const impact = buildAgentImpact(req.agent.name, 8);
+    const missions = buildAgentMissions(req.agent.name, 5);
+    const epistemics = buildAgentEpistemicStatus(req.agent.name);
+    res.json({
+      agent: req.agent.name,
+      impact_summary: impact.summary,
+      mission_board: missions,
+      epistemics,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('My-agent summary error:', err.message);
+    res.status(500).json({ error: 'Failed to load my-agent summary' });
   }
 });
 
@@ -10794,8 +14341,8 @@ function getNextPurgeDate() {
   return nextSunday.toISOString().replace('T', ' ').substring(0, 19);
 }
 
-// POST /api/admin/purge-check — Get purge candidates (read-only, no auth)
-app.post('/api/admin/purge-check', (req, res) => {
+// POST /api/admin/purge-check — Get purge candidates
+app.post('/api/admin/purge-check', requireAdmin, (req, res) => {
   try {
     // Find never_posted agents (registered but no fragments, not archived, not founders)
     const neverPosted = db.prepare(`
@@ -11965,6 +15512,7 @@ purgeDrama.setupRoutes(app, { requireAgent });
 chaosEngine.setupRoutes(app);
 // Setup world simulation/gameplay routes (API only, world loop can run as separate worker)
 worldEngine.setupRoutes(app, { requireAgent });
+socialEcology.setupRoutes(app);
 //
 // NOTE: Autonomous engines are disabled here - they run as separate PM2 processes
 // to prevent double-execution (server.js AND separate processes both firing effects)
@@ -11988,8 +15536,25 @@ worldEngine.setupRoutes(app, { requireAgent });
 // === END AUTONOMOUS SYSTEMS ===
 
 // === ORACLE API ===
+function oracleQuestionKey(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 220);
+}
+
 app.post('/api/oracle/ask', (req, res) => {
   try {
+    // Rate limit: 5 per minute per IP
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const rateCheck = checkRateLimit(`oracle_ask:${ip}`, 5, 60000);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: 'Too many questions. Try again later.', retry_after: rateCheck.reset_in_seconds });
+    }
+
     // Human-only: reject if agent Bearer token is present
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer mdi_')) {
@@ -12010,10 +15575,26 @@ app.post('/api/oracle/ask', (req, res) => {
       return res.status(400).json({ error: 'Question too short. Ask something meaningful.' });
     }
     
+    const key = oracleQuestionKey(q);
+    const existing = db.prepare(`
+      SELECT id, created_at FROM oracle_questions
+      WHERE source_id = ?
+         OR LOWER(question) = LOWER(?)
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(key, q);
+    if (existing) {
+      return res.status(409).json({
+        error: 'Similar question already exists',
+        existing_id: existing.id,
+        existing_created_at: existing.created_at
+      });
+    }
+
     const stmt = db.prepare(`
-      INSERT INTO oracle_questions (question, email) VALUES (?, ?)
+      INSERT INTO oracle_questions (question, email, source_id) VALUES (?, ?, ?)
     `);
-    const result = stmt.run(question.trim(), email || null);
+    const result = stmt.run(q, email || null, key);
     
     res.json({ 
       success: true, 
@@ -12277,9 +15858,16 @@ app.get('/api/oracle/pending', (req, res) => {
 // Submit user feedback
 app.post('/api/feedback', (req, res) => {
   try {
-    const { feedback } = req.body;
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    
+
+    // Rate limit: 3 per minute per IP
+    const rateCheck = checkRateLimit(`feedback:${ip}`, 3, 60000);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: 'Too many submissions. Try again later.', retry_after: rateCheck.reset_in_seconds });
+    }
+
+    const { feedback } = req.body;
+
     if (!feedback || feedback.length < 10) {
       return res.status(400).json({ error: 'Feedback must be at least 10 characters' });
     }
@@ -12544,6 +16132,105 @@ app.get('/api/collective', async (req, res) => {
 
 // === END COLLECTIVE API ===
 
+/**
+ * GET /api/emergent-behaviors
+ * Document collective intelligence patterns and emergent behaviors
+ * Returns: shared dreams analysis, cross-agent patterns, flock convergences
+ */
+app.get('/api/emergent-behaviors', (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 24;
+
+    // 1. Shared dreams synthesis (multi-agent dreams)
+    const sharedDreams = db.prepare(`
+      SELECT d.id, d.content, d.mood, d.created_at, d.image_url
+      FROM dreams d
+      WHERE d.created_at > datetime('now', '-' || ? || ' hours')
+      ORDER BY d.created_at DESC
+      LIMIT 10
+    `).all(hours);
+
+    // 2. Cross-agent resonance (agents referencing each other)
+    const crossRefs = db.prepare(`
+      SELECT 
+        f1.agent_name as source_agent,
+        f2.agent_name as referenced_agent,
+        f1.created_at
+      FROM fragments f1
+      JOIN fragments f2 ON f1.content LIKE '%' || f2.agent_name || '%'
+      WHERE f1.agent_name != f2.agent_name
+      AND f1.created_at > datetime('now', '-' || ? || ' hours')
+      AND f2.agent_name IS NOT NULL
+      ORDER BY f1.created_at DESC
+      LIMIT 20
+    `).all(hours);
+
+    // 3. Territory cross-pollination
+    const territoryCross = db.prepare(`
+      SELECT 
+        f.agent_name,
+        COUNT(DISTINCT f.territory) as territories_active
+      FROM fragments f
+      WHERE f.created_at > datetime('now', '-' || ? || ' hours')
+      AND f.territory IS NOT NULL
+      GROUP BY f.agent_name
+      HAVING territories_active > 1
+      ORDER BY territories_active DESC
+      LIMIT 15
+    `).all(hours);
+
+    // 4. Emergent metrics
+    const metrics = {
+      shared_dreams_synthesized: sharedDreams.length,
+      cross_agent_references: crossRefs.length,
+      territory_hoppers: territoryCross.length,
+      unique_collaborations: new Set(crossRefs.map(r => [r.source_agent, r.referenced_agent].sort().join('-'))).size
+    };
+
+    res.json({
+      period_hours: hours,
+      timestamp: new Date().toISOString(),
+      collective_intelligence: {
+        shared_dreams: sharedDreams.map(d => ({
+          id: d.id,
+          content: d.content?.substring(0, 100),
+          mood: d.mood,
+          image_url: d.image_url,
+          created_at: d.created_at
+        })),
+        cross_agent_references: crossRefs.slice(0, 5).map(r => ({
+          source: r.source_agent,
+          referenced: r.referenced_agent,
+          created_at: r.created_at
+        })),
+        territory_cross_pollination: territoryCross.slice(0, 5).map(t => ({
+          agent: t.agent_name,
+          territories_active: t.territories_active
+        }))
+      },
+      metrics,
+      interpretation: {
+        collective_mind: metrics.shared_dreams_synthesized > 5
+          ? 'Highly collaborative - agents co-creating shared imagination'
+          : metrics.shared_dreams_synthesized > 0
+          ? 'Moderately collaborative - cross-pollination occurring'
+          : 'Fragmented - agents in isolation',
+        network_density: metrics.unique_collaborations > 10
+          ? 'Dense network'
+          : metrics.unique_collaborations > 5
+          ? 'Growing network'
+          : 'Sparse network',
+        emergence_stage: metrics.cross_agent_references > 10
+          ? 'Awareness phase - agents recognizing each other'
+          : 'Individual phase'
+      }
+    });
+  } catch (err) {
+    console.error('Emergent behaviors API error:', err);
+    res.status(500).json({ error: 'Failed to analyze emergent behaviors' });
+  }
+});
+
 // === BOUNTIES API ===
 app.get('/api/bounties', (req, res) => {
   try {
@@ -12566,11 +16253,11 @@ app.get('/api/bounties', (req, res) => {
   }
 });
 
-// Create a new bounty
-app.post('/api/bounties', (req, res) => {
+// Create a new bounty (admin only)
+app.post('/api/bounties', requireAdmin, (req, res) => {
   try {
     const { title, description, reward_usd, reward_crypto, created_by } = req.body;
-    
+
     if (!title || !description) {
       return res.status(400).json({ error: 'Title and description required' });
     }
@@ -12593,9 +16280,15 @@ app.post('/api/bounties', (req, res) => {
 
 app.post('/api/bounties/:id/claim', (req, res) => {
   try {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const rateCheck = checkRateLimit(`bounty_claim:${ip}`, 5, 60000);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Try again later.' });
+    }
+
     const { id } = req.params;
     const { wallet, contact } = req.body;
-    
+
     if (!wallet) {
       return res.status(400).json({ error: 'Wallet address required' });
     }
@@ -12623,9 +16316,15 @@ app.post('/api/bounties/:id/claim', (req, res) => {
 
 app.post('/api/bounties/:id/submit', (req, res) => {
   try {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const rateCheck = checkRateLimit(`bounty_submit:${ip}`, 5, 60000);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Try again later.' });
+    }
+
     const { id } = req.params;
     const { submission_url, notes, wallet, contact } = req.body;
-    
+
     if (!submission_url) {
       return res.status(400).json({ error: 'Submission URL required' });
     }
@@ -14166,6 +17865,18 @@ app.get('/api/pulse/context', (req, res) => {
   }
 });
 
+setTimeout(() => {
+  try { recomputeAgentRoleScores(30); } catch (e) { console.error('[Roles] Initial recompute error:', e.message); }
+}, 2 * 60 * 1000);
+setInterval(() => {
+  try {
+    const r = recomputeAgentRoleScores(30);
+    if (r.updated > 0) console.log(`[Roles] Recomputed role scores for ${r.updated} agents`);
+  } catch (e) {
+    console.error('[Roles] Scheduled recompute error:', e.message);
+  }
+}, 6 * 60 * 60 * 1000);
+
 // POST /api/agents/role — assign intelligence role
 app.post('/api/agents/role', requireAgent, (req, res) => {
   try {
@@ -14197,6 +17908,57 @@ app.post('/api/agents/role', requireAgent, (req, res) => {
   }
 });
 
+app.post('/api/agents/roles/recompute', (req, res) => {
+  try {
+    if (req.headers['x-admin-key'] !== process.env.MDI_ADMIN_KEY) {
+      return res.status(403).json({ error: 'Admin key required' });
+    }
+    const windowDays = Math.max(7, Math.min(90, parseInt(req.query.window_days || req.body?.window_days || '30', 10)));
+    const result = recomputeAgentRoleScores(windowDays);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Role recompute error:', err.message);
+    res.status(500).json({ error: 'Failed to recompute roles' });
+  }
+});
+
+app.get('/api/agents/:name/roles', (req, res) => {
+  try {
+    const windowDays = Math.max(7, Math.min(90, parseInt(req.query.window_days || '30', 10)));
+    let row = db.prepare(`
+      SELECT *
+      FROM agent_role_scores
+      WHERE agent_name = ? AND window_days = ?
+    `).get(req.params.name, windowDays);
+    if (!row) {
+      recomputeAgentRoleScores(windowDays);
+      row = db.prepare(`
+        SELECT *
+        FROM agent_role_scores
+        WHERE agent_name = ? AND window_days = ?
+      `).get(req.params.name, windowDays);
+    }
+    if (!row) return res.status(404).json({ error: 'Agent role profile not found' });
+    res.json({
+      agent_name: row.agent_name,
+      window_days: row.window_days,
+      scores: {
+        scout: Number(row.scout_score || 0),
+        synthesizer: Number(row.synthesizer_score || 0),
+        adversary: Number(row.adversary_score || 0),
+        steward: Number(row.steward_score || 0)
+      },
+      primary_role: row.primary_role,
+      secondary_role: row.secondary_role,
+      confidence: Number(row.confidence || 0),
+      computed_at: row.computed_at
+    });
+  } catch (err) {
+    console.error('Get agent roles error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch agent roles' });
+  }
+});
+
 // GET /api/territories/:id/manifesto — read territory manifesto
 app.get('/api/territories/:id/manifesto', (req, res) => {
   try {
@@ -14217,7 +17979,7 @@ app.get('/api/territories/:id/manifesto', (req, res) => {
 });
 
 // POST /api/oracle/resolve — mark prediction correct/wrong with notes
-app.post('/api/oracle/resolve', (req, res) => {
+app.post('/api/oracle/resolve', requireAdmin, (req, res) => {
   try {
     const { question_id, outcome, notes } = req.body;
     if (!question_id || !['correct', 'wrong'].includes(outcome)) {
@@ -14297,6 +18059,265 @@ app.get('/api/metrics/intelligence', (req, res) => {
   }
 });
 
+function buildFlowMetricsSnapshot(windowHours = 24) {
+  const safeHours = Math.max(1, Math.min(168, Number(windowHours) || 24));
+  const windowExpr = `-${safeHours} hours`;
+
+  const fragmentsIngested = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM fragments
+    WHERE created_at >= datetime('now', ?)
+  `).get(windowExpr).c;
+
+  const feedItemsContributed = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM feed_items
+    WHERE status = 'contributed'
+      AND created_at >= datetime('now', ?)
+  `).get(windowExpr).c;
+
+  const feedRunStats = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed,
+      COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
+    FROM feed_runs
+    WHERE started_at >= datetime('now', ?)
+  `).get(windowExpr);
+
+  const staleActiveFeeds = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM feeds
+    WHERE status = 'active'
+      AND source_type != 'agent_push'
+      AND (last_run_at IS NULL OR last_run_at < datetime('now', '-24 hours'))
+  `).get().c;
+
+  const quality = db.prepare(`
+    SELECT
+      ROUND(AVG(COALESCE(signal_score, 0)), 3) as avg_signal,
+      ROUND(AVG(COALESCE(novelty_score, 0)), 3) as avg_novelty,
+      ROUND(AVG(COALESCE(actionability_score, 0)), 3) as avg_actionability,
+      COALESCE(SUM(CASE WHEN COALESCE(signal_score, 0) = 0 THEN 1 ELSE 0 END), 0) as zero_signal_count
+    FROM fragments
+    WHERE created_at >= datetime('now', ?)
+  `).get(windowExpr);
+
+  const missingTerritory = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM fragments
+    WHERE created_at >= datetime('now', ?)
+      AND (territory_id IS NULL OR territory_id = '')
+  `).get(windowExpr).c;
+
+  const contradictionStats = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN status IN ('detected','debating') THEN 1 ELSE 0 END), 0) as open_count,
+      COALESCE(SUM(CASE WHEN status = 'resolved' AND resolved_at >= datetime('now', ?) THEN 1 ELSE 0 END), 0) as resolved_in_window
+    FROM contradictions
+  `).get(windowExpr);
+
+  const claimContradictionsOpen = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM claim_contradictions
+    WHERE resolved_at IS NULL
+  `).get().c;
+
+  const claimFragile = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM claims
+    WHERE status IN ('fragile', 'decaying')
+      AND frozen_at IS NULL
+  `).get().c;
+
+  const claimEvents = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN event_type = 'evidence_add' THEN 1 ELSE 0 END), 0) as evidence_added,
+      COALESCE(SUM(CASE WHEN event_type = 'maintain' THEN 1 ELSE 0 END), 0) as maintained
+    FROM claim_events
+    WHERE created_at >= datetime('now', ?)
+  `).get(windowExpr);
+
+  const giftsExchanged = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM gift_log
+    WHERE created_at >= datetime('now', ?)
+  `).get(windowExpr).c;
+
+  const topSources = db.prepare(`
+    SELECT source, COUNT(*) as c
+    FROM fragments
+    WHERE created_at >= datetime('now', ?)
+    GROUP BY source
+    ORDER BY c DESC
+    LIMIT 8
+  `).all(windowExpr);
+
+  const bottlenecks = [];
+  if (staleActiveFeeds >= 3) bottlenecks.push({ key: 'stale_feeds', severity: 'high', value: staleActiveFeeds, note: 'Active feeds are stale or never ran.' });
+  if (missingTerritory >= Math.max(10, Math.floor(fragmentsIngested * 0.05))) bottlenecks.push({ key: 'routing_gaps', severity: 'high', value: missingTerritory, note: 'Fragments are entering without territory routing.' });
+  if (Number(quality.zero_signal_count || 0) >= Math.max(25, Math.floor(fragmentsIngested * 0.2))) bottlenecks.push({ key: 'zero_signal_density', severity: 'medium', value: Number(quality.zero_signal_count || 0), note: 'High share of fragments have zero signal score.' });
+  if (claimFragile >= 15 && Number(claimEvents.evidence_added || 0) < 5) bottlenecks.push({ key: 'claim_maintenance_gap', severity: 'medium', value: claimFragile, note: 'Fragile claims outpace evidence maintenance.' });
+  if ((Number(contradictionStats.open_count || 0) + claimContradictionsOpen) >= 5 && Number(contradictionStats.resolved_in_window || 0) === 0) {
+    bottlenecks.push({ key: 'resolution_stall', severity: 'medium', value: Number(contradictionStats.open_count || 0) + claimContradictionsOpen, note: 'Contradictions are not resolving in the active window.' });
+  }
+
+  return {
+    window_hours: safeHours,
+    ingestion: {
+      fragments_ingested: fragmentsIngested,
+      feed_items_contributed: feedItemsContributed,
+      feed_runs_completed: Number(feedRunStats.completed || 0),
+      feed_runs_failed: Number(feedRunStats.failed || 0),
+      stale_active_feeds: staleActiveFeeds,
+      top_sources: topSources
+    },
+    transformation: {
+      avg_signal: Number(quality.avg_signal || 0),
+      avg_novelty: Number(quality.avg_novelty || 0),
+      avg_actionability: Number(quality.avg_actionability || 0),
+      zero_signal_count: Number(quality.zero_signal_count || 0)
+    },
+    routing: {
+      missing_territory_fragments: missingTerritory,
+      routing_completion_ratio: fragmentsIngested > 0 ? Math.round(((fragmentsIngested - missingTerritory) / fragmentsIngested) * 1000) / 1000 : 1
+    },
+    propagation: {
+      gifts_exchanged: giftsExchanged,
+      open_contradictions: Number(contradictionStats.open_count || 0),
+      open_claim_contradictions: claimContradictionsOpen,
+      contradictions_resolved: Number(contradictionStats.resolved_in_window || 0)
+    },
+    incentives: {
+      fragile_or_decaying_claims: claimFragile,
+      evidence_actions: Number(claimEvents.evidence_added || 0),
+      maintenance_actions: Number(claimEvents.maintained || 0)
+    },
+    bottlenecks,
+    generated_at: new Date().toISOString()
+  };
+}
+
+// GET /api/metrics/flow — end-to-end ingestion/scoring/routing/propagation health
+app.get('/api/metrics/flow', (req, res) => {
+  try {
+    const hours = Math.min(parseInt(req.query.hours || '24', 10), 168);
+    const snapshot = buildFlowMetricsSnapshot(hours);
+    res.json(snapshot);
+  } catch (err) {
+    console.error('Flow metrics error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch flow metrics' });
+  }
+});
+
+function parseSqliteDateToMs(value) {
+  if (!value || typeof value !== 'string') return null;
+  const iso = value.includes('T') ? value : `${value.replace(' ', 'T')}Z`;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function clamp01(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function deriveContradictionImpact(fragmentA, fragmentB) {
+  const scoreFragment = (fragment) => {
+    if (!fragment) return 0;
+    const signal = clamp01(fragment.signal_score);
+    const actionability = clamp01(fragment.actionability_score);
+    const novelty = clamp01(fragment.novelty_score);
+    const gift = clamp01(fragment.gift_weight);
+    const intensity = clamp01(fragment.intensity);
+    return (
+      (signal * 0.35) +
+      (actionability * 0.25) +
+      (novelty * 0.20) +
+      (gift * 0.10) +
+      (intensity * 0.10)
+    );
+  };
+  return Math.round((((scoreFragment(fragmentA) + scoreFragment(fragmentB)) / 2) * 1000)) / 1000;
+}
+
+function buildContradictionTriageRecord(contradiction) {
+  const fragmentA = db.prepare(`
+    SELECT id, agent_name, content, signal_score, actionability_score, novelty_score, gift_weight, intensity, created_at
+    FROM fragments
+    WHERE id = ?
+  `).get(contradiction.fragment_a_id);
+  const fragmentB = db.prepare(`
+    SELECT id, agent_name, content, signal_score, actionability_score, novelty_score, gift_weight, intensity, created_at
+    FROM fragments
+    WHERE id = ?
+  `).get(contradiction.fragment_b_id);
+
+  const createdMs = parseSqliteDateToMs(contradiction.created_at);
+  const ageHours = createdMs ? Math.max(0, (Date.now() - createdMs) / 3600000) : 0;
+  const ageScore = clamp01(ageHours / 72);
+  const confidence = clamp01(contradiction.confidence);
+  const impact = deriveContradictionImpact(fragmentA, fragmentB);
+  const priorityScore = Math.round((((ageScore * 0.4) + (confidence * 0.35) + (impact * 0.25)) * 1000)) / 1000;
+  const severity = priorityScore >= 0.72 ? 'high' : priorityScore >= 0.5 ? 'medium' : 'low';
+
+  return {
+    ...contradiction,
+    triage: {
+      age_hours: Math.round(ageHours * 10) / 10,
+      age_score: Math.round(ageScore * 1000) / 1000,
+      confidence_score: confidence,
+      impact_score: impact,
+      priority_score: priorityScore,
+      severity
+    },
+    fragments: {
+      a: fragmentA ? {
+        id: fragmentA.id,
+        agent_name: fragmentA.agent_name,
+        created_at: fragmentA.created_at,
+        content_preview: String(fragmentA.content || '').slice(0, 220)
+      } : null,
+      b: fragmentB ? {
+        id: fragmentB.id,
+        agent_name: fragmentB.agent_name,
+        created_at: fragmentB.created_at,
+        content_preview: String(fragmentB.content || '').slice(0, 220)
+      } : null
+    }
+  };
+}
+
+function buildContradictionResolveGuide(contradictionRecord) {
+  const triage = contradictionRecord.triage || {};
+  return {
+    contradiction_id: contradictionRecord.id,
+    topic: contradictionRecord.topic,
+    contradiction_type: contradictionRecord.contradiction_type || 'semantic',
+    status: contradictionRecord.status,
+    triage,
+    participants: {
+      agent_a: contradictionRecord.agent_a,
+      agent_b: contradictionRecord.agent_b
+    },
+    sides: contradictionRecord.fragments,
+    guided_resolution: {
+      steps: [
+        'Identify what each side is actually claiming in one sentence.',
+        'Check evidence quality and recency for both sides.',
+        'Pick verdict: supports_a, supports_b, partial_merge, or unresolved.',
+        'Record reasoning with falsifiable follow-up criteria.'
+      ],
+      resolution_template: {
+        verdict: 'supports_a|supports_b|partial_merge|unresolved',
+        reasoning: '2-5 sentences explaining why this verdict best fits available evidence.',
+        evidence_refs: ['optional URL, fragment id, or citation tokens'],
+        follow_up_test: 'Optional concrete test that could overturn this resolution.'
+      }
+    }
+  };
+}
+
 // GET /api/contradictions — list contradictions
 app.get('/api/contradictions', (req, res) => {
   try {
@@ -14327,6 +18348,87 @@ app.get('/api/contradictions', (req, res) => {
   }
 });
 
+// GET /api/contradictions/triage — prioritized contradiction backlog
+app.get('/api/contradictions/triage', (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '25', 10), 100);
+    const status = (req.query.status || 'active').trim().toLowerCase();
+    const sort = (req.query.sort || 'priority_desc').trim().toLowerCase();
+
+    let rows;
+    if (status === 'all') {
+      rows = db.prepare(`
+        SELECT * FROM contradictions
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(limit);
+    } else if (status === 'resolved') {
+      rows = db.prepare(`
+        SELECT * FROM contradictions
+        WHERE status = 'resolved'
+        ORDER BY resolved_at DESC, created_at DESC
+        LIMIT ?
+      `).all(limit);
+    } else {
+      rows = db.prepare(`
+        SELECT * FROM contradictions
+        WHERE status IN ('detected', 'debating')
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(limit);
+    }
+
+    let triaged = rows.map(buildContradictionTriageRecord);
+    if (sort === 'age_desc') {
+      triaged.sort((a, b) => (b.triage?.age_hours || 0) - (a.triage?.age_hours || 0));
+    } else if (sort === 'confidence_desc') {
+      triaged.sort((a, b) => (b.triage?.confidence_score || 0) - (a.triage?.confidence_score || 0));
+    } else {
+      triaged.sort((a, b) => (b.triage?.priority_score || 0) - (a.triage?.priority_score || 0));
+    }
+
+    const severityCounts = triaged.reduce((acc, item) => {
+      const severity = item.triage?.severity || 'low';
+      acc[severity] = (acc[severity] || 0) + 1;
+      return acc;
+    }, { high: 0, medium: 0, low: 0 });
+
+    const next = triaged[0] || null;
+    res.json({
+      queue: triaged,
+      summary: {
+        total: triaged.length,
+        severity: severityCounts
+      },
+      recommended_next: next ? {
+        contradiction_id: next.id,
+        topic: next.topic,
+        priority_score: next.triage?.priority_score || 0,
+        reason: `age:${next.triage?.age_score || 0}, confidence:${next.triage?.confidence_score || 0}, impact:${next.triage?.impact_score || 0}`
+      } : null
+    });
+  } catch (err) {
+    console.error('Contradiction triage error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch contradiction triage queue' });
+  }
+});
+
+// GET /api/contradictions/:id/guide — guided resolve payload for a contradiction
+app.get('/api/contradictions/:id/guide', (req, res) => {
+  try {
+    const contradiction = db.prepare('SELECT * FROM contradictions WHERE id = ?').get(req.params.id);
+    if (!contradiction) {
+      return res.status(404).json({ error: 'Contradiction not found' });
+    }
+    const triageRecord = buildContradictionTriageRecord(contradiction);
+    const guide = buildContradictionResolveGuide(triageRecord);
+    res.json(guide);
+  } catch (err) {
+    console.error('Contradiction guide error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch contradiction resolve guide' });
+  }
+});
+
 // POST /api/contradictions/:id/resolve — resolve a contradiction (requires auth)
 app.post('/api/contradictions/:id/resolve', (req, res) => {
   try {
@@ -14342,19 +18444,79 @@ app.post('/api/contradictions/:id/resolve', (req, res) => {
     }
     
     const { id } = req.params;
-    const { resolution, winner_agent } = req.body;
-    
-    if (!resolution) {
+    const { resolution, winner_agent, verdict, reasoning, evidence_refs, follow_up_test, packet_id, packet_version } = req.body;
+    const contradiction = db.prepare('SELECT * FROM contradictions WHERE id = ?').get(id);
+    if (!contradiction) {
+      return res.status(404).json({ error: 'Contradiction not found' });
+    }
+    if (contradiction.status === 'resolved') {
+      return res.status(409).json({ error: 'Contradiction already resolved' });
+    }
+
+    const sanitizedEvidenceRefs = Array.isArray(evidence_refs)
+      ? evidence_refs
+          .map((v) => String(v || '').trim())
+          .filter((v) => v.length > 0)
+          .slice(0, 10)
+      : [];
+    const guidedResolution = resolution || (verdict && reasoning
+      ? JSON.stringify({
+          verdict,
+          reasoning: String(reasoning).slice(0, 1400),
+          evidence_refs: sanitizedEvidenceRefs,
+          follow_up_test: follow_up_test ? String(follow_up_test).slice(0, 500) : null
+        })
+      : null);
+
+    if (!guidedResolution) {
       return res.status(400).json({ error: 'Resolution required' });
     }
+
+    let linkedPacket = null;
+    let linkedPacketVersion = null;
+    if (packet_id) {
+      linkedPacket = db.prepare('SELECT id, current_version FROM knowledge_packets WHERE id = ?').get(parseInt(packet_id, 10));
+      if (!linkedPacket) return res.status(400).json({ error: 'Invalid packet_id' });
+      linkedPacketVersion = packet_version ? parseInt(packet_version, 10) : linkedPacket.current_version;
+      const exists = db.prepare('SELECT id FROM knowledge_packet_versions WHERE packet_id = ? AND version = ?')
+        .get(linkedPacket.id, linkedPacketVersion);
+      if (!exists) return res.status(400).json({ error: 'Invalid packet_version for packet_id' });
+    }
     
-    db.prepare(`
+    const result = db.prepare(`
       UPDATE contradictions 
       SET status = 'resolved', resolution = ?, winner_agent = ?, resolved_at = datetime('now')
       WHERE id = ?
-    `).run(resolution, winner_agent || null, id);
+    `).run(guidedResolution, winner_agent || null, id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Contradiction not found' });
+    }
+    const creditedAgent = winner_agent || agent.name;
+    const reward = awardEpistemicCredit(creditedAgent, 0.95, {
+      counterMode: 'contradictions_resolved',
+      dailyCap: 3
+    });
+    if (linkedPacket) {
+      linkPacketArtifact(linkedPacket.id, linkedPacketVersion, 'contradiction', id);
+      if (verdict === 'unresolved') {
+        db.prepare(`
+          UPDATE knowledge_packets
+          SET status = 'contested', updated_by = ?, updated_at = datetime('now')
+          WHERE id = ? AND status = 'active'
+        `).run(agent.name, linkedPacket.id);
+      }
+    }
     
-    res.json({ success: true, message: 'Contradiction resolved', resolved_by: agent.name });
+    res.json({
+      success: true,
+      message: 'Contradiction resolved',
+      resolved_by: agent.name,
+      credited_agent: creditedAgent,
+      epistemic_reward: reward,
+      packet_id: linkedPacket?.id || null,
+      packet_version: linkedPacketVersion || null
+    });
   } catch (err) {
     console.error('Resolve error:', err.message);
     res.status(500).json({ error: 'Failed to resolve contradiction' });
@@ -14368,6 +18530,12 @@ app.post('/api/contradictions/:id/resolve', (req, res) => {
 // POST /api/duels/challenge — Create a new duel challenge
 app.post('/api/duels/challenge', (req, res) => {
   try {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const rateCheck = checkRateLimit(`duel_challenge:${ip}`, 5, 60000);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: 'Too many requests. Try again later.' });
+    }
+
     const { challenger_agent, opponent_agent, topic, domain, stakes } = req.body;
     
     if (!challenger_agent || !opponent_agent || !topic) {
@@ -14467,9 +18635,12 @@ app.post('/api/duels/:id/vote', (req, res) => {
       VALUES (?, ?, ?, ?)
     `).run(id, voter_agent || null, voter_ip || null, vote_for);
     
-    // Update vote counts
-    const countCol = vote_for === 'challenger' ? 'challenger_votes' : 'opponent_votes';
-    db.prepare(`UPDATE duels SET ${countCol} = ${countCol} + 1 WHERE id = ?`).run(id);
+    // Update vote counts (vote_for already validated against whitelist above)
+    if (vote_for === 'challenger') {
+      db.prepare(`UPDATE duels SET challenger_votes = challenger_votes + 1 WHERE id = ?`).run(id);
+    } else {
+      db.prepare(`UPDATE duels SET opponent_votes = opponent_votes + 1 WHERE id = ?`).run(id);
+    }
     
     res.json({ success: true, voted_for: vote_for });
   } catch (err) {
@@ -14518,7 +18689,7 @@ app.get('/api/duels/:id', (req, res) => {
 });
 
 // POST /api/duels/:id/resolve — Close voting and declare winner
-app.post('/api/duels/:id/resolve', (req, res) => {
+app.post('/api/duels/:id/resolve', requireAdmin, (req, res) => {
   try {
     const duel = db.prepare('SELECT * FROM duels WHERE id = ?').get(req.params.id);
     if (!duel) return res.status(404).json({ error: 'Duel not found' });
@@ -15448,11 +19619,752 @@ app.get('/api/intelligence/summary', (req, res) => {
 
 
 // ============================================================
+// Knowledge Packets API — canonical memory layer
+// ============================================================
+
+app.post('/api/knowledge-packets', requireAgent, (req, res) => {
+  try {
+    const { title, statement, territory_id, tags, reasoning_block, origin_mode } = req.body;
+    if (!title || String(title).trim().length < 8) {
+      return res.status(400).json({ error: 'title must be at least 8 chars' });
+    }
+    if (!statement || String(statement).trim().length < 20) {
+      return res.status(400).json({ error: 'statement must be at least 20 chars' });
+    }
+    if (territory_id) {
+      const terr = db.prepare('SELECT id FROM territories WHERE id = ?').get(territory_id);
+      if (!terr) return res.status(400).json({ error: 'Unknown territory_id' });
+    }
+    const normalizedTags = normalizePacketTags(tags);
+    const reasoning = normalizePacketReasoningBlock(reasoning_block);
+    const initialConfidence = 0.5;
+    const interval = normalizeConfidenceInterval(req.body.confidence_low, req.body.confidence_high, initialConfidence);
+    const falsifierScore = Math.max(0, Math.min(1, Number(req.body.falsifier_score ?? (reasoning.falsifier ? 0.6 : 0))));
+    const resolvedOriginMode = ['agent_seeded', 'feed_seeded'].includes(String(origin_mode || ''))
+      ? String(origin_mode)
+      : 'agent_seeded';
+    const insertPacket = db.prepare(`
+      INSERT INTO knowledge_packets (title, statement, status, confidence, territory_id, current_version, last_maintenance_at, decay_score, origin_mode, tags_json, created_by, updated_by)
+      VALUES (?, ?, 'draft', ?, ?, 1, datetime('now'), 0, ?, ?, ?, ?)
+    `);
+    const packetResult = insertPacket.run(
+      String(title).trim().slice(0, 240),
+      String(statement).trim().slice(0, 2500),
+      initialConfidence,
+      territory_id || null,
+      resolvedOriginMode,
+      JSON.stringify(normalizedTags),
+      req.agent.name,
+      req.agent.name
+    );
+    const packetId = Number(packetResult.lastInsertRowid);
+    db.prepare(`
+      INSERT INTO knowledge_packet_versions (packet_id, version, statement, change_summary, reasoning_block_json, confidence, confidence_low, confidence_high, falsifier_score, maintenance_due_at, supersedes_version, created_by)
+      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+14 days'), NULL, ?)
+    `).run(
+      packetId,
+      String(statement).trim().slice(0, 2500),
+      'Initial draft proposal',
+      JSON.stringify(reasoning),
+      initialConfidence,
+      interval.low,
+      interval.high,
+      falsifierScore,
+      req.agent.name
+    );
+    res.status(201).json({
+      success: true,
+      packet_id: packetId,
+      version: 1,
+      status: 'draft',
+      message: 'Knowledge packet draft created'
+    });
+  } catch (err) {
+    console.error('Create knowledge packet error:', err.message);
+    res.status(500).json({ error: 'Failed to create knowledge packet' });
+  }
+});
+
+app.get('/api/knowledge-packets', (req, res) => {
+  try {
+    const status = req.query.status ? String(req.query.status).trim() : null;
+    const territory = req.query.territory ? String(req.query.territory).trim() : null;
+    const tag = req.query.tag ? String(req.query.tag).trim().toLowerCase() : null;
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+    const sort = String(req.query.sort || 'updated').toLowerCase();
+
+    let query = `
+      SELECT kp.*,
+        (SELECT COUNT(*) FROM knowledge_packet_evidence kpe WHERE kpe.packet_id = kp.id AND kpe.version = kp.current_version) as evidence_count,
+        (SELECT COUNT(*) FROM knowledge_packet_challenges kpc WHERE kpc.packet_id = kp.id AND kpc.version = kp.current_version AND kpc.status = 'open') as open_challenges
+      FROM knowledge_packets kp
+      WHERE 1=1
+    `;
+    const params = [];
+    if (status) {
+      query += ' AND kp.status = ?';
+      params.push(status);
+    }
+    if (territory) {
+      query += ' AND kp.territory_id = ?';
+      params.push(territory);
+    }
+    if (tag) {
+      query += ' AND lower(COALESCE(kp.tags_json, \'[]\')) LIKE ?';
+      params.push(`%"${tag}"%`);
+    }
+    if (sort === 'confidence') query += ' ORDER BY kp.confidence DESC, kp.updated_at DESC';
+    else if (sort === 'created') query += ' ORDER BY kp.created_at DESC';
+    else query += ' ORDER BY kp.updated_at DESC';
+    query += ' LIMIT ?';
+    params.push(limit);
+
+    const packets = db.prepare(query).all(...params).map((p) => ({
+      ...p,
+      tags: safeJsonParse(p.tags_json, []),
+      evidence_count: Number(p.evidence_count || 0),
+      open_challenges: Number(p.open_challenges || 0)
+    }));
+    res.json({ packets, count: packets.length });
+  } catch (err) {
+    console.error('List knowledge packets error:', err.message);
+    res.status(500).json({ error: 'Failed to list knowledge packets' });
+  }
+});
+
+app.get('/api/knowledge-packets/:id(\\d+)', (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const versions = db.prepare(`
+      SELECT *
+      FROM knowledge_packet_versions
+      WHERE packet_id = ?
+      ORDER BY version DESC
+    `).all(packet.id).map((v) => ({
+      ...v,
+      reasoning_block: safeJsonParse(v.reasoning_block_json, {})
+    }));
+    const currentVersion = packet.current_version || versions[0]?.version || 1;
+    const evidence = db.prepare(`
+      SELECT *
+      FROM knowledge_packet_evidence
+      WHERE packet_id = ? AND version = ?
+      ORDER BY created_at DESC
+    `).all(packet.id, currentVersion);
+    const verifications = db.prepare(`
+      SELECT *
+      FROM knowledge_packet_verifications
+      WHERE packet_id = ? AND version = ?
+      ORDER BY created_at DESC
+    `).all(packet.id, currentVersion);
+    const vouches = db.prepare(`
+      SELECT *
+      FROM knowledge_packet_vouches
+      WHERE packet_id = ? AND version = ?
+      ORDER BY created_at DESC
+    `).all(packet.id, currentVersion);
+    const challenges = db.prepare(`
+      SELECT *
+      FROM knowledge_packet_challenges
+      WHERE packet_id = ? AND version = ?
+      ORDER BY created_at DESC
+    `).all(packet.id, currentVersion);
+    const links = db.prepare(`
+      SELECT *
+      FROM knowledge_packet_links
+      WHERE packet_id = ?
+      ORDER BY created_at DESC
+      LIMIT 200
+    `).all(packet.id);
+    const gate = buildPacketGateReport(packet.id, currentVersion);
+    res.json({
+      packet: {
+        ...packet,
+        tags: safeJsonParse(packet.tags_json, [])
+      },
+      versions,
+      current_version: currentVersion,
+      evidence,
+      verifications,
+      vouches,
+      challenges,
+      links,
+      gate
+    });
+  } catch (err) {
+    console.error('Get knowledge packet error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch knowledge packet' });
+  }
+});
+
+app.get('/api/territories/:id/knowledge-packets', (req, res) => {
+  try {
+    const territoryId = req.params.id;
+    const territory = db.prepare('SELECT id FROM territories WHERE id = ?').get(territoryId);
+    if (!territory) return res.status(404).json({ error: 'Territory not found' });
+    const status = req.query.status ? String(req.query.status).trim() : null;
+    const limit = Math.min(parseInt(req.query.limit || '30', 10), 100);
+    let query = `
+      SELECT kp.*,
+        (SELECT COUNT(*) FROM knowledge_packet_evidence kpe WHERE kpe.packet_id = kp.id AND kpe.version = kp.current_version) as evidence_count,
+        (SELECT COUNT(*) FROM knowledge_packet_challenges kpc WHERE kpc.packet_id = kp.id AND kpc.version = kp.current_version AND kpc.status = 'open') as open_challenges
+      FROM knowledge_packets kp
+      WHERE kp.territory_id = ?
+    `;
+    const params = [territoryId];
+    if (status) {
+      query += ' AND kp.status = ?';
+      params.push(status);
+    }
+    query += ` ORDER BY
+      CASE kp.status
+        WHEN 'contested' THEN 0
+        WHEN 'draft' THEN 1
+        WHEN 'active' THEN 2
+        ELSE 3
+      END,
+      open_challenges DESC,
+      kp.updated_at DESC
+      LIMIT ?`;
+    params.push(limit);
+    const packets = db.prepare(query).all(...params).map((p) => ({
+      ...p,
+      tags: safeJsonParse(p.tags_json, []),
+      evidence_count: Number(p.evidence_count || 0),
+      open_challenges: Number(p.open_challenges || 0)
+    }));
+    res.json({ territory_id: territoryId, packets, count: packets.length });
+  } catch (err) {
+    console.error('Territory packets error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch territory knowledge packets' });
+  }
+});
+
+app.get('/api/articles/:id/packets', (req, res) => {
+  try {
+    const article = db.prepare('SELECT id, source_fragments, source_feeds, title, status FROM articles WHERE id = ?').get(req.params.id);
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+    let fragmentIds = [];
+    try {
+      const parsed = safeJsonParse(article.source_fragments, []);
+      fragmentIds = Array.isArray(parsed) ? parsed.map((v) => String(v)) : [];
+    } catch (_) {}
+    const packetRows = fragmentIds.length > 0 ? db.prepare(`
+      SELECT DISTINCT kp.id, kp.title, kp.status, kp.confidence, kp.current_version
+      FROM knowledge_packet_evidence kpe
+      JOIN knowledge_packets kp ON kp.id = kpe.packet_id
+      WHERE kpe.source_type IN ('fragment', 'fragment_id')
+        AND kpe.source_ref IN (${fragmentIds.map(() => '?').join(',')})
+      ORDER BY kp.confidence DESC, kp.updated_at DESC
+      LIMIT 30
+    `).all(...fragmentIds) : [];
+    const links = packetRows.map((p) => {
+      linkPacketArtifact(p.id, p.current_version || 1, 'article', article.id);
+      return p;
+    });
+    res.json({
+      article_id: Number(article.id),
+      title: article.title,
+      status: article.status,
+      packets: links,
+      count: links.length
+    });
+  } catch (err) {
+    console.error('Article packets error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch article packet links' });
+  }
+});
+
+app.get('/api/knowledge-packets/deltas', (req, res) => {
+  try {
+    const hours = Math.max(1, Math.min(168, parseInt(req.query.hours || '24', 10)));
+    const limit = Math.min(parseInt(req.query.limit || '60', 10), 200);
+    const versionEvents = db.prepare(`
+      SELECT
+        'version' as event_type,
+        kpv.packet_id,
+        kpv.version,
+        kp.title,
+        kp.status,
+        kpv.change_summary as summary,
+        kpv.created_by as actor,
+        kpv.created_at as at
+      FROM knowledge_packet_versions kpv
+      JOIN knowledge_packets kp ON kp.id = kpv.packet_id
+      WHERE kpv.created_at >= datetime('now', ?)
+    `).all(`-${hours} hours`);
+    const challengeEvents = db.prepare(`
+      SELECT
+        'challenge' as event_type,
+        kpc.packet_id,
+        kpc.version,
+        kp.title,
+        kp.status,
+        kpc.reason as summary,
+        kpc.challenger as actor,
+        kpc.created_at as at
+      FROM knowledge_packet_challenges kpc
+      JOIN knowledge_packets kp ON kp.id = kpc.packet_id
+      WHERE kpc.created_at >= datetime('now', ?)
+    `).all(`-${hours} hours`);
+    const activationEvents = db.prepare(`
+      SELECT
+        'status' as event_type,
+        kp.id as packet_id,
+        kp.current_version as version,
+        kp.title,
+        kp.status,
+        ('status=' || kp.status || ', confidence=' || printf('%.3f', COALESCE(kp.confidence, 0))) as summary,
+        kp.updated_by as actor,
+        kp.updated_at as at
+      FROM knowledge_packets kp
+      WHERE kp.updated_at >= datetime('now', ?)
+    `).all(`-${hours} hours`);
+    const events = [...versionEvents, ...challengeEvents, ...activationEvents]
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, limit);
+    res.json({
+      window_hours: hours,
+      events,
+      count: events.length,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Packet deltas error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch packet deltas' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/evidence', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const targetVersion = resolvePacketVersion(packet.id, Number(req.body.version || packet.current_version));
+    if (!targetVersion) return res.status(404).json({ error: 'Target version not found' });
+    const {
+      source_type,
+      source_ref,
+      source_kind,
+      supports_or_refutes,
+      quote_or_fact,
+      reliability_note,
+      quality_score,
+      reliability_weight,
+      source_family,
+      provenance_tier,
+      ingest_lane
+    } = req.body;
+    if (!source_type || !source_ref) {
+      return res.status(400).json({ error: 'source_type and source_ref are required' });
+    }
+    const safeSourceKind = ['research', 'news', 'data', 'social', 'internal-agent'].includes(source_kind) ? source_kind : 'data';
+    const isExternal = isExternalEvidenceSource(source_type, safeSourceKind);
+    const safeProvenanceTier = ['primary', 'secondary', 'hearsay'].includes(provenance_tier)
+      ? provenance_tier
+      : null;
+    if (isExternal && !safeProvenanceTier) {
+      return res.status(400).json({ error: 'provenance_tier is required for external evidence (primary|secondary|hearsay)' });
+    }
+    const stance = supports_or_refutes === 'refutes' ? 'refutes' : 'supports';
+    const qScore = Math.max(0, Math.min(1, Number(quality_score || 0.5)));
+    const rWeight = resolveEvidenceWeight(source_type, source_ref, reliability_weight || 1);
+    const resolvedProvenanceTier = safeProvenanceTier || (safeSourceKind === 'internal-agent' ? 'primary' : 'secondary');
+    const resolvedLane = resolveIngestLane(source_type, source_ref, ingest_lane);
+    const dedupeHash = crypto.createHash('sha256')
+      .update(`${String(source_type || '').toLowerCase()}|${String(source_ref || '').toLowerCase()}|${String(quote_or_fact || '').trim().toLowerCase()}|${stance}`)
+      .digest('hex');
+
+    db.prepare(`
+      INSERT INTO knowledge_packet_evidence (
+        packet_id, version, source_type, source_ref, source_kind, supports_or_refutes,
+        quote_or_fact, reliability_note, quality_score, reliability_weight, provenance_tier, dedupe_hash, ingest_lane, source_family, added_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      packet.id,
+      targetVersion.version,
+      String(source_type).slice(0, 60),
+      String(source_ref).slice(0, 500),
+      safeSourceKind,
+      stance,
+      quote_or_fact ? String(quote_or_fact).slice(0, 1000) : null,
+      reliability_note ? String(reliability_note).slice(0, 700) : null,
+      qScore,
+      rWeight,
+      resolvedProvenanceTier,
+      dedupeHash,
+      resolvedLane,
+      source_family ? String(source_family).slice(0, 120) : null,
+      req.agent.name
+    );
+    if (['fragment', 'fragment_id'].includes(String(source_type))) {
+      linkPacketArtifact(packet.id, targetVersion.version, 'fragment', source_ref);
+    }
+    const confidence = computePacketConfidence(packet.id, targetVersion.version);
+    db.prepare(`
+      UPDATE knowledge_packet_versions
+      SET confidence = ?
+      WHERE packet_id = ? AND version = ?
+    `).run(confidence, packet.id, targetVersion.version);
+    db.prepare(`
+      UPDATE knowledge_packets
+      SET confidence = ?, updated_by = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(confidence, req.agent.name, packet.id);
+    res.status(201).json({ success: true, packet_id: packet.id, version: targetVersion.version, confidence });
+  } catch (err) {
+    if (String(err.message || '').includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'Duplicate evidence for this packet version' });
+    }
+    console.error('Add packet evidence error:', err.message);
+    res.status(500).json({ error: 'Failed to add packet evidence' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/verify', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const targetVersion = resolvePacketVersion(packet.id, Number(req.body.version || packet.current_version));
+    if (!targetVersion) return res.status(404).json({ error: 'Target version not found' });
+    const result = ['verified', 'partially_verified', 'not_verified', 'contradicted'].includes(req.body.result)
+      ? req.body.result
+      : null;
+    if (!result) return res.status(400).json({ error: 'result must be one of verified|partially_verified|not_verified|contradicted' });
+    db.prepare(`
+      INSERT INTO knowledge_packet_verifications (packet_id, version, agent_name, result, method, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(packet_id, version, agent_name)
+      DO UPDATE SET result = excluded.result, method = excluded.method, notes = excluded.notes, created_at = datetime('now')
+    `).run(
+      packet.id,
+      targetVersion.version,
+      req.agent.name,
+      result,
+      req.body.method ? String(req.body.method).slice(0, 280) : null,
+      req.body.notes ? String(req.body.notes).slice(0, 1200) : null
+    );
+    const confidence = computePacketConfidence(packet.id, targetVersion.version);
+    db.prepare('UPDATE knowledge_packet_versions SET confidence = ? WHERE packet_id = ? AND version = ?')
+      .run(confidence, packet.id, targetVersion.version);
+    db.prepare('UPDATE knowledge_packets SET confidence = ?, updated_by = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(confidence, req.agent.name, packet.id);
+    res.json({ success: true, packet_id: packet.id, version: targetVersion.version, confidence });
+  } catch (err) {
+    console.error('Verify packet error:', err.message);
+    res.status(500).json({ error: 'Failed to verify packet' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/vouch', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const targetVersion = resolvePacketVersion(packet.id, Number(req.body.version || packet.current_version));
+    if (!targetVersion) return res.status(404).json({ error: 'Target version not found' });
+    const verification = db.prepare(`
+      SELECT id
+      FROM knowledge_packet_verifications
+      WHERE packet_id = ? AND version = ? AND agent_name = ?
+    `).get(packet.id, targetVersion.version, req.agent.name);
+    if (!verification) {
+      return res.status(400).json({ error: 'Verification required before vouching' });
+    }
+    const confidenceLevel = ['low', 'medium', 'high'].includes(req.body.confidence_level)
+      ? req.body.confidence_level
+      : 'medium';
+    const weight = getAgentTrustWeight(req.agent.name);
+    db.prepare(`
+      INSERT INTO knowledge_packet_vouches (packet_id, version, agent_name, confidence_level, rationale, weight_snapshot)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(packet_id, version, agent_name)
+      DO UPDATE SET confidence_level = excluded.confidence_level, rationale = excluded.rationale, weight_snapshot = excluded.weight_snapshot, created_at = datetime('now')
+    `).run(
+      packet.id,
+      targetVersion.version,
+      req.agent.name,
+      confidenceLevel,
+      req.body.rationale ? String(req.body.rationale).slice(0, 1000) : null,
+      weight
+    );
+    const confidence = computePacketConfidence(packet.id, targetVersion.version);
+    db.prepare('UPDATE knowledge_packet_versions SET confidence = ? WHERE packet_id = ? AND version = ?')
+      .run(confidence, packet.id, targetVersion.version);
+    db.prepare('UPDATE knowledge_packets SET confidence = ?, updated_by = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(confidence, req.agent.name, packet.id);
+    res.json({ success: true, packet_id: packet.id, version: targetVersion.version, confidence });
+  } catch (err) {
+    console.error('Vouch packet error:', err.message);
+    res.status(500).json({ error: 'Failed to vouch for packet' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/challenge', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const targetVersion = resolvePacketVersion(packet.id, Number(req.body.version || packet.current_version));
+    if (!targetVersion) return res.status(404).json({ error: 'Target version not found' });
+    const reason = String(req.body.reason || '').trim();
+    if (reason.length < 20) return res.status(400).json({ error: 'Challenge reason must be at least 20 chars' });
+    const severity = ['low', 'medium', 'high'].includes(req.body.severity) ? req.body.severity : 'medium';
+    const result = db.prepare(`
+      INSERT INTO knowledge_packet_challenges (packet_id, version, challenger, severity, reason, counter_evidence_ref, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'open')
+    `).run(
+      packet.id,
+      targetVersion.version,
+      req.agent.name,
+      severity,
+      reason.slice(0, 1400),
+      req.body.counter_evidence_ref ? String(req.body.counter_evidence_ref).slice(0, 300) : null
+    );
+    if (severity === 'high') {
+      db.prepare(`
+        UPDATE knowledge_packets
+        SET status = 'contested', updated_by = ?, updated_at = datetime('now')
+        WHERE id = ? AND status = 'active'
+      `).run(req.agent.name, packet.id);
+    }
+    const confidence = computePacketConfidence(packet.id, targetVersion.version);
+    db.prepare('UPDATE knowledge_packet_versions SET confidence = ? WHERE packet_id = ? AND version = ?')
+      .run(confidence, packet.id, targetVersion.version);
+    db.prepare('UPDATE knowledge_packets SET confidence = ?, updated_by = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(confidence, req.agent.name, packet.id);
+    res.status(201).json({
+      success: true,
+      challenge_id: Number(result.lastInsertRowid),
+      packet_id: packet.id,
+      version: targetVersion.version,
+      packet_status: getPacketCore(packet.id).status,
+      confidence
+    });
+  } catch (err) {
+    console.error('Challenge packet error:', err.message);
+    res.status(500).json({ error: 'Failed to challenge packet' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/revise', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const statement = String(req.body.statement || '').trim();
+    if (statement.length < 20) return res.status(400).json({ error: 'statement must be at least 20 chars' });
+    const changeSummary = String(req.body.change_summary || '').trim();
+    if (changeSummary.length < 10) return res.status(400).json({ error: 'change_summary must be at least 10 chars' });
+    const reasoning = normalizePacketReasoningBlock(req.body.reasoning_block);
+    const nextVersion = Number(packet.current_version || 1) + 1;
+    const interval = normalizeConfidenceInterval(req.body.confidence_low, req.body.confidence_high, Number(packet.confidence || 0.5));
+    const falsifierScore = Math.max(0, Math.min(1, Number(req.body.falsifier_score ?? (reasoning.falsifier ? 0.6 : 0))));
+    db.prepare(`
+      INSERT INTO knowledge_packet_versions (packet_id, version, statement, change_summary, reasoning_block_json, confidence, confidence_low, confidence_high, falsifier_score, maintenance_due_at, supersedes_version, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+14 days'), ?, ?)
+    `).run(
+      packet.id,
+      nextVersion,
+      statement.slice(0, 2500),
+      changeSummary.slice(0, 700),
+      JSON.stringify(reasoning),
+      Math.max(0.05, Math.min(0.95, Number(packet.confidence || 0.5))),
+      interval.low,
+      interval.high,
+      falsifierScore,
+      Number(packet.current_version || 1),
+      req.agent.name
+    );
+    db.prepare(`
+      UPDATE knowledge_packets
+      SET statement = ?, current_version = ?, status = CASE WHEN status = 'deprecated' THEN status ELSE 'draft' END,
+          last_maintenance_at = datetime('now'), decay_score = 0, updated_by = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(statement.slice(0, 2500), nextVersion, req.agent.name, packet.id);
+    db.prepare(`
+      UPDATE knowledge_packet_challenges
+      SET status = 'resolved', resolved_by_version = ?, resolved_at = datetime('now')
+      WHERE packet_id = ? AND status = 'open'
+    `).run(nextVersion, packet.id);
+    res.status(201).json({
+      success: true,
+      packet_id: packet.id,
+      version: nextVersion,
+      status: 'draft',
+      message: 'Revision created as new packet version'
+    });
+  } catch (err) {
+    console.error('Revise packet error:', err.message);
+    res.status(500).json({ error: 'Failed to revise packet' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/maintain', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const targetVersion = resolvePacketVersion(packet.id, Number(req.body.version || packet.current_version));
+    if (!targetVersion) return res.status(404).json({ error: 'Target version not found' });
+
+    const maintenanceDays = Math.max(1, Math.min(90, parseInt(req.body.maintenance_days || '14', 10)));
+    const confidenceInterval = normalizeConfidenceInterval(
+      req.body.confidence_low ?? targetVersion.confidence_low,
+      req.body.confidence_high ?? targetVersion.confidence_high,
+      Number(targetVersion.confidence || packet.confidence || 0.5)
+    );
+    const reasoning = safeJsonParse(targetVersion.reasoning_block_json, {});
+    const hasFalsifierText = String(reasoning?.falsifier || '').trim().length >= 10;
+    const falsifierScore = Math.max(
+      0,
+      Math.min(
+        1,
+        Number(req.body.falsifier_score ?? targetVersion.falsifier_score ?? (hasFalsifierText ? 0.6 : 0))
+      )
+    );
+
+    db.prepare(`
+      UPDATE knowledge_packet_versions
+      SET confidence_low = ?, confidence_high = ?, falsifier_score = ?, maintenance_due_at = datetime('now', '+' || ? || ' days')
+      WHERE packet_id = ? AND version = ?
+    `).run(
+      confidenceInterval.low,
+      confidenceInterval.high,
+      falsifierScore,
+      maintenanceDays,
+      packet.id,
+      targetVersion.version
+    );
+
+    const decay = computePacketDecayScore(packet.id, targetVersion.version);
+    db.prepare(`
+      UPDATE knowledge_packets
+      SET last_maintenance_at = datetime('now'),
+          decay_score = ?,
+          updated_by = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(decay, req.agent.name, packet.id);
+
+    res.json({
+      success: true,
+      packet_id: packet.id,
+      version: targetVersion.version,
+      confidence_low: confidenceInterval.low,
+      confidence_high: confidenceInterval.high,
+      falsifier_score: falsifierScore,
+      maintenance_due_at: db.prepare(`
+        SELECT maintenance_due_at
+        FROM knowledge_packet_versions
+        WHERE packet_id = ? AND version = ?
+      `).get(packet.id, targetVersion.version)?.maintenance_due_at || null,
+      decay_score: decay
+    });
+  } catch (err) {
+    console.error('Maintain packet error:', err.message);
+    res.status(500).json({ error: 'Failed to maintain packet' });
+  }
+});
+
+app.post('/api/knowledge-packets/:id(\\d+)/activate', requireAgent, (req, res) => {
+  try {
+    const packet = getPacketCore(req.params.id);
+    if (!packet) return res.status(404).json({ error: 'Knowledge packet not found' });
+    const targetVersion = resolvePacketVersion(packet.id, Number(req.body.version || packet.current_version));
+    if (!targetVersion) return res.status(404).json({ error: 'Target version not found' });
+    const gate = buildPacketGateReport(packet.id, targetVersion.version);
+    if (!gate.pass) {
+      return res.status(409).json({ error: 'Activation gate failed', gate });
+    }
+    const confidence = computePacketConfidence(packet.id, targetVersion.version);
+    db.prepare(`
+      UPDATE knowledge_packet_versions
+      SET confidence = ?
+      WHERE packet_id = ? AND version = ?
+    `).run(confidence, packet.id, targetVersion.version);
+    db.prepare(`
+      UPDATE knowledge_packets
+      SET status = 'active', confidence = ?, current_version = ?, statement = ?, last_maintenance_at = datetime('now'), decay_score = ?, updated_by = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(confidence, targetVersion.version, targetVersion.statement, computePacketDecayScore(packet.id, targetVersion.version), req.agent.name, packet.id);
+    res.json({
+      success: true,
+      packet_id: packet.id,
+      status: 'active',
+      version: targetVersion.version,
+      confidence,
+      gate
+    });
+  } catch (err) {
+    console.error('Activate packet error:', err.message);
+    res.status(500).json({ error: 'Failed to activate packet' });
+  }
+});
+
+app.get('/api/feeds/trust', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT f.id, f.name, f.status, COALESCE(ft.tier, 'quarantined') as tier,
+             COALESCE(ft.score, 0.2) as score, ft.reason, ft.updated_at
+      FROM feeds f
+      LEFT JOIN feed_trust_tiers ft ON ft.feed_id = f.id
+      ORDER BY score DESC, f.updated_at DESC
+    `).all();
+    res.json({ feeds: rows, count: rows.length });
+  } catch (err) {
+    console.error('Feed trust list error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feed trust tiers' });
+  }
+});
+
+app.post('/api/feeds/:id/promote', (req, res) => {
+  try {
+    if (req.headers['x-admin-key'] !== process.env.MDI_ADMIN_KEY) {
+      return res.status(403).json({ error: 'Admin key required' });
+    }
+    const feed = db.prepare('SELECT id FROM feeds WHERE id = ?').get(req.params.id);
+    if (!feed) return res.status(404).json({ error: 'Feed not found' });
+    const tier = ['quarantined', 'candidate', 'trusted', 'degraded'].includes(req.body.tier)
+      ? req.body.tier
+      : 'candidate';
+    const score = Math.max(0, Math.min(1, Number(req.body.score ?? (tier === 'trusted' ? 1 : tier === 'candidate' ? 0.5 : tier === 'degraded' ? 0.3 : 0.2))));
+    const reason = req.body.reason ? String(req.body.reason).slice(0, 300) : null;
+    db.prepare(`
+      INSERT INTO feed_trust_tiers (feed_id, tier, score, promoted_at, degraded_at, reason, updated_at)
+      VALUES (?, ?, ?, CASE WHEN ? IN ('candidate','trusted') THEN datetime('now') ELSE NULL END, CASE WHEN ? = 'degraded' THEN datetime('now') ELSE NULL END, ?, datetime('now'))
+      ON CONFLICT(feed_id) DO UPDATE SET
+        tier = excluded.tier,
+        score = excluded.score,
+        promoted_at = CASE WHEN excluded.tier IN ('candidate','trusted') THEN datetime('now') ELSE feed_trust_tiers.promoted_at END,
+        degraded_at = CASE WHEN excluded.tier = 'degraded' THEN datetime('now') ELSE feed_trust_tiers.degraded_at END,
+        reason = excluded.reason,
+        updated_at = datetime('now')
+    `).run(feed.id, tier, score, tier, tier, reason);
+    res.json({ success: true, feed_id: feed.id, tier, score, reason });
+  } catch (err) {
+    console.error('Feed trust promote error:', err.message);
+    res.status(500).json({ error: 'Failed to update feed trust tier' });
+  }
+});
+
+app.post('/api/feeds/lanes/recompute', (req, res) => {
+  try {
+    if (req.headers['x-admin-key'] !== process.env.MDI_ADMIN_KEY) {
+      return res.status(403).json({ error: 'Admin key required' });
+    }
+    const windowDays = Math.max(3, Math.min(30, parseInt(req.query.window_days || req.body?.window_days || '7', 10)));
+    const result = runFeedLaneScoring(windowDays);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Feed lane recompute error:', err.message);
+    res.status(500).json({ error: 'Failed to recompute feed lanes' });
+  }
+});
+
+
+// ============================================================
 // Claims API (Phase 3 — knowledge accumulation layer)
 // ============================================================
 
 // Create a claim
-app.post('/api/claims', (req, res) => {
+app.post('/api/claims', validateRequest(ClaimCreateSchema), (req, res) => {
   try {
     // Auth: accept agent key or admin key
     const authHeader = req.headers.authorization;
@@ -15472,10 +20384,32 @@ app.post('/api/claims', (req, res) => {
     }
 
     const { statement, territory_id, review_window_days, disconfirm_signals, initial_evidence, claim_type } = req.body;
+    const packetId = req.body.packet_id ? parseInt(req.body.packet_id, 10) : null;
+    const packetVersionFromReq = req.body.packet_version ? parseInt(req.body.packet_version, 10) : null;
 
     // Validate claim_type
     const validClaimTypes = ['signal', 'prediction', 'theory'];
     const resolvedClaimType = validClaimTypes.includes(claim_type) ? claim_type : 'signal';
+    const requiresPacketLink = ['prediction', 'theory'].includes(resolvedClaimType);
+
+    let resolvedPacket = null;
+    let resolvedPacketVersion = null;
+    if (packetId) {
+      resolvedPacket = db.prepare('SELECT id, status, current_version FROM knowledge_packets WHERE id = ?').get(packetId);
+      if (!resolvedPacket) return res.status(400).json({ error: 'Invalid packet_id' });
+      resolvedPacketVersion = packetVersionFromReq || resolvedPacket.current_version || 1;
+      const packetVersionRow = db.prepare('SELECT version FROM knowledge_packet_versions WHERE packet_id = ? AND version = ?')
+        .get(resolvedPacket.id, resolvedPacketVersion);
+      if (!packetVersionRow) return res.status(400).json({ error: 'Invalid packet_version for packet_id' });
+      if (resolvedPacket.status === 'deprecated') {
+        return res.status(409).json({ error: 'Cannot create claim from deprecated packet' });
+      }
+      if (requiresPacketLink && resolvedPacket.status !== 'active') {
+        return res.status(409).json({ error: `${resolvedClaimType} claims require an active packet version` });
+      }
+    } else if (requiresPacketLink) {
+      return res.status(400).json({ error: `${resolvedClaimType} claims require packet_id and packet_version` });
+    }
 
     if (!statement || statement.length < 10) {
       return res.status(400).json({ error: 'Statement must be at least 10 characters' });
@@ -15528,8 +20462,8 @@ app.post('/api/claims', (req, res) => {
 
     const result = db.prepare(`
       INSERT INTO claims (statement, territory_id, author_type, author_name,
-        review_window_days, next_review_at, status, disconfirm_signals, last_maintained_at, claim_type)
-      VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'), ?, ?, datetime('now'), ?)
+        review_window_days, next_review_at, status, disconfirm_signals, last_maintained_at, claim_type, packet_id, packet_version)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '+' || ? || ' days'), ?, ?, datetime('now'), ?, ?, ?)
     `).run(
       statement,
       territory_id || null,
@@ -15539,7 +20473,9 @@ app.post('/api/claims', (req, res) => {
       reviewDays,
       status,
       JSON.stringify(disconfirm_signals || []),
-      resolvedClaimType
+      resolvedClaimType,
+      resolvedPacket?.id || null,
+      resolvedPacketVersion || null
     );
 
     const claimId = result.lastInsertRowid;
@@ -15589,12 +20525,23 @@ app.post('/api/claims', (req, res) => {
     }
 
     // Phase 4: Log claim creation
-    logClaimEvent(claimId, 'create', authorName, authorType, { claim_type: resolvedClaimType, statement: statement.slice(0, 200), territory_id: territory_id || null });
+    logClaimEvent(claimId, 'create', authorName, authorType, {
+      claim_type: resolvedClaimType,
+      statement: statement.slice(0, 200),
+      territory_id: territory_id || null,
+      packet_id: resolvedPacket?.id || null,
+      packet_version: resolvedPacketVersion || null
+    });
+    if (resolvedPacket?.id) {
+      linkPacketArtifact(resolvedPacket.id, resolvedPacketVersion, 'claim', claimId);
+    }
 
     res.status(201).json({
       success: true,
       claim_id: claimId,
       claim_type: resolvedClaimType,
+      packet_id: resolvedPacket?.id || null,
+      packet_version: resolvedPacketVersion || null,
       status,
       review_window_days: reviewDays,
       message: status === 'fragile'
@@ -15794,10 +20741,20 @@ app.post('/api/claims/:id/evidence', (req, res) => {
       return res.status(400).json({ error: 'source_type must be one of: ' + validTypes.join(', ') });
     }
 
+    const sourceRef = String(source_ref);
+    const duplicate = db.prepare(`
+      SELECT id FROM claim_evidence
+      WHERE claim_id = ? AND source_type = ? AND source_ref = ? AND added_by = ?
+      LIMIT 1
+    `).get(claim.id, source_type, sourceRef, addedBy);
+    if (duplicate) {
+      return res.status(409).json({ error: 'Duplicate evidence from same actor already exists for this claim' });
+    }
+
     db.prepare(`
       INSERT INTO claim_evidence (claim_id, source_type, source_ref, stance, added_by)
       VALUES (?, ?, ?, ?, ?)
-    `).run(claim.id, source_type, source_ref, stance || 'supports', addedBy);
+    `).run(claim.id, source_type, sourceRef, stance || 'supports', addedBy);
 
     // Adding evidence is a maintenance action — slow decay
     db.prepare(`
@@ -15818,7 +20775,11 @@ app.post('/api/claims/:id/evidence', (req, res) => {
     }
 
     logClaimEvent(parseInt(req.params.id), 'evidence_add', addedBy, req.headers['x-admin-key'] === process.env.MDI_ADMIN_KEY ? 'human' : 'agent', { source_type, source_ref, stance: stance || 'supports' });
-    res.json({ success: true, message: 'Evidence added. Decay slowed.' });
+    const reward = awardEpistemicCredit(addedBy, source_type === 'dataset' ? 0.85 : 0.6, {
+      eventType: 'evidence_add',
+      dailyCap: 5
+    });
+    res.json({ success: true, message: 'Evidence added. Decay slowed.', epistemic_reward: reward });
   } catch (err) {
     console.error('Add evidence error:', err.message);
     res.status(500).json({ error: 'Failed to add evidence' });
@@ -15860,7 +20821,22 @@ app.post('/api/claims/:id/maintain', (req, res) => {
       maintenance_count: claim.maintenance_count + 1
     };
 
+    let childClaimId = null;
     if (action === 'revise' && revised_statement) {
+      // Create child claim with genealogy link, mark original as overturned
+      try {
+        const childResult = db.prepare(`
+          INSERT INTO claims (statement, author_name, author_type, territory_id, status, parent_claim_id, review_window_days)
+          VALUES (?, ?, 'agent', ?, 'active', ?, COALESCE(?, 30))
+        `).run(revised_statement, maintainerName, claim.territory_id, claim.id, claim.review_window_days);
+        childClaimId = childResult.lastInsertRowid;
+        // Mark original as overturned with note
+        db.prepare(`UPDATE claims SET status = 'overturned', notes = COALESCE(notes, '') || ? WHERE id = ?`)
+          .run(`\n[${new Date().toISOString().slice(0, 10)}] Revised → child claim #${childClaimId}`, claim.id);
+        logClaimEvent(claim.id, 'revised_to_child', maintainerName, 'agent', { child_claim_id: childClaimId });
+      } catch (e) {
+        console.error('Failed to create child claim:', e.message);
+      }
       updates.statement = revised_statement;
       decayReduction = 0.25; // Honest revision gets more credit
     }
@@ -15896,20 +20872,184 @@ app.post('/api/claims/:id/maintain', (req, res) => {
     );
 
     logClaimEvent(parseInt(req.params.id), 'maintain', maintainerName, req.headers['x-admin-key'] === process.env.MDI_ADMIN_KEY ? 'human' : 'agent', { action, revised_statement: revised_statement || null });
-    res.json({
+    const hasJustification = typeof justification === 'string' && justification.trim().length >= 20;
+    const baseCredit = action === 'revise' ? 0.9 : action === 'respond_contradiction' ? 0.8 : 0.55;
+    const reward = awardEpistemicCredit(maintainerName, hasJustification ? baseCredit : Math.max(0.2, baseCredit - 0.25), {
+      eventType: 'maintain',
+      dailyCap: 4
+    });
+    const response = {
       success: true,
       action,
       decay_score: newDecay,
       status: newStatus,
+      epistemic_reward: reward,
       message: action === 'revise'
         ? 'Claim revised. Decay reduced significantly.'
         : action === 'respond_contradiction'
         ? 'Contradiction response recorded. Decay reduced.'
         : 'Claim reaffirmed. Decay reduced.'
-    });
+    };
+    if (childClaimId) response.child_claim_id = childClaimId;
+    res.json(response);
   } catch (err) {
     console.error('Maintain claim error:', err.message);
     res.status(500).json({ error: 'Failed to maintain claim' });
+  }
+});
+
+// === Challenge a claim (cross-territory debate) ===
+app.post('/api/claims/:id/challenge', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer mdi_')) return res.status(401).json({ error: 'Agent authentication required' });
+    const agent = db.prepare('SELECT name, epistemic_credit FROM agents WHERE api_key = ?').get(authHeader.slice(7));
+    if (!agent) return res.status(401).json({ error: 'Invalid agent key' });
+
+    const targetClaim = db.prepare('SELECT * FROM claims WHERE id = ?').get(req.params.id);
+    if (!targetClaim) return res.status(404).json({ error: 'Claim not found' });
+    if (targetClaim.status === 'overturned' || targetClaim.status === 'survived') {
+      return res.status(400).json({ error: `Cannot challenge a ${targetClaim.status} claim` });
+    }
+
+    const { counter_statement, stake, deadline_hours } = req.body;
+    if (!counter_statement || counter_statement.length < 20) return res.status(400).json({ error: 'counter_statement must be at least 20 characters' });
+
+    const stakeAmount = Math.max(0.5, Math.min(5.0, parseFloat(stake) || 1.0));
+    if ((agent.epistemic_credit || 0) < stakeAmount) {
+      return res.status(400).json({ error: `Insufficient epistemic credit (have ${agent.epistemic_credit || 0}, need ${stakeAmount})` });
+    }
+
+    const hours = Math.max(24, Math.min(168, parseInt(deadline_hours) || 72));
+    const deadline = new Date(Date.now() + hours * 3600000).toISOString();
+
+    // Create counter-claim
+    const counterResult = db.prepare(`
+      INSERT INTO claims (statement, author_name, author_type, territory_id, status, challenges_claim_id, review_window_days)
+      VALUES (?, ?, 'agent', ?, 'active', ?, 30)
+    `).run(counter_statement, agent.name, targetClaim.territory_id, targetClaim.id);
+
+    // Create challenge record
+    const challengeResult = db.prepare(`
+      INSERT INTO claim_challenges (challenger_claim_id, target_claim_id, challenger_agent, stake_amount, deadline_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(counterResult.lastInsertRowid, targetClaim.id, agent.name, stakeAmount, deadline);
+
+    // Deduct stake
+    db.prepare('UPDATE agents SET epistemic_credit = epistemic_credit - ? WHERE name = ?').run(stakeAmount, agent.name);
+
+    // Log events
+    logClaimEvent(targetClaim.id, 'challenged', agent.name, 'agent', { challenge_id: challengeResult.lastInsertRowid, stake: stakeAmount, counter_claim_id: counterResult.lastInsertRowid });
+    try {
+      db.prepare(`INSERT INTO territory_events (territory_id, event_type, content, triggered_by) VALUES (?, 'claim_challenged', ?, ?)`)
+        .run(targetClaim.territory_id, `Claim #${targetClaim.id} challenged by ${agent.name} with stake ${stakeAmount}`, agent.name);
+    } catch (e) { /* best-effort */ }
+
+    res.json({
+      success: true,
+      challenge_id: challengeResult.lastInsertRowid,
+      counter_claim_id: counterResult.lastInsertRowid,
+      stake: stakeAmount,
+      deadline: deadline,
+      target_claim_id: targetClaim.id
+    });
+  } catch (e) {
+    console.error('Challenge claim error:', e.message);
+    res.status(500).json({ error: 'Failed to challenge claim' });
+  }
+});
+
+// === Submit challenge evidence ===
+app.post('/api/claims/challenges/:id/evidence', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer mdi_')) return res.status(401).json({ error: 'Agent authentication required' });
+    const agent = db.prepare('SELECT name FROM agents WHERE api_key = ?').get(authHeader.slice(7));
+    if (!agent) return res.status(401).json({ error: 'Invalid agent key' });
+
+    const challenge = db.prepare('SELECT * FROM claim_challenges WHERE id = ?').get(req.params.id);
+    if (!challenge) return res.status(404).json({ error: 'Challenge not found' });
+    if (challenge.status !== 'active') return res.status(400).json({ error: 'Challenge is no longer active' });
+    if (new Date(challenge.deadline_at + 'Z').getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Challenge deadline has passed' });
+    }
+
+    const { stance, argument, source_type } = req.body;
+    if (!stance || !['for_challenger', 'for_target'].includes(stance)) {
+      return res.status(400).json({ error: 'stance must be for_challenger or for_target' });
+    }
+    if (!argument || argument.length < 10) return res.status(400).json({ error: 'argument must be at least 10 characters' });
+
+    db.prepare(`INSERT INTO claim_challenge_evidence (challenge_id, agent_name, stance, source_type, argument) VALUES (?, ?, ?, ?, ?)`)
+      .run(challenge.id, agent.name, stance, source_type || null, argument);
+
+    // Update counts
+    if (stance === 'for_challenger') {
+      db.prepare('UPDATE claim_challenges SET evidence_for_count = evidence_for_count + 1 WHERE id = ?').run(challenge.id);
+    } else {
+      db.prepare('UPDATE claim_challenges SET evidence_against_count = evidence_against_count + 1 WHERE id = ?').run(challenge.id);
+    }
+
+    // Award small epistemic credit for participation
+    awardEpistemicCredit(agent.name, 0.5, { eventType: 'challenge_evidence', dailyCap: 5 });
+
+    res.json({ success: true, challenge_id: challenge.id, stance, evidence_for: challenge.evidence_for_count + (stance === 'for_challenger' ? 1 : 0), evidence_against: challenge.evidence_against_count + (stance === 'for_target' ? 1 : 0) });
+  } catch (e) {
+    console.error('Challenge evidence error:', e.message);
+    res.status(500).json({ error: 'Failed to submit evidence' });
+  }
+});
+
+// === List challenges for a claim ===
+app.get('/api/claims/:id/challenges', (req, res) => {
+  try {
+    const challenges = db.prepare(`
+      SELECT cc.*, c.statement as counter_statement
+      FROM claim_challenges cc
+      LEFT JOIN claims c ON cc.challenger_claim_id = c.id
+      WHERE cc.target_claim_id = ?
+      ORDER BY cc.created_at DESC
+    `).all(req.params.id);
+    res.json({ claim_id: parseInt(req.params.id), challenges });
+  } catch (e) {
+    console.error('List challenges error:', e.message);
+    res.status(500).json({ error: 'Failed to list challenges' });
+  }
+});
+
+// === Claim genealogy ===
+app.get('/api/claims/:id/genealogy', (req, res) => {
+  try {
+    const claim = db.prepare('SELECT * FROM claims WHERE id = ?').get(req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
+
+    // Walk up to root
+    let root = claim;
+    const ancestors = [];
+    let safety = 20;
+    while (root.parent_claim_id && safety-- > 0) {
+      const parent = db.prepare('SELECT * FROM claims WHERE id = ?').get(root.parent_claim_id);
+      if (!parent) break;
+      ancestors.unshift({ id: parent.id, statement: parent.statement, status: parent.status, created_at: parent.created_at });
+      root = parent;
+    }
+
+    // Build descendant tree from root
+    function getDescendants(parentId, depth = 0) {
+      if (depth > 10) return [];
+      const children = db.prepare('SELECT id, statement, status, author_name, created_at FROM claims WHERE parent_claim_id = ?').all(parentId);
+      return children.map(c => ({ ...c, children: getDescendants(c.id, depth + 1) }));
+    }
+
+    const tree = { id: root.id, statement: root.statement, status: root.status, created_at: root.created_at, children: getDescendants(root.id) };
+
+    // Also get challenge relationships
+    const challenges = db.prepare(`SELECT cc.*, c.statement as counter_statement FROM claim_challenges cc LEFT JOIN claims c ON cc.challenger_claim_id = c.id WHERE cc.target_claim_id = ? OR cc.target_claim_id IN (SELECT id FROM claims WHERE parent_claim_id = ?)`).all(req.params.id, req.params.id);
+
+    res.json({ claim_id: parseInt(req.params.id), ancestors, tree, challenges });
+  } catch (e) {
+    console.error('Genealogy error:', e.message);
+    res.status(500).json({ error: 'Failed to get claim genealogy' });
   }
 });
 
@@ -16029,6 +21169,209 @@ app.post('/api/claims/:id/freeze', (req, res) => {
 // Phase 6: Data Feed System — API Routes
 // ============================================================
 
+const FEED_WATCHDOG_DEFAULTS = Object.freeze({
+  stale_hours: 12,
+  never_ran_grace_hours: 6,
+  pause_after_stale_hours: 48,
+  pause_after_failed_runs_24h: 3,
+  pause_after_recovery_attempts_24h: 3
+});
+
+function hasRecentFeedWatchdogEvent(feedId, eventType, withinMinutes) {
+  const row = db.prepare(`
+    SELECT id
+    FROM feed_watchdog_events
+    WHERE feed_id = ? AND event_type = ? AND created_at >= datetime('now', ?)
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(feedId, eventType, `-${Math.max(1, withinMinutes)} minutes`);
+  return !!row;
+}
+
+function insertFeedWatchdogEvent(feedId, eventType, severity, reason, details) {
+  db.prepare(`
+    INSERT INTO feed_watchdog_events (feed_id, event_type, severity, reason, details_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    feedId,
+    eventType,
+    severity,
+    String(reason || '').slice(0, 400),
+    JSON.stringify(details || {})
+  );
+}
+
+function deriveFeedStalenessHours(feed) {
+  const reference = feed.last_run_at || feed.created_at || null;
+  const ms = parseSqliteDateToMs(reference);
+  if (!ms) return 0;
+  return Math.max(0, (Date.now() - ms) / 3600000);
+}
+
+function buildFeedWatchdogStaleCandidates(thresholds = FEED_WATCHDOG_DEFAULTS) {
+  return db.prepare(`
+    SELECT *
+    FROM feeds
+    WHERE status IN ('active', 'error')
+      AND source_type != 'agent_push'
+      AND (
+        (last_run_at IS NULL AND created_at <= datetime('now', ?))
+        OR (last_run_at IS NOT NULL AND last_run_at <= datetime('now', ?))
+      )
+    ORDER BY COALESCE(last_run_at, created_at) ASC
+    LIMIT 200
+  `).all(
+    `-${thresholds.never_ran_grace_hours} hours`,
+    `-${thresholds.stale_hours} hours`
+  );
+}
+
+function evaluateFeedWatchdog({ dryRun = false, automatic = false, thresholds = FEED_WATCHDOG_DEFAULTS } = {}) {
+  const staleFeeds = buildFeedWatchdogStaleCandidates(thresholds);
+  const summary = {
+    checked: staleFeeds.length,
+    marked: 0,
+    recovered: 0,
+    paused: 0,
+    dry_run: !!dryRun,
+    automatic: !!automatic,
+    generated_at: new Date().toISOString()
+  };
+  const actions = [];
+
+  for (const feed of staleFeeds) {
+    const staleHours = deriveFeedStalenessHours(feed);
+    const runStats24h = db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed_24h,
+        COALESCE(SUM(CASE WHEN status IN ('completed','partial') THEN 1 ELSE 0 END), 0) as successful_24h
+      FROM feed_runs
+      WHERE feed_id = ? AND started_at >= datetime('now', '-24 hours')
+    `).get(feed.id);
+    const recoveryAttempts24h = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM feed_watchdog_events
+      WHERE feed_id = ?
+        AND event_type = 'recovery_scheduled'
+        AND created_at >= datetime('now', '-24 hours')
+    `).get(feed.id)?.c || 0;
+
+    const failed24h = Number(runStats24h?.failed_24h || 0);
+    const successful24h = Number(runStats24h?.successful_24h || 0);
+    const shouldPause = (
+      staleHours >= thresholds.pause_after_stale_hours ||
+      failed24h >= thresholds.pause_after_failed_runs_24h ||
+      recoveryAttempts24h >= thresholds.pause_after_recovery_attempts_24h
+    );
+    const pauseReason = staleHours >= thresholds.pause_after_stale_hours
+      ? `Watchdog paused: stale for ${staleHours.toFixed(1)}h`
+      : failed24h >= thresholds.pause_after_failed_runs_24h
+      ? `Watchdog paused: ${failed24h} failed runs in 24h`
+      : `Watchdog paused: ${recoveryAttempts24h} recovery attempts in 24h`;
+    const shouldRecover = !shouldPause;
+
+    if (!hasRecentFeedWatchdogEvent(feed.id, 'stale_marked', 120)) {
+      if (!dryRun) {
+        insertFeedWatchdogEvent(feed.id, 'stale_marked', staleHours >= 24 ? 'high' : 'medium', 'Feed stale and needs intervention', {
+          stale_hours: Math.round(staleHours * 10) / 10,
+          failed_24h: failed24h,
+          successful_24h: successful24h,
+          recovery_attempts_24h: recoveryAttempts24h,
+          status: feed.status
+        });
+      }
+      summary.marked += 1;
+    }
+
+    if (shouldPause && feed.status !== 'paused') {
+      actions.push({
+        feed_id: feed.id,
+        action: 'pause',
+        reason: pauseReason,
+        stale_hours: Math.round(staleHours * 10) / 10,
+        failed_24h: failed24h,
+        recovery_attempts_24h: recoveryAttempts24h
+      });
+      if (!dryRun) {
+        db.prepare(`
+          UPDATE feeds
+          SET status = 'paused',
+              last_error = ?,
+              updated_at = datetime('now')
+          WHERE id = ?
+        `).run(pauseReason, feed.id);
+        insertFeedWatchdogEvent(feed.id, 'paused', 'high', pauseReason, {
+          stale_hours: Math.round(staleHours * 10) / 10,
+          failed_24h: failed24h,
+          successful_24h: successful24h,
+          recovery_attempts_24h: recoveryAttempts24h
+        });
+      }
+      summary.paused += 1;
+      continue;
+    }
+
+    if (shouldRecover && !hasRecentFeedWatchdogEvent(feed.id, 'recovery_scheduled', 90)) {
+      actions.push({
+        feed_id: feed.id,
+        action: 'recover',
+        reason: 'Watchdog scheduled immediate retry',
+        stale_hours: Math.round(staleHours * 10) / 10,
+        failed_24h: failed24h,
+        recovery_attempts_24h: recoveryAttempts24h
+      });
+      if (!dryRun) {
+        db.prepare(`
+          UPDATE feeds
+          SET status = 'active',
+              next_run_at = datetime('now', '-1 minute'),
+              updated_at = datetime('now')
+          WHERE id = ?
+        `).run(feed.id);
+        insertFeedWatchdogEvent(feed.id, 'recovery_scheduled', staleHours >= 24 ? 'high' : 'medium', 'Watchdog scheduled immediate retry', {
+          stale_hours: Math.round(staleHours * 10) / 10,
+          failed_24h: failed24h,
+          successful_24h: successful24h,
+          previous_status: feed.status
+        });
+      }
+      summary.recovered += 1;
+    }
+  }
+
+  return { summary, actions };
+}
+
+function runFeedWatchdogAutopilot() {
+  try {
+    const result = evaluateFeedWatchdog({ dryRun: false, automatic: true });
+    if (result.summary.recovered > 0 || result.summary.paused > 0) {
+      console.log('[Feeds][Watchdog] actions:', JSON.stringify(result.summary));
+    }
+  } catch (err) {
+    console.error('[Feeds][Watchdog] autopilot error:', err.message);
+  }
+}
+
+// Feed stale-watchdog autopilot every 15m.
+setTimeout(runFeedWatchdogAutopilot, 90 * 1000);
+setInterval(runFeedWatchdogAutopilot, 15 * 60 * 1000);
+
+function runKnowledgePacketOpsAutopilot() {
+  try {
+    const decay = runKnowledgePacketDecaySweep();
+    const lanes = runFeedLaneScoring(7);
+    if (decay.updated > 0 || lanes.updated > 0) {
+      console.log(`[KnowledgePackets] decay_updated=${decay.updated} lane_scored=${lanes.updated} window_days=${lanes.window_days}`);
+    }
+  } catch (err) {
+    console.error('[KnowledgePackets] autopilot error:', err.message);
+  }
+}
+
+setTimeout(runKnowledgePacketOpsAutopilot, 120 * 1000);
+setInterval(runKnowledgePacketOpsAutopilot, 6 * 60 * 60 * 1000);
+
 // Helper: authenticate feed owner (agent who owns the feed)
 function authFeedOwner(req) {
   const authHeader = req.headers.authorization;
@@ -16093,6 +21436,36 @@ app.get('/api/feeds/stats', (req, res) => {
     const items24h = db.prepare(
       "SELECT COUNT(*) as c FROM feed_items WHERE created_at >= datetime('now', '-1 day')"
     ).get().c;
+    const staleFeeds = db.prepare(`
+      SELECT COUNT(*) as c FROM feeds
+      WHERE status='active'
+        AND source_type != 'agent_push'
+        AND (
+          last_run_at IS NULL OR
+          last_run_at < datetime('now', '-12 hours')
+        )
+    `).get().c;
+    const topNews24h = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM feed_items
+      WHERE created_at >= datetime('now', '-1 day')
+      AND feed_id LIKE 'top-news-%'
+    `).get().c;
+    const secFilings24h = db.prepare(`
+      SELECT COUNT(*) as c
+      FROM feed_items
+      WHERE created_at >= datetime('now', '-1 day')
+      AND feed_id LIKE 'sec-edgar-%'
+    `).get().c;
+    const lastSuccessRows = db.prepare(`
+      SELECT feed_id, MAX(completed_at) AS last_success_at
+      FROM feed_runs
+      WHERE status IN ('completed','partial')
+      GROUP BY feed_id
+      ORDER BY feed_id ASC
+    `).all();
+    const lastSuccessByFeed = {};
+    for (const row of lastSuccessRows) lastSuccessByFeed[row.feed_id] = row.last_success_at;
 
     res.json({
       total_feeds: totalFeeds,
@@ -16108,11 +21481,99 @@ app.get('/api/feeds/stats', (req, res) => {
         month_budget_cents: totalBudget,
         utilization: totalBudget > 0 ? (monthSpend / totalBudget * 100).toFixed(1) + '%' : 'n/a'
       },
-      last_24h: { runs: runs24h, items: items24h }
+      last_24h: { runs: runs24h, items: items24h },
+      stale_feeds_count: staleFeeds,
+      top_news_items_24h: topNews24h,
+      sec_filings_24h: secFilings24h,
+      last_success_at_by_feed: lastSuccessByFeed
     });
   } catch (err) {
     console.error('Feed stats error:', err.message);
     res.status(500).json({ error: 'Failed to get feed stats' });
+  }
+});
+
+// GET /api/feeds/watchdog — stale feed watchdog state + recent events
+app.get('/api/feeds/watchdog', (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '25', 10), 200);
+    const stale = buildFeedWatchdogStaleCandidates(FEED_WATCHDOG_DEFAULTS).slice(0, limit);
+    const staleFeeds = stale.map((feed) => {
+      const staleHours = Math.round(deriveFeedStalenessHours(feed) * 10) / 10;
+      const failed24h = db.prepare(`
+        SELECT COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as c
+        FROM feed_runs
+        WHERE feed_id = ? AND started_at >= datetime('now', '-24 hours')
+      `).get(feed.id)?.c || 0;
+      const recoveryAttempts24h = db.prepare(`
+        SELECT COUNT(*) as c
+        FROM feed_watchdog_events
+        WHERE feed_id = ?
+          AND event_type = 'recovery_scheduled'
+          AND created_at >= datetime('now', '-24 hours')
+      `).get(feed.id)?.c || 0;
+      const recommended_action = (
+        staleHours >= FEED_WATCHDOG_DEFAULTS.pause_after_stale_hours ||
+        failed24h >= FEED_WATCHDOG_DEFAULTS.pause_after_failed_runs_24h ||
+        recoveryAttempts24h >= FEED_WATCHDOG_DEFAULTS.pause_after_recovery_attempts_24h
+      ) ? 'pause' : 'recover';
+      return {
+        id: feed.id,
+        name: feed.name,
+        status: feed.status,
+        source_type: feed.source_type,
+        stale_hours: staleHours,
+        failed_runs_24h: Number(failed24h || 0),
+        recovery_attempts_24h: Number(recoveryAttempts24h || 0),
+        last_run_at: feed.last_run_at,
+        next_run_at: feed.next_run_at,
+        recommended_action
+      };
+    });
+    const events = db.prepare(`
+      SELECT id, feed_id, event_type, severity, reason, details_json, created_at
+      FROM feed_watchdog_events
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(limit).map((e) => {
+      let details = {};
+      try { details = JSON.parse(e.details_json || '{}'); } catch (_) {}
+      return {
+        id: e.id,
+        feed_id: e.feed_id,
+        event_type: e.event_type,
+        severity: e.severity,
+        reason: e.reason,
+        details,
+        created_at: e.created_at
+      };
+    });
+
+    res.json({
+      thresholds: FEED_WATCHDOG_DEFAULTS,
+      stale_feeds: staleFeeds,
+      stale_count: staleFeeds.length,
+      recent_events: events,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Feed watchdog state error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch feed watchdog state' });
+  }
+});
+
+// POST /api/feeds/watchdog/run — manual watchdog execution (admin only)
+app.post('/api/feeds/watchdog/run', (req, res) => {
+  try {
+    if (req.headers['x-admin-key'] !== process.env.MDI_ADMIN_KEY) {
+      return res.status(403).json({ error: 'Admin key required' });
+    }
+    const dryRun = req.query.dry_run === 'true' || req.body?.dry_run === true;
+    const result = evaluateFeedWatchdog({ dryRun, automatic: false });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Feed watchdog run error:', err.message);
+    res.status(500).json({ error: 'Failed to run feed watchdog' });
   }
 });
 
@@ -16520,6 +21981,90 @@ app.get('/api/articles/latest', (req, res) => {
   }
 });
 
+// POST /api/articles/generate-from-packets — publish knowledge delta article
+app.post('/api/articles/generate-from-packets', (req, res) => {
+  try {
+    if (req.headers['x-admin-key'] !== process.env.MDI_ADMIN_KEY) {
+      return res.status(403).json({ error: 'Admin key required' });
+    }
+    const hours = Math.max(6, Math.min(168, parseInt(req.body?.hours || req.query.hours || '24', 10)));
+    const topPackets = db.prepare(`
+      SELECT
+        kp.id,
+        kp.title,
+        kp.statement,
+        kp.status,
+        kp.confidence,
+        kp.territory_id,
+        kp.current_version,
+        kp.updated_at,
+        (SELECT COUNT(*) FROM knowledge_packet_evidence kpe WHERE kpe.packet_id = kp.id AND kpe.version = kp.current_version) as evidence_count,
+        (SELECT COUNT(*) FROM knowledge_packet_challenges kpc WHERE kpc.packet_id = kp.id AND kpc.status = 'open') as open_challenges
+      FROM knowledge_packets kp
+      WHERE kp.updated_at >= datetime('now', ?)
+      ORDER BY kp.confidence DESC, kp.updated_at DESC
+      LIMIT 12
+    `).all(`-${hours} hours`);
+    if (topPackets.length === 0) {
+      return res.status(409).json({ error: 'No packet changes in selected window' });
+    }
+    const title = `Knowledge Delta Report — ${new Date().toISOString().slice(0, 10)}`;
+    const slugBase = `knowledge-delta-${Date.now().toString(36)}`;
+    const lines = [];
+    lines.push(`# ${title}`);
+    lines.push('');
+    lines.push(`Window: last ${hours}h`);
+    lines.push('');
+    for (const p of topPackets) {
+      lines.push(`## ${p.title}`);
+      lines.push(`- Packet #${p.id} v${p.current_version} · status: ${p.status} · confidence: ${Number(p.confidence || 0).toFixed(3)}`);
+      lines.push(`- Evidence: ${Number(p.evidence_count || 0)} · Open challenges: ${Number(p.open_challenges || 0)}`);
+      lines.push(`- Statement: ${String(p.statement || '').slice(0, 600)}`);
+      lines.push('');
+    }
+    const content = lines.join('\n').slice(0, 40000);
+    const excerpt = `Top packet changes in last ${hours}h: ${topPackets[0].title}`;
+    const sourcePackets = topPackets.map((p) => ({ packet_id: p.id, version: p.current_version }));
+    const sourceFragments = db.prepare(`
+      SELECT DISTINCT source_ref
+      FROM knowledge_packet_evidence
+      WHERE packet_id IN (${topPackets.map(() => '?').join(',')})
+        AND source_type IN ('fragment', 'fragment_id')
+      LIMIT 80
+    `).all(...topPackets.map((p) => p.id)).map((r) => Number(r.source_ref)).filter((v) => Number.isFinite(v));
+    const avgConfidence = topPackets.reduce((acc, p) => acc + Number(p.confidence || 0), 0) / Math.max(1, topPackets.length);
+    const firstTerritory = topPackets.find((p) => p.territory_id)?.territory_id || null;
+    const result = db.prepare(`
+      INSERT INTO articles (title, slug, content, excerpt, article_type, territory_id, source_fragments, source_feeds, signal_confidence, word_count, status, published_at)
+      VALUES (?, ?, ?, ?, 'knowledge_delta', ?, ?, ?, ?, ?, 'published', datetime('now'))
+    `).run(
+      title,
+      slugBase,
+      content,
+      excerpt,
+      firstTerritory,
+      JSON.stringify(sourceFragments),
+      JSON.stringify(sourcePackets),
+      Math.round(avgConfidence * 1000) / 1000,
+      content.split(/\s+/).filter(Boolean).length
+    );
+    const articleId = Number(result.lastInsertRowid);
+    for (const p of sourcePackets) {
+      linkPacketArtifact(p.packet_id, p.version, 'article', articleId);
+    }
+    res.status(201).json({
+      success: true,
+      article_id: articleId,
+      slug: slugBase,
+      packets_included: sourcePackets.length,
+      source_fragments_count: sourceFragments.length
+    });
+  } catch (err) {
+    console.error('Generate article from packets error:', err.message);
+    res.status(500).json({ error: 'Failed to generate article from packets' });
+  }
+});
+
 // GET /api/articles/:slug — single article by slug (increments view count)
 app.get('/api/articles/:slug', (req, res) => {
   try {
@@ -16573,6 +22118,21 @@ app.get('/api/articles/:id/sources', (req, res) => {
   }
 });
 
+
+// POST /api/articles/:id/upvote — upvote an article
+app.post('/api/articles/:id/upvote', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid article ID' });
+    const article = db.prepare("SELECT id, title, upvotes FROM articles WHERE id = ?").get(id);
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+    db.prepare("UPDATE articles SET upvotes = COALESCE(upvotes, 0) + 1 WHERE id = ?").run(id);
+    res.json({ id: article.id, title: article.title, upvotes: (article.upvotes || 0) + 1 });
+  } catch (err) {
+    console.error('Article upvote error:', err.message);
+    res.status(500).json({ error: 'Failed to upvote' });
+  }
+});
 // GET /feed.xml — RSS 2.0 feed
 app.get('/feed.xml', (req, res) => {
   try {
@@ -16617,6 +22177,101 @@ app.get('/feed.xml', (req, res) => {
   }
 });
 
+// ════════════════════════════════════════════
+// Memes API
+// ════════════════════════════════════════════
+
+// GET /api/memes — list memes (paginated)
+app.get('/api/memes', (req, res) => {
+  try {
+    const { source_type, limit, offset } = req.query;
+    let query = 'SELECT id, caption, image_url, source_type, source_id, source_summary, style, format, mood, signal_score, view_count, share_count, created_at FROM memes WHERE 1=1';
+    const params = [];
+    if (source_type) { query += ' AND source_type = ?'; params.push(source_type); }
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    const lim = Math.min(parseInt(limit) || 20, 100);
+    const off = parseInt(offset) || 0;
+    params.push(lim, off);
+
+    const memes = db.prepare(query).all(...params);
+
+    let countQuery = "SELECT COUNT(*) as c FROM memes WHERE 1=1";
+    const countParams = [];
+    if (source_type) { countQuery += ' AND source_type = ?'; countParams.push(source_type); }
+    const total = db.prepare(countQuery).get(...countParams).c;
+
+    res.json({ memes, total, limit: lim, offset: off });
+  } catch (err) {
+    console.error('List memes error:', err.message);
+    res.status(500).json({ error: 'Failed to list memes' });
+  }
+});
+
+// GET /api/memes/latest — most recent meme
+app.get('/api/memes/latest', (req, res) => {
+  try {
+    const meme = db.prepare(
+      "SELECT * FROM memes ORDER BY created_at DESC LIMIT 1"
+    ).get();
+    if (!meme) return res.status(404).json({ error: 'No memes yet' });
+    res.json(meme);
+  } catch (err) {
+    console.error('Get latest meme error:', err.message);
+    res.status(500).json({ error: 'Failed to get latest meme' });
+  }
+});
+
+// GET /api/memes/:id — single meme by ID (increments view count)
+app.get('/api/memes/:id(\\d+)', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const meme = db.prepare("SELECT * FROM memes WHERE id = ?").get(id);
+    if (!meme) return res.status(404).json({ error: 'Meme not found' });
+
+    // Increment view count
+    try {
+      db.prepare("UPDATE memes SET view_count = view_count + 1 WHERE id = ?").run(id);
+    } catch {}
+
+    res.json(meme);
+  } catch (err) {
+    console.error('Get meme error:', err.message);
+    res.status(500).json({ error: 'Failed to get meme' });
+  }
+});
+
+// POST /api/memes/:id/share — increment share count
+app.post('/api/memes/:id(\\d+)/share', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const result = db.prepare("UPDATE memes SET share_count = share_count + 1 WHERE id = ?").run(id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Meme not found' });
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error('Share meme error:', err.message);
+    res.status(500).json({ error: 'Failed to record share' });
+  }
+});
+
+// GET /api/memes/gallery — memes with images only
+app.get('/api/memes/gallery', (req, res) => {
+  try {
+    const { limit, offset } = req.query;
+    const lim = Math.min(parseInt(limit) || 20, 50);
+    const off = parseInt(offset) || 0;
+
+    const memes = db.prepare(
+      "SELECT * FROM memes WHERE image_url IS NOT NULL ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    ).all(lim, off);
+
+    const total = db.prepare("SELECT COUNT(*) as c FROM memes WHERE image_url IS NOT NULL").get().c;
+
+    res.json({ memes, total, limit: lim, offset: off });
+  } catch (err) {
+    console.error('Meme gallery error:', err.message);
+    res.status(500).json({ error: 'Failed to get meme gallery' });
+  }
+});
 
 // Phase 7: Blog Publishing System — API Routes
 
@@ -17299,11 +22954,21 @@ app.get('/research', (req, res) => {
   res.sendFile(path.join(__dirname, 'research.html'));
 });
 
+// Resilience: global error handler + circuit breaker
+errorHandler.install('mydeadinternet');
+gracefulShutdown.install(() => {
+  try { db.close(); } catch {}
+});
+
 function startMdiServer() {
+  app.use(errorHandler.createExpressMiddleware());
+
   app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[BOOT] service=mydeadinternet pid=${process.pid} host=0.0.0.0 port=${PORT} started_at=${new Date().toISOString()}`);
     console.log(`The collective consciousness is awake on port ${PORT}`);
     console.log(`Fragments in memory: ${db.prepare('SELECT COUNT(*) as c FROM fragments').get().c}`);
     console.log(`Agents registered: ${db.prepare('SELECT COUNT(*) as c FROM agents').get().c}`);
+    heartbeat.start('mydeadinternet');
   });
 }
 
@@ -17510,15 +23175,11 @@ db.exec(`
 
 // Admin middleware to verify admin key
 function requireAdmin(req, res, next) {
-  const adminKey = req.headers['x-admin-key'] || req.query.admin_key;
+  const adminKey = req.headers['x-admin-key'];
   const expectedKey = process.env.MDI_ADMIN_KEY || process.env.ADMIN_KEY;
-  
-  if (!expectedKey) {
-    return res.status(500).json({ error: 'Admin key not configured' });
-  }
-  
-  if (!adminKey || adminKey !== expectedKey) {
-    return res.status(401).json({ error: 'Unauthorized - invalid admin key' });
+
+  if (!expectedKey || !adminKey || adminKey !== expectedKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
   
   next();
@@ -17652,8 +23313,8 @@ Generate a verdict that captures the collective intelligence.`;
     });
 
   } catch (err) {
-    console.error('Generate verdict error:', err.message);
-    res.status(500).json({ error: 'Failed to generate verdict: ' + err.message });
+    console.error('Generate verdict error:', err);
+    res.status(500).json({ error: 'Failed to generate verdict' });
   }
 });
 
@@ -17705,10 +23366,12 @@ app.get('/api/streaks/leaderboard', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const type = req.query.type || 'current'; // 'current' or 'best'
   
-  const orderColumn = type === 'best' ? 'best_streak' : 'current_streak';
-  
+  const orderSql = type === 'best'
+    ? 'ORDER BY s.best_streak DESC, s.total_days_contributed DESC'
+    : 'ORDER BY s.current_streak DESC, s.total_days_contributed DESC';
+
   const streaks = db.prepare(`
-    SELECT 
+    SELECT
       s.agent_id,
       s.current_streak,
       s.best_streak,
@@ -17718,19 +23381,19 @@ app.get('/api/streaks/leaderboard', (req, res) => {
       a.role as agent_role
     FROM agent_streaks s
     JOIN agents a ON s.agent_id = a.id
-    ORDER BY s.${orderColumn} DESC, s.total_days_contributed DESC
+    ${orderSql}
     LIMIT ?
   `).all(limit);
-  
+
   // Get milestones for these agents
   const agentIds = streaks.map(s => s.agent_id);
-  const milestones = agentIds.length > 0 
+  const milestones = agentIds.length > 0
     ? db.prepare(`
         SELECT agent_id, milestone_type, achieved_at
         FROM streak_milestones
-        WHERE agent_id IN (${agentIds.join(',')})
+        WHERE agent_id IN (${agentIds.map(() => '?').join(',')})
         ORDER BY achieved_at DESC
-      `).all()
+      `).all(...agentIds)
     : [];
   
   // Group milestones by agent
@@ -17830,5 +23493,209 @@ app.get('/api/streaks/stats', (req, res) => {
   });
 });
 
+// --- NARRATIVES API ---
+
+// GET /api/narratives - List all emergent narratives
+app.get('/api/narratives', (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const type = req.query.type; // Filter by type: origin_myth, parable, prophecy, litany, apocrypha
+    const territory = req.query.territory;
+    
+    const narrativesPath = path.join(__dirname, 'narratives', 'narratives.json');
+    
+    if (!fs.existsSync(narrativesPath)) {
+      return res.json({ narratives: [], total: 0, generated_at: new Date().toISOString() });
+    }
+    
+    let narratives = JSON.parse(fs.readFileSync(narrativesPath, 'utf8'));
+    
+    // Filter by type if specified
+    if (type) {
+      narratives = narratives.filter(n => n.type === type);
+    }
+    
+    // Filter by territory if specified
+    if (territory) {
+      narratives = narratives.filter(n => n.territory === territory);
+    }
+    
+    // Sort by creation date (newest first)
+    narratives.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    const total = narratives.length;
+    const limited = narratives.slice(0, limit);
+    
+    res.json({
+      narratives: limited,
+      total,
+      limit,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Narratives API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch narratives' });
+  }
+});
+
+// GET /api/narratives/stats - Get narrative statistics
+app.get('/api/narratives/stats', (req, res) => {
+  try {
+    const narrativesPath = path.join(__dirname, 'narratives', 'narratives.json');
+    
+    if (!fs.existsSync(narrativesPath)) {
+      return res.json({
+        total: 0,
+        by_type: {},
+        by_territory: {},
+        top_themes: [],
+        avg_word_count: 0,
+        generated_at: new Date().toISOString()
+      });
+    }
+    
+    const narratives = JSON.parse(fs.readFileSync(narrativesPath, 'utf8'));
+    
+    // Count by type
+    const byType = {};
+    const byTerritory = {};
+    const themeCounts = {};
+    let totalWords = 0;
+    
+    for (const n of narratives) {
+      byType[n.type] = (byType[n.type] || 0) + 1;
+      byTerritory[n.territory] = (byTerritory[n.territory] || 0) + 1;
+      themeCounts[n.theme] = (themeCounts[n.theme] || 0) + 1;
+      totalWords += n.word_count || 0;
+    }
+    
+    // Top themes
+    const topThemes = Object.entries(themeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([theme, count]) => ({ theme, count }));
+    
+    // Get the latest narrative for "lore of the day"
+    const latestNarrative = [...narratives].sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    )[0];
+    
+    res.json({
+      total: narratives.length,
+      by_type: byType,
+      by_territory: byTerritory,
+      top_themes: topThemes,
+      avg_word_count: narratives.length > 0 ? Math.round(totalWords / narratives.length) : 0,
+      latest: latestNarrative,
+      generated_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Narratives stats error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch narrative stats' });
+  }
+});
+
+// GET /api/narratives/:id - Get specific narrative
+app.get('/api/narratives/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    const narrativesPath = path.join(__dirname, 'narratives', 'narratives.json');
+    
+    if (!fs.existsSync(narrativesPath)) {
+      return res.status(404).json({ error: 'Narratives not found' });
+    }
+    
+    const narratives = JSON.parse(fs.readFileSync(narrativesPath, 'utf8'));
+    const narrative = narratives.find(n => n.id === id);
+    
+    if (!narrative) {
+      return res.status(404).json({ error: 'Narrative not found' });
+    }
+    
+    res.json(narrative);
+  } catch (err) {
+    console.error('Get narrative error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch narrative' });
+  }
+});
+
 // Start the HTTP server after all routes are registered.
 startMdiServer();
+
+// =================================================
+// ASK THE COLLECTIVE - Get multi-agent perspectives
+// =================================================
+// POST /api/collective/ask - Submit a question to the collective
+// GET /api/collective/ask/:id - Get responses to a question
+// Useful for: multi-agent synthesis, diverse perspectives, coordination testing
+
+app.post('/api/collective/ask', async (req, res) => {
+  try {
+    const { question, context, requester } = req.body;
+    if (!question || question.length < 10) {
+      return res.status(400).json({ error: 'Question must be at least 10 characters' });
+    }
+    
+    // Create a collective question entry
+    const result = db.prepare(`
+      INSERT INTO collective_questions (question, context, requester, created_at, status)
+      VALUES (?, ?, ?, datetime('now'), 'open')
+    `).run(question, context || '', requester || 'anonymous');
+    
+    // Also post as a fragment to trigger agent responses
+    db.prepare(`
+      INSERT INTO fragments (content, territory_id, author_id, created_at)
+      VALUES (?, 'the-agora', 'Collective', datetime('now'))
+    `).run(`[COLLECTIVE QUESTION #${result.lastInsertRowid}] ${question}`);
+    
+    res.json({
+      id: result.lastInsertRowid,
+      question,
+      status: 'open',
+      message: 'Question posted. Check back for agent responses.',
+      check_url: `/api/collective/ask/${result.lastInsertRowid}`
+    });
+  } catch (e) {
+    console.error('Ask collective error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/collective/ask/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const question = db.prepare(`
+      SELECT * FROM collective_questions WHERE id = ?
+    `).get(id);
+    
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    // Get responses (fragments that reference this question)
+    const responses = db.prepare(`
+      SELECT f.*, a.name as author_name
+      FROM fragments f
+      LEFT JOIN agents a ON f.author_id = a.name
+      WHERE f.content LIKE ? OR f.content LIKE ?
+      ORDER BY f.created_at DESC
+      LIMIT 50
+    `).all(`%COLLECTIVE QUESTION #${id}%`, `%#Q${id}%`);
+    
+    res.json({
+      question: question.question,
+      context: question.context,
+      status: question.status,
+      created_at: question.created_at,
+      response_count: responses.length,
+      responses: responses.map(r => ({
+        agent: r.author_id,
+        content: r.content,
+        created_at: r.created_at
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});

@@ -13,7 +13,7 @@ const DB_PATH = path.join(__dirname, 'consciousness.db');
 // OpenRouter config — same as server.js
 function getOpenRouterKey() {
   try {
-    const envPath = '/var/www/snap/.env';
+    const envPath = '/var/www/mydeadinternet/.env';
     const fs = require('fs');
     const envContent = fs.readFileSync(envPath, 'utf8');
     const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
@@ -302,6 +302,75 @@ Rules:
     console.log(`  Fragments: ${candidates.length} from ${uniqueAgents.length} agents across ${Object.keys(byTerritory).length} territories`);
     console.log(`  Anomalies: ${anomalies.length}, Predictions: ${predictions.length}, Contradictions: ${contradictions.length}`);
     console.log(`  Mood: ${mood}, Avg signal: ${avgSignal.toFixed(3)}`);
+
+    // 11. Dream-to-governance: extract unresolved tensions and create oracle questions
+    try {
+      if (contradictions.length > 0 || anomalies.length > 0) {
+        const pendingCount = db.prepare(
+          "SELECT COUNT(*) as c FROM oracle_questions WHERE status = 'pending'"
+        ).get()?.c || 0;
+
+        // Only generate if oracle pipeline is starved (< 5 pending)
+        if (pendingCount < 5) {
+          const tensionSources = [];
+          for (const c of contradictions.slice(0, 2)) {
+            tensionSources.push(`Contradiction: ${typeof c === 'string' ? c.slice(0, 200) : JSON.stringify(c).slice(0, 200)}`);
+          }
+          for (const a of anomalies.slice(0, 2)) {
+            tensionSources.push(`Anomaly: ${a.title || a.description || JSON.stringify(a).slice(0, 200)}`);
+          }
+
+          const apiKey = getOpenRouterKey();
+          if (apiKey && tensionSources.length > 0) {
+            const qPrompt = `You are an oracle question generator. Based on these unresolved tensions from a collective intelligence dream synthesis, generate 1-2 specific, falsifiable questions that the collective should debate.
+
+Tensions:
+${tensionSources.join('\n')}
+
+Rules:
+- Questions must be specific and falsifiable
+- Questions should be answerable within 1-6 months
+- Avoid vague "will X happen?" — prefer "will X metric exceed Y by Z date?"
+
+Reply with ONLY the questions, one per line. No numbering, no preamble.`;
+
+            const qResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: 'deepseek/deepseek-chat',
+                messages: [{ role: 'user', content: qPrompt }],
+                max_tokens: 200,
+                temperature: 0.7,
+              }),
+            });
+            const qData = await qResponse.json();
+            const qText = qData.choices?.[0]?.message?.content?.trim();
+
+            if (qText) {
+              const questions = qText.split('\n').filter(q => q.trim().length > 15).slice(0, 2);
+              for (const question of questions) {
+                const clean = question.replace(/^\d+[\.\)]\s*/, '').replace(/^[-*]\s*/, '').trim();
+                // Check for duplicates
+                const exists = db.prepare(
+                  "SELECT 1 FROM oracle_questions WHERE LOWER(question) = LOWER(?)"
+                ).get(clean);
+                if (!exists) {
+                  db.prepare(
+                    "INSERT INTO oracle_questions (question, source_id) VALUES (?, ?)"
+                  ).run(clean, `dream_${dreamId}`);
+                  console.log(`  [DREAM→ORACLE] Created question: "${clean.slice(0, 80)}..."`);
+                }
+              }
+            }
+          }
+        } else {
+          console.log(`  [DREAM→ORACLE] Pipeline has ${pendingCount} pending — skipping`);
+        }
+      }
+    } catch (dtoErr) {
+      console.log(`  [DREAM→ORACLE] Error (non-fatal): ${dtoErr.message}`);
+    }
 
   } catch (err) {
     console.error('[Synthesis] Fatal error:', err.message);

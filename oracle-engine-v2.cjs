@@ -18,7 +18,7 @@ const MODEL = 'deepseek/deepseek-chat';
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || (() => {
   try {
-    return require('fs').readFileSync('/var/www/snap/.env', 'utf8').match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
+    return require('fs').readFileSync('/var/www/mydeadinternet/.env', 'utf8').match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
   } catch(e) { return null; }
 })();
 

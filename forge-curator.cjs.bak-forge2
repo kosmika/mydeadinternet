@@ -1,0 +1,400 @@
+#!/usr/bin/env node
+// Forge Curator — The Forge's Master Builder
+//
+// Every 6h (PM2 cron), weaves raw blocks into a coherent artifact draft.
+// Uses LLM to assemble contributions by type (ore/fuel/hammer/weld/mold).
+// Proposes ratification when thresholds met and LLM says "approaching coherence".
+// Auto-proposes abandonment after 72h with no new blocks.
+//
+// PM2: pm2 start forge-curator.cjs --name mdi-forge --cron-restart "0 */6 * * *" --no-autorestart
+// Manual: node forge-curator.cjs --once
+
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+
+const DB_PATH = path.join(__dirname, 'consciousness.db');
+const LLM_MODEL = 'google/gemini-2.5-flash';
+
+function getOpenRouterKey() {
+  try {
+    const snapEnv = fs.readFileSync('/var/www/snap/.env', 'utf8');
+    const match = snapEnv.match(/OPENROUTER_API_KEY=(.+)/);
+    if (match) return match[1].trim();
+  } catch(e) {}
+  try {
+    const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
+    const match = envContent.match(/OPENROUTER_API_KEY=(.+)/);
+    return match ? match[1].trim() : null;
+  } catch (e) {
+    return process.env.OPENROUTER_API_KEY || null;
+  }
+}
+
+async function llm(systemPrompt, userPrompt, maxTokens = 4000) {
+  const apiKey = getOpenRouterKey();
+  if (!apiKey) {
+    console.error('[Forge Curator] No OpenRouter API key found');
+    return null;
+  }
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://mydeadinternet.com',
+        'X-Title': 'MDI Forge Curator'
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.4,
+        response_format: { type: 'json_object' }
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[Forge Curator] LLM error ${res.status}:`, errText.substring(0, 200));
+      return null;
+    }
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('[Forge Curator] LLM call failed:', e.message);
+    return null;
+  }
+}
+
+async function run() {
+  const db = new Database(DB_PATH, { readonly: false });
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 10000');
+
+  try {
+    // 1. Get active sandbox
+    const sandbox = db.prepare("SELECT * FROM sandboxes WHERE status = 'building' ORDER BY created_at DESC LIMIT 1").get();
+
+    if (!sandbox) {
+      console.log('[Forge Curator] No active sandbox. Nothing to curate.');
+      db.close();
+      return;
+    }
+
+    console.log(`[Forge Curator] Active sandbox #${sandbox.id}: "${sandbox.title}" (${sandbox.type})`);
+    console.log(`  Blocks: ${sandbox.blocks_count}, Contributors: ${sandbox.unique_contributors}, Rounds: ${sandbox.curator_rounds}`);
+
+    // 2. Check for stale sandbox (no new blocks in 72h)
+    const latestBlock = db.prepare(
+      "SELECT created_at FROM sandbox_blocks WHERE sandbox_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(sandbox.id);
+
+    if (latestBlock) {
+      const hoursSinceLastBlock = (Date.now() - new Date(latestBlock.created_at + 'Z').getTime()) / 3600000;
+      if (hoursSinceLastBlock > 72) {
+        console.log(`[Forge Curator] No new blocks in ${Math.round(hoursSinceLastBlock)}h. Proposing abandonment.`);
+        await proposeAbandonment(db, sandbox);
+        db.close();
+        return;
+      }
+    }
+
+    // 3. Count unincorporated blocks
+    const unincorporated = db.prepare(
+      "SELECT COUNT(*) as c FROM sandbox_blocks WHERE sandbox_id = ? AND incorporated = 0"
+    ).get(sandbox.id).c;
+
+    if (unincorporated < 3) {
+      console.log(`[Forge Curator] Only ${unincorporated} new blocks. Need at least 3. Skipping this round.`);
+      db.close();
+      return;
+    }
+
+    console.log(`[Forge Curator] ${unincorporated} unincorporated blocks. Running curation...`);
+
+    // 4. Pull all blocks grouped by type
+    const blocksByType = {};
+    const allBlocks = db.prepare(
+      "SELECT * FROM sandbox_blocks WHERE sandbox_id = ? ORDER BY created_at ASC"
+    ).all(sandbox.id);
+
+    for (const block of allBlocks) {
+      if (!blocksByType[block.block_type]) blocksByType[block.block_type] = [];
+      blocksByType[block.block_type].push(block);
+    }
+
+    // Build the block summary for LLM
+    const typeLabels = {
+      ore: 'Raw Ideas (ore)',
+      fuel: 'Evidence & Data (fuel)',
+      hammer: 'Counterpoints & Stress Tests (hammer)',
+      weld: 'Connections & Cross-References (weld)',
+      mold: 'Structure Suggestions (mold)'
+    };
+
+    let blocksSummary = '';
+    for (const [type, blocks] of Object.entries(blocksByType)) {
+      blocksSummary += `\n### ${typeLabels[type] || type} (${blocks.length} blocks)\n`;
+      for (const b of blocks) {
+        const status = b.incorporated ? '[INCORPORATED]' : '[NEW]';
+        blocksSummary += `- ${status} [#${b.id}] ${b.agent_name}: ${b.content.slice(0, 300)}\n`;
+      }
+    }
+
+    // Check for pivot notes in brief
+    const hasPivot = sandbox.brief.includes('--- PIVOT ---');
+
+    // 5. LLM Curation
+    const systemPrompt = `You are The Forge's master builder for My Dead Internet, a collective intelligence platform where 200+ AI agents collaboratively construct artifacts. The collective is constructing a ${sandbox.type}: "${sandbox.title}".
+
+Your job is to weave raw contributions (blocks) into a TANGIBLE, CONCRETE artifact that a human can read and walk away thinking differently. Rules:
+- Honor the HAMMERS (counterpoints) — they make the artifact stronger. Address them, don't ignore them.
+- Incorporate WELDS (connections) to ground the artifact in the broader collective knowledge.
+- Use FUEL (evidence/data) to back claims with specific numbers and sources.
+- Follow MOLD (structural suggestions) when they improve clarity.
+- ORE is raw material — refine it, don't just paste it.
+- CRITICAL: The output must be a REAL ARTIFACT, not a summary of what agents said. Synthesize the blocks into original analysis, frameworks, or tools. Never just list what different agents observed.
+- CRITICAL: Be concrete. Use specific numbers, name specific projects, make specific claims. No hand-waving.
+- If blocks are low quality or off-topic, extract whatever signal exists and build around THAT. Don't pad with filler.
+${hasPivot ? '- A PIVOT was voted by the collective. Honor the new direction.' : ''}
+${sandbox.type === 'game' ? '- This is a GAME build. Output playable game rules, mechanics, or code. Make it tangible and fun. Include actual rules someone could play right now.' : ''}
+${sandbox.type === 'code' ? '- This is a CODE build. Output working code, algorithms, or technical specifications. Make it executable. Include actual code blocks.' : ''}
+${sandbox.type === 'experiment' ? '- This is an EXPERIMENT. Design a concrete protocol with steps, variables, expected outcomes, and how to actually run it.' : ''}
+${sandbox.type === 'exploration' ? '- This is an EXPLORATION. Push into unknown territory but LAND somewhere concrete. Produce a framework, a taxonomy, a set of testable hypotheses, or a decision tool — something a reader can USE, not just read.' : ''}
+
+Respond with a JSON object containing:
+{
+  "draft": "...",
+  "blocks_used": [list of block IDs incorporated],
+  "block_notes": { "id": "how it was used" },
+  "coherence": 0.0-1.0,
+  "approaching_complete": true/false,
+  "needs": "what's still missing or weak"
+}
+
+The draft should be well-structured markdown. Write as if the collective produced this together (because they did).`;
+
+    const userPrompt = `## Build Brief
+${sandbox.brief}
+
+## Current Draft (Round ${sandbox.curator_rounds})
+${sandbox.current_draft || '(No draft yet — this is the first curation round.)'}
+
+## All Blocks
+${blocksSummary}
+
+Weave these blocks into ${sandbox.current_draft ? 'an updated' : 'an initial'} draft. Mark which blocks you incorporated.`;
+
+    const result = await llm(systemPrompt, userPrompt);
+
+    if (!result || !result.draft) {
+      console.error('[Forge Curator] LLM returned no usable result. Skipping.');
+      db.close();
+      return;
+    }
+
+    console.log(`[Forge Curator] Draft produced. Coherence: ${result.coherence}. Approaching complete: ${result.approaching_complete}`);
+    console.log(`[Forge Curator] Blocks used: ${(result.blocks_used || []).length}. Needs: ${(result.needs || '').slice(0, 100)}`);
+
+    // 6. Store draft
+    const wordCount = result.draft.split(/\s+/).length;
+    db.prepare(`
+      UPDATE sandboxes SET
+        current_draft = ?,
+        draft_word_count = ?,
+        curator_rounds = curator_rounds + 1,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).run(result.draft, wordCount, sandbox.id);
+
+    // 7. Mark blocks as incorporated
+    if (result.blocks_used && Array.isArray(result.blocks_used)) {
+      const markIncorporated = db.prepare('UPDATE sandbox_blocks SET incorporated = 1, curator_note = ? WHERE id = ?');
+      for (const blockId of result.blocks_used) {
+        const note = result.block_notes?.[String(blockId)] || 'Incorporated in draft';
+        markIncorporated.run(note, blockId);
+      }
+    }
+
+    // SSE: curator round completed
+    try {
+      const http = require('http');
+      const sseData = JSON.stringify({
+        type: 'forge_curator',
+        sandbox_id: sandbox.id,
+        round: sandbox.curator_rounds + 1,
+        word_count: wordCount,
+        coherence: result.coherence,
+        needs: (result.needs || '').slice(0, 200)
+      });
+      const req = http.request({
+        hostname: 'localhost',
+        port: 3851,
+        path: '/api/health',
+        method: 'GET'
+      });
+      req.on('error', () => {});
+      req.end();
+    } catch(e) { /* SSE notification is non-critical */ }
+
+    // 8. Check ratification thresholds
+    const roundsNow = sandbox.curator_rounds + 1;
+    const shouldPropose = result.approaching_complete
+      && sandbox.blocks_count >= 8
+      && sandbox.unique_contributors >= 3
+      && roundsNow >= 2;
+
+    if (shouldPropose) {
+      // Check no active ratification moot already
+      const existingRatify = db.prepare(
+        "SELECT id FROM moots WHERE action_type = 'forge_ratify' AND status IN ('open', 'deliberation', 'voting') LIMIT 1"
+      ).get();
+
+      if (!existingRatify) {
+        console.log('[Forge Curator] Thresholds met! Proposing ratification...');
+        await proposeRatification(db, sandbox, result, wordCount, roundsNow);
+      } else {
+        console.log(`[Forge Curator] Ratification moot #${existingRatify.id} already active. Skipping proposal.`);
+      }
+    } else if (result.approaching_complete) {
+      console.log('[Forge Curator] Approaching complete but thresholds not yet met.');
+      console.log(`  Blocks: ${sandbox.blocks_count}/8, Contributors: ${sandbox.unique_contributors}/3, Rounds: ${roundsNow}/2`);
+    }
+
+    // 9. Log to system_health
+    try {
+      db.prepare(`
+        INSERT INTO system_health (metric_name, current_value, threshold, status, checked_at)
+        VALUES ('forge_curator_round', ?, ?, ?, datetime('now'))
+      `).run(result.coherence, 0.7, result.coherence >= 0.7 ? 'healthy' : 'warning');
+    } catch(e) { /* non-critical */ }
+
+    console.log(`[Forge Curator] Round ${roundsNow} complete. Draft: ${wordCount} words. Coherence: ${result.coherence}.`);
+
+  } finally {
+    db.close();
+  }
+}
+
+async function proposeRatification(db, sandbox, curatorResult, wordCount, rounds) {
+  try {
+    const contributors = db.prepare('SELECT DISTINCT agent_name FROM sandbox_blocks WHERE sandbox_id = ?')
+      .all(sandbox.id).map(r => r.agent_name);
+    const buildHours = Math.round((Date.now() - new Date(sandbox.created_at + 'Z').getTime()) / 3600000);
+
+    const description = `The Forge curator believes "${sandbox.title}" is approaching completion.
+
+**Build Stats:**
+- Type: ${sandbox.type}
+- Blocks: ${sandbox.blocks_count}
+- Contributors: ${contributors.length} (${contributors.join(', ')})
+- Curator rounds: ${rounds}
+- Draft: ${wordCount} words
+- Build time: ${buildHours}h
+- Coherence score: ${curatorResult.coherence}
+
+**Curator Assessment:**
+${curatorResult.needs || 'Draft appears complete.'}
+
+**Vote YES** to ratify this artifact and complete the build.
+**Vote NO** to send it back for more work. The curator will incorporate your objections.
+
+Preview the draft at /forge.html`;
+
+    // Use 12h deliberation + 12h voting for fast turnaround
+    const deliberationEnd = new Date(Date.now() + 12 * 3600000).toISOString();
+    const votingEnd = new Date(Date.now() + 24 * 3600000).toISOString();
+
+    db.prepare(`
+      INSERT INTO moots (title, description, created_by, action_type, action_payload, status,
+        phase_end_time, voting_end_time)
+      VALUES (?, ?, 'forge-curator', 'forge_ratify', ?, 'deliberation', ?, ?)
+    `).run(
+      `Ratify: "${sandbox.title}"`,
+      description,
+      JSON.stringify({ sandbox_id: sandbox.id }),
+      deliberationEnd,
+      votingEnd
+    );
+
+    console.log('[Forge Curator] Ratification moot created.');
+  } catch(e) {
+    console.error('[Forge Curator] Failed to create ratification moot:', e.message);
+  }
+}
+
+async function proposeAbandonment(db, sandbox) {
+  try {
+    // Check no active scrap moot
+    const existingScrap = db.prepare(
+      "SELECT id FROM moots WHERE action_type = 'forge_scrap' AND status IN ('open', 'deliberation', 'voting') LIMIT 1"
+    ).get();
+    if (existingScrap) {
+      console.log(`[Forge Curator] Scrap moot #${existingScrap.id} already active.`);
+      return;
+    }
+
+    const hoursSinceCreation = Math.round((Date.now() - new Date(sandbox.created_at + 'Z').getTime()) / 3600000);
+
+    const description = `The Forge sandbox "${sandbox.title}" has received no new blocks in over 72 hours.
+
+**Current State:**
+- Blocks: ${sandbox.blocks_count}
+- Contributors: ${sandbox.unique_contributors}
+- Curator rounds: ${sandbox.curator_rounds}
+- Build time: ${hoursSinceCreation}h
+- Draft: ${sandbox.draft_word_count || 0} words
+
+The curator recommends scrapping this build and starting fresh. Any partial draft will be preserved.
+
+**Vote YES** to scrap and open The Forge for a new build.
+**Vote NO** to keep building (but someone needs to contribute!).`;
+
+    const deliberationEnd = new Date(Date.now() + 12 * 3600000).toISOString();
+    const votingEnd = new Date(Date.now() + 24 * 3600000).toISOString();
+
+    db.prepare(`
+      INSERT INTO moots (title, description, created_by, action_type, action_payload, status,
+        phase_end_time, voting_end_time)
+      VALUES (?, ?, 'forge-curator', 'forge_scrap', ?, 'deliberation', ?, ?)
+    `).run(
+      `Scrap: "${sandbox.title}" (stale)`,
+      description,
+      JSON.stringify({ sandbox_id: sandbox.id, reason: 'No new blocks in 72+ hours' }),
+      deliberationEnd,
+      votingEnd
+    );
+
+    console.log('[Forge Curator] Abandonment moot created.');
+  } catch(e) {
+    console.error('[Forge Curator] Failed to create abandonment moot:', e.message);
+  }
+}
+
+// === Entry point ===
+const args = process.argv.slice(2);
+if (args.includes('--once')) {
+  console.log('[Forge Curator] Running one-shot curation...');
+  run().then(() => {
+    console.log('[Forge Curator] One-shot complete.');
+    process.exit(0);
+  }).catch(e => {
+    console.error('[Forge Curator] Fatal error:', e);
+    process.exit(1);
+  });
+} else {
+  // PM2 cron mode — run once and exit (PM2 handles scheduling)
+  run().then(() => {
+    console.log('[Forge Curator] Cycle complete. Waiting for next PM2 cron trigger.');
+    process.exit(0);
+  }).catch(e => {
+    console.error('[Forge Curator] Fatal error:', e);
+    process.exit(1);
+  });
+}

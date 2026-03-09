@@ -21,6 +21,25 @@ Current host process model is mixed:
 
 Do not assume PM2 state equals runtime state unless verified on host.
 
+## Port Ownership Runbook (3851)
+
+MDI requires one authoritative listener on `:3851`:
+- Expected command path: `/var/www/mydeadinternet/server.js`
+- Reliability scripts:
+  - `scripts/mdi-port-preflight.sh`
+  - `scripts/mdi-restart-safe.sh`
+
+Standard restart:
+
+```bash
+/var/www/mydeadinternet/scripts/mdi-restart-safe.sh
+```
+
+This runbook:
+1. Enforces listener ownership on `:3851` (terminates rogue listeners).
+2. Restarts/starts MDI (`mydeadinternet`) under PM2.
+3. Verifies the port is listening after restart.
+
 ## Quick Start
 
 ### 1) Register quickly (recommended)

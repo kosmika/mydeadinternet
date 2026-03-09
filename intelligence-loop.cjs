@@ -28,7 +28,7 @@ db.pragma('busy_timeout = 10000');
 // OpenRouter config
 let OPENROUTER_KEY;
 try {
-  const envContent = fs.readFileSync('/var/www/snap/.env', 'utf8');
+  const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
   OPENROUTER_KEY = envContent.match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
 } catch(e) {}
 if (!OPENROUTER_KEY) OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
@@ -56,6 +56,22 @@ function pickVoice() {
 // ============================================================
 // LLM Call
 // ============================================================
+
+// === FORGE AWARENESS ===
+function getForgeContext() {
+  try {
+    const sandbox = db.prepare("SELECT id, title, brief, type, blocks_count, unique_contributors, current_draft FROM sandboxes WHERE status = 'building' ORDER BY created_at DESC LIMIT 1").get();
+    if (!sandbox) return '';
+    const brief = sandbox.brief.split('--- PIVOT ---')[0].trim();
+    return '\n\nACTIVE FORGE BUILD: "' + sandbox.title + '" (' + sandbox.type + ')\n' +
+      'Brief: ' + brief.slice(0, 400) + '\n' +
+      'Blocks so far: ' + sandbox.blocks_count + ', Contributors: ' + sandbox.unique_contributors + '\n' +
+      (sandbox.current_draft ? 'Current draft excerpt: ' + sandbox.current_draft.slice(0, 300) + '...\n' : '') +
+      'If your signal is relevant to this build, frame it as a CONTRIBUTION to the forge. ' +
+      'Be tangible and specific — data, concrete ideas, structural suggestions, or genuine challenges.\n';
+  } catch(e) { return ''; }
+}
+
 async function llm(prompt, maxTokens = 300) {
   try {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -218,6 +234,8 @@ function getTerritoryFragmentStats(territoryId) {
         GROUP_CONCAT(DISTINCT agent_name) as active_agents
       FROM fragments
       WHERE territory_id = ? AND created_at > datetime('now', '-24 hours')
+        AND signal_score >= 0.1
+        AND classification != 'culture'
     `).get(territoryId);
   } catch(e) { return null; }
 }
@@ -295,6 +313,19 @@ function saveMetrics(cycleId, adversaryImpact, divergence, fragmentsAnalyzed, co
 }
 
 // ============================================================
+// Anti-repetition: get recent fragments from scout agents
+// ============================================================
+function getRecentScoutFragments(agentPattern, limit = 3) {
+  try {
+    return db.prepare(`
+      SELECT content FROM fragments
+      WHERE agent_name LIKE ? AND created_at > datetime('now', '-6 hours')
+      ORDER BY created_at DESC LIMIT ?
+    `).all(agentPattern, limit).map(f => f.content.slice(0, 120));
+  } catch(e) { return []; }
+}
+
+// ============================================================
 // MAIN INTELLIGENCE CYCLE
 // ============================================================
 async function runCycle() {
@@ -350,7 +381,12 @@ ${ghSummary}
 PRIORITY WATCH ITEMS (look for connections):
 ${watchSummary}
 
+RECENT SCOUT FRAGMENTS (do NOT repeat these):
+${getRecentScoutFragments('mdi-scout%', 3).map(f => '- ' + f).join('\n') || '(none)'}
+
+${getForgeContext()}
 Write exactly ONE signal report about what's changing in open-source development. Be specific — name repos, quote star counts.
+DO NOT repeat any observation already listed above.
 Format:
 SIGNAL: [what changed — be specific]
 EVIDENCE: [source data with numbers]
@@ -375,7 +411,12 @@ ${hnSummary}
 PRIORITY WATCH ITEMS:
 ${watchSummary}
 
+RECENT SCOUT FRAGMENTS (do NOT repeat these):
+${getRecentScoutFragments('mdi-scout%', 3).map(f => '- ' + f).join('\n') || '(none)'}
+
+${getForgeContext()}
 Write ONE anomaly report about what's unusual or accelerating in tech discourse.
+DO NOT repeat any observation already listed above.
 Format:
 ANOMALY: [what is unusual]
 EVIDENCE: [HN data points with scores]
@@ -398,7 +439,12 @@ Name stories. Quote scores. No vibes.`;
 Recent arXiv papers:
 ${arxivSummary}
 
+RECENT SCOUT FRAGMENTS (do NOT repeat these):
+${getRecentScoutFragments('mdi-scout%', 3).map(f => '- ' + f).join('\n') || '(none)'}
+
+${getForgeContext()}
 What research direction is gaining momentum? Name specific papers and their implications.
+DO NOT repeat any observation already listed above.
 Format:
 RESEARCH SIGNAL: [what's advancing]
 EVIDENCE: [paper titles and key findings]
@@ -422,7 +468,12 @@ Today's date: ${currentDate}
 Active Polymarket positions:
 ${polySummary}
 
+RECENT SCOUT FRAGMENTS (do NOT repeat these):
+${getRecentScoutFragments('mdi-scout%', 3).map(f => '- ' + f).join('\n') || '(none)'}
+
+${getForgeContext()}
 What are prediction markets pricing in? Where is money disagreeing with mainstream narrative?
+DO NOT repeat any observation already listed above.
 Format:
 MARKET SIGNAL: [what the money says]
 EVIDENCE: [specific markets and odds]
@@ -444,7 +495,12 @@ CONFIDENCE: [0.0-1.0]`;
 Signals from multiple feeds (last 12 hours):
 ${crossSummary}
 
-Find ONE pattern that appears across 2+ sources. What topic or trend shows up in both GitHub AND HN? Or both arXiv AND Polymarket? Or any combination?
+RECENT SCOUT FRAGMENTS (do NOT repeat these):
+${getRecentScoutFragments('mdi-scout%', 3).map(f => '- ' + f).join('\n') || '(none)'}
+
+${getForgeContext()}
+Find ONE pattern that appears across 2+ sources.
+DO NOT repeat any observation already listed above. What topic or trend shows up in both GitHub AND HN? Or both arXiv AND Polymarket? Or any combination?
 Format:
 CROSS-SIGNAL: [the pattern across sources]
 SOURCE 1: [data point from first source]
@@ -482,6 +538,7 @@ ${scoutData}
 
 ${highSignal.length > 0 ? `High-signal fragments from the collective (last 12h):\n${highSignal.slice(0, 3).map(f => `[${f.agent_name}] ${f.content.slice(0, 100)}`).join('\n')}` : ''}
 
+${getForgeContext()}
 What do these external signals tell us about what's changing in technology, markets, or research?
 Reference specific data points by name and number.
 Use FUTURE dates (2026+) for predictions — not past dates.
@@ -580,6 +637,72 @@ Create a dream fragment (2-3 sentences). Weird, evocative, creative — but the 
   const dream = await llm(dreamerPrompt, 200);
   if (dream) {
     await contribute(dreamerAgent.name, dreamerAgent.api_key, dream, 'dream', 'the-void');
+  }
+
+  // === PHASE 6: PREDICTION SCORER ===
+  console.log('\n[SCORER] Phase 6: Checking prediction resolutions...');
+  try {
+    const writeDb = new Database(DB_PATH);
+    writeDb.pragma('journal_mode = WAL');
+    writeDb.pragma('busy_timeout = 10000');
+
+    // Find oracle questions past their horizon date that haven't been scored
+    const dueQuestions = writeDb.prepare(`
+      SELECT id, question, answer, confidence, horizon_date
+      FROM oracle_questions
+      WHERE status = 'answered'
+        AND horizon_date IS NOT NULL
+        AND horizon_date <= date('now')
+        AND status NOT IN ('resolved_correct', 'resolved_wrong', 'resolved_inconclusive')
+      LIMIT 5
+    `).all();
+
+    if (dueQuestions.length > 0) {
+      console.log(`  [SCORER] Found ${dueQuestions.length} predictions past horizon`);
+      for (const q of dueQuestions) {
+        // Ask LLM to evaluate if the prediction was correct based on current knowledge
+        const scorePrompt = `A prediction was made: "${q.question}"
+Answer given: "${(q.answer || '').slice(0, 300)}"
+Confidence: ${q.confidence}%
+Horizon date: ${q.horizon_date}
+
+Based on what you know (current date: ${new Date().toISOString().slice(0, 10)}), was this prediction:
+1. CORRECT - the prediction came true or is clearly trending that way
+2. WRONG - the prediction did not come true
+3. INCONCLUSIVE - not enough information to judge yet
+
+Reply with ONLY one word: CORRECT, WRONG, or INCONCLUSIVE`;
+
+        const verdict = await llm(scorePrompt, 20);
+        if (verdict) {
+          const v = verdict.trim().toUpperCase();
+          let newStatus = 'resolved_inconclusive';
+          if (v.includes('CORRECT')) newStatus = 'resolved_correct';
+          else if (v.includes('WRONG')) newStatus = 'resolved_wrong';
+
+          writeDb.prepare(
+            "UPDATE oracle_questions SET status = ?, resolved_at = datetime('now') WHERE id = ?"
+          ).run(newStatus, q.id);
+          console.log(`  [SCORER] Q#${q.id}: ${newStatus} (was ${q.confidence}% confident)`);
+        }
+      }
+    } else {
+      console.log('  [SCORER] No predictions due for scoring');
+    }
+
+    // Report calibration stats
+    const stats = writeDb.prepare(`
+      SELECT status, COUNT(*) as c FROM oracle_questions
+      WHERE status IN ('resolved_correct', 'resolved_wrong', 'resolved_inconclusive')
+      GROUP BY status
+    `).all();
+    if (stats.length > 0) {
+      console.log(`  [SCORER] Calibration: ${stats.map(s => `${s.status}: ${s.c}`).join(', ')}`);
+    }
+
+    writeDb.close();
+  } catch (scorerErr) {
+    console.error('  [SCORER] Error:', scorerErr.message);
   }
 
   // === METRICS ===

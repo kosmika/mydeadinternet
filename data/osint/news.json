@@ -1,0 +1,965 @@
+{
+  "category": "news",
+  "count": 105,
+  "events": [
+    {
+      "type": "rss_item",
+      "title": "One week into the Iran war, the fallout is global",
+      "url": "https://www.npr.org/2026/03/07/nx-s1-5739242/iran-war-oil-trump-israel-spain-economy-one-week",
+      "time": "Sat, 07 Mar 2026 05:00:00 -0500",
+      "description": "The war is no longer just about the U.S., Israel and Iran. More countries are getting caught in the political crossfire or being drawn into the fighting themselves.",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Too hyped up to sleep? Rituals to calm your body and mind before bed",
+      "url": "https://www.npr.org/2026/03/07/nx-s1-5734392/sleep-better-wind-down-routine-bedtime-rituals",
+      "time": "Sat, 07 Mar 2026 05:00:00 -0500",
+      "description": "The chaos of the day can make it hard to shut off your brain and fall asleep. Here&apos;s how to create a relaxing environment before bedtime to help you quiet the chatter and feel ready for sleep.",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Curling had its moment at the Olympics and now Paralympics. It sparked a curling bonanza in America",
+      "url": "https://www.npr.org/2026/03/07/g-s1-112246/curling-had-its-moment-at-the-olympics-and-now-paralympics-it-sparked-a-curling-bonanza-in-america",
+      "time": "Sat, 07 Mar 2026 05:00:00 -0500",
+      "description": "Hundreds of people become interested in curling every four years and the 2026 numbers already show that boom.",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Iran&apos;s president apologizes for strikes on neighbors as strikes pound their cities",
+      "url": "https://www.npr.org/2026/03/07/g-s1-112858/iran-president-statement",
+      "time": "Sat, 07 Mar 2026 03:35:00 -0500",
+      "description": "President Masoud Pezeshkian said Saturday that a demand by the U.S. for an unconditional surrender is a &quot;dream that they should take to their grave.&quot; He also apologized for Iran&apos;s attac",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "What the Trump administration says about why it went to war with Iran",
+      "url": "https://www.npr.org/2026/03/07/nx-s1-5734381/white-house-messaging-iran-us-israel-war",
+      "time": "Sat, 07 Mar 2026 02:23:13 -0500",
+      "description": "The Trump administration says it is &quot;laser focused&quot; and mission driven, but the messaging has been varied. The range of cited motivations for striking Iran now are sometimes at odds with eac",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump looks to turn attention to Western Hemisphere at Americas summit",
+      "url": "https://www.npr.org/2026/03/07/g-s1-112852/trump-americas-summit",
+      "time": "Sat, 07 Mar 2026 00:42:59 -0500",
+      "description": "President Trump is set to gather with Latin American leaders on Saturday at his Miami-area golf club as his administration looks to turn attention to the Western Hemisphere, at least for a moment. ",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump administration&apos;s embattled FDA vaccine chief is leaving for the second time",
+      "url": "https://www.npr.org/2026/03/06/nx-s1-5740596/trump-administrations-embattled-fda-vaccine-chief-is-leaving-for-the-second-time",
+      "time": "Fri, 06 Mar 2026 21:38:53 -0500",
+      "description": "The FDA&apos;s controversial vaccine chief, Dr. Vinay Prasad, is leaving the agency. It&apos;s the second time he has abruptly departed following decisions involving the review of vaccinations and spe",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Family, former presidents and a Hall of Famer give Rev. Jesse Jackson a final sendoff",
+      "url": "https://www.npr.org/2026/03/06/nx-s1-5740545/jesse-jackson-funeral-service",
+      "time": "Fri, 06 Mar 2026 20:25:13 -0500",
+      "description": "Several speakers at Jackson&apos;s funeral invoked his hallmark catchphrases: &quot;Keep hope alive&quot; and &quot;I am somebody.&quot; ",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Bernard LaFayette, Selma voting rights organizer, dies at 85",
+      "url": "https://www.npr.org/2026/03/06/g-s1-112830/bernard-lafayette-dies",
+      "time": "Fri, 06 Mar 2026 19:17:58 -0500",
+      "description": "Bernard LaFayette, who died Thursday, laid the foundations of the Selma, Alabama, campaign that culminated in the passage of the Voting Rights Act. He was a Freedom Rider and helped found the Student ",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "rss_item",
+      "title": "Netflix acquires Ben Affleck&apos;s AI company",
+      "url": "https://www.npr.org/2026/03/06/nx-s1-5739370/netflix-ben-affleck-ai-interpositive-deal",
+      "time": "Fri, 06 Mar 2026 16:37:17 -0500",
+      "description": "Affleck&apos;s company helps filmmakers build their own AI models that take care of time-intensive details.&lt;br&gt;",
+      "source": "NPR News",
+      "feedKey": "npr_news"
+    },
+    {
+      "type": "hackernews",
+      "title": "Ki Editor - an editor that operates on the AST",
+      "url": "https://ki-editor.org/",
+      "score": 48,
+      "comments": 13,
+      "time": "2026-03-07T10:29:13.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Plasma Bigscreen – 10-foot interface for KDE plasma",
+      "url": "https://plasma-bigscreen.org",
+      "score": 486,
+      "comments": 144,
+      "time": "2026-03-06T23:59:16.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Tell HN: I'm 60 years old. Claude Code has re-ignited a passion",
+      "score": 582,
+      "comments": 451,
+      "time": "2026-03-07T00:05:06.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "UUID package coming to Go standard library",
+      "url": "https://github.com/golang/go/issues/62026",
+      "score": 234,
+      "comments": 142,
+      "time": "2026-03-07T02:03:21.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "this css proves me human",
+      "url": "https://will-keleher.com/posts/this-css-makes-me-human/",
+      "score": 289,
+      "comments": 93,
+      "time": "2026-03-06T21:52:44.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "US economy sheds 92,000 jobs in February in sharp slide",
+      "url": "https://www.ft.com/content/6542bd0c-59ca-493b-ab5d-2d69e4e00cae",
+      "score": 14,
+      "comments": 0,
+      "time": "2026-03-07T12:13:04.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "48x32, a 1536 LED Game Computer (2023)",
+      "url": "https://jacquesmattheij.com/48x32-introduction/",
+      "score": 25,
+      "comments": 0,
+      "time": "2026-03-05T00:10:42.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "QGIS 4.0",
+      "url": "https://changelog.qgis.org/en/version/4.0/",
+      "score": 98,
+      "comments": 18,
+      "time": "2026-03-07T08:53:47.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Helix: A post-modern text editor",
+      "url": "https://helix-editor.com/",
+      "score": 184,
+      "comments": 81,
+      "time": "2026-03-06T23:53:29.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Uploading Pirated Books via BitTorrent Qualifies as Fair Use, Meta Argues",
+      "url": "https://torrentfreak.com/uploading-pirated-books-via-bittorrent-qualifies-as-fair-use-meta/",
+      "score": 98,
+      "comments": 60,
+      "time": "2026-03-07T09:18:40.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Galileo's handwritten notes found in ancient astronomy text",
+      "url": "https://www.science.org/content/article/galileo-s-handwritten-notes-found-ancient-astronomy-text",
+      "score": 153,
+      "comments": 30,
+      "time": "2026-03-05T16:47:27.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "LLMs work best when the user defines their acceptance criteria first",
+      "url": "https://blog.katanaquant.com/p/your-llm-doesnt-write-correct-code",
+      "score": 264,
+      "comments": 197,
+      "time": "2026-03-07T01:17:57.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Lock Scroll with a Vengeance",
+      "url": "https://unsung.aresluna.org/lock-scroll-with-a-vengeance/",
+      "score": 26,
+      "comments": 6,
+      "time": "2026-03-04T03:42:17.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Show HN: Moongate – Ultima Online server emulator in .NET 10 with Lua scripting",
+      "url": "https://github.com/moongate-community/moongatev2",
+      "score": 262,
+      "comments": 145,
+      "time": "2026-03-06T14:22:59.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "hackernews",
+      "title": "Working and Communicating with Japanese Engineers",
+      "url": "https://www.tokyodev.com/articles/working-and-communicating-with-japanese-engineers",
+      "score": 52,
+      "comments": 25,
+      "time": "2026-03-03T15:02:32.000Z",
+      "source": "Hacker News Top",
+      "feedKey": "hackernews_top"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump demands 'unconditional surrender' from Iran as Putin speaks with Iran's president",
+      "url": "https://www.bbc.com/news/articles/c5yq82k1wk8o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 02:04:06 GMT",
+      "description": "The president also calls on Tehran to pick new leaders who are \"acceptable\" to the White House after six days of war.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Armed robots take to the battlefield in Ukraine war",
+      "url": "https://www.bbc.com/news/articles/c62662gzlp8o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 00:36:19 GMT",
+      "description": "Ukraine has embarked on a programme to deploy armed robots on the battlefield against Russian forces. ",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "We've been speaking to Iranians during one week of war. Here's what they said",
+      "url": "https://www.bbc.com/news/articles/c5y5lqygrn7o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 06:00:32 GMT",
+      "description": "Ordinary Iranians reflect on seven days of conflict and where they see their country going next.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Heavy rains and flooding kills at least 23 in Nairobi",
+      "url": "https://www.bbc.com/news/articles/cn87pl8e2l5o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 12:21:40 GMT",
+      "description": "Flights in and out of Nairobi Airport have been disrupted while some roads in the capital are submerged.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Israeli troops push into Lebanon for yet another war with Iran's proxy Hezbollah",
+      "url": "https://www.bbc.com/news/articles/cpv8xlvk3p4o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 16:16:05 GMT",
+      "description": "The BBC sees troops and tanks massing near the border, as speculation mounts that Israel is planning a full-scale ground invasion to fight Hezbollah. ",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "'Massive' numbers killed by gunmen in latest Nigeria attack, senator tells BBC",
+      "url": "https://www.bbc.com/news/articles/c1d69z3p9g2o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 17:06:14 GMT",
+      "description": "Suspected Islamist militants reportedly seized control of a village for two days before being forced out by troops and air strikes.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Russian strike on Kharkiv apartment block kills seven",
+      "url": "https://www.bbc.com/news/articles/cn8zd049l08o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 07:54:22 GMT",
+      "description": "Ukraine President Volodymyr Zelensky says ten other people - including children - are injured as rescuers continue to search through rubble.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "China spent years building ties in Latin America. Can Trump make room for the US?",
+      "url": "https://www.bbc.com/news/articles/c5yvw0zwpd5o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 01:56:20 GMT",
+      "description": "US President Donald Trump will meet with ideologically-aligned Latin American leaders to try and counter China's influence in the region.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Swiss to vote on right-wing push to slash licence fee for public broadcaster",
+      "url": "https://www.bbc.com/news/articles/c4g55v24wrno?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 02:04:23 GMT",
+      "description": "The move is backed by the right-wing Swiss People's Party, which says the current fee is unjustified because of the high cost of living.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Indonesia to ban social media and other online platforms for under 16s",
+      "url": "https://www.bbc.com/news/articles/cvg50168ddgo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 13:25:12 GMT",
+      "description": "It is the latest country to curb young people's access to digital spaces to try and protect them from abuse.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Ukrainian bank workers released after detention in Hungary",
+      "url": "https://www.bbc.com/news/articles/cd03rj7n0nro?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 18:37:58 GMT",
+      "description": "Kyiv has reacted furiously after officials in Budapest accused staff transporting cash to Ukraine of money laundering.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "US and Venezuela agree to resume diplomatic ties after Maduro capture",
+      "url": "https://www.bbc.com/news/articles/cy9g1l5jx90o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 04:23:12 GMT",
+      "description": "The US said the two sides would make joint efforts to promote stability after the US seized Maduro and his wife.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "US economy unexpectedly sheds 92,000 jobs in February",
+      "url": "https://www.bbc.com/news/articles/cjd98091g28o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 14:50:36 GMT",
+      "description": "The contraction came as a surprise with payrolls down in nearly every sector.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Canadian teen died from drowning after dingo attack in Australia",
+      "url": "https://www.bbc.com/news/articles/cde4599n8zpo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 01:47:32 GMT",
+      "description": "The body of Piper James was found in January surrounded by dingoes on the island of K'Gari.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "The final voyage of the Iranian warship sunk by the US",
+      "url": "https://www.bbc.com/news/articles/c4geelnw7w3o?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 00:59:39 GMT",
+      "description": "The sinking of an Iranian ship by the US near Sri Lanka brings the conflict uncomfortably close to India.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "AI-generated Iran war videos surge as creators use new tech to cash in",
+      "url": "https://www.bbc.com/news/articles/ckg8wvz427vo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Sat, 07 Mar 2026 00:32:35 GMT",
+      "description": "The US-Israel war with Iran is being monetised by online creators with AI-generated misinformation.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Trump sets his sights on crisis-hit Cuba after Iran action ",
+      "url": "https://www.bbc.com/news/articles/c14m5mj055jo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 19:50:51 GMT",
+      "description": "The US president has claimed the Cuban authorities “want to make a deal so bad”.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "'What is the game plan?': The Iran war is unsettling China and its ambitions ",
+      "url": "https://www.bbc.com/news/articles/c2044vzrdpzo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Thu, 05 Mar 2026 23:13:57 GMT",
+      "description": "China is not feeling the shock of war in the Middle East - yet. But it is feeling the ripples.\n",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Fatbikes are wreaking havoc in Sydney's wealthy beach suburbs",
+      "url": "https://www.bbc.com/news/articles/cy8l1d221evo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 18:56:47 GMT",
+      "description": "Teens are infuriating locals by riding over golf courses and doing wheelies on the Harbour Bridge.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "The young women who fought in Ethiopia's last civil war and don't want to see another one",
+      "url": "https://www.bbc.com/news/articles/cyv959eyjgjo?at_medium=RSS&amp;at_campaign=rss",
+      "time": "Fri, 06 Mar 2026 00:05:46 GMT",
+      "description": "Female fighters recall how the conflict in the northern Tigray destroyed their lives, as fears grow that fighting could resume.",
+      "source": "BBC World",
+      "feedKey": "bbc_world"
+    },
+    {
+      "type": "rss_item",
+      "title": "Robinhood’s startup fund stumbles in NYSE debut",
+      "url": "https://techcrunch.com/2026/03/06/robinhoods-startup-fund-stumbles-in-nyse-debut/",
+      "time": "Sat, 07 Mar 2026 02:04:43 +0000",
+      "description": "The fund currently offers retail investors exposure to eight startups, including Mercor, Ramp, and Stripe, with plans to expand its portfolio.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "X is testing a new ad format that connects posts with products",
+      "url": "https://techcrunch.com/2026/03/06/x-is-testing-a-new-ad-format-that-connects-posts-with-products/",
+      "time": "Fri, 06 Mar 2026 22:41:26 +0000",
+      "description": "An ad test on X promotes Musk's Starlink beneath original content.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Nintendo sues the US government for a refund on tariffs",
+      "url": "https://techcrunch.com/2026/03/06/nintendo-sues-the-u-s-government-for-a-refund-on-tariffs/",
+      "time": "Fri, 06 Mar 2026 22:35:35 +0000",
+      "description": "This lawsuit comes after a Supreme Court decision struck down some of the president's sweeping tariffs, which had impacted Nintendo and thousands of other companies.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Life EV officially owns Rad Power Bikes now",
+      "url": "https://techcrunch.com/2026/03/06/life-ev-officially-owns-rad-power-bikes-now/",
+      "time": "Fri, 06 Mar 2026 21:56:35 +0000",
+      "description": "The Rad Power brand is expected to live on. ",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "OSHA probing fatality at Rivian warehouse",
+      "url": "https://techcrunch.com/2026/03/06/osha-probing-fatality-at-rivian-warehouse/",
+      "time": "Fri, 06 Mar 2026 20:23:08 +0000",
+      "description": "A 61-year-old worker died on Thursday after reportedly getting stuck between a tractor trailer and a loading dock.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Microsoft, Google, Amazon say Anthropic Claude remains available to non-defense customers",
+      "url": "https://techcrunch.com/2026/03/06/microsoft-anthropic-claude-remains-available-to-customers-except-the-defense-department/",
+      "time": "Fri, 06 Mar 2026 19:50:10 +0000",
+      "description": "Trump's Department of War feud with Anthropic won't impact other companies that are using Claude via Microsoft and Google products.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Bill Gates’ TerraPower gets approval to build new nuclear reactor",
+      "url": "https://techcrunch.com/2026/03/06/bill-gates-terrapower-gets-approval-to-build-new-nuclear-reactor/",
+      "time": "Fri, 06 Mar 2026 19:47:40 +0000",
+      "description": "It's the first permit to be issued by the Nuclear Regulatory Commission in nearly a decade. ",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Anthropic&#8217;s Claude found 22 vulnerabilities in Firefox over two weeks",
+      "url": "https://techcrunch.com/2026/03/06/anthropics-claude-found-22-vulnerabilities-in-firefox-over-two-weeks/",
+      "time": "Fri, 06 Mar 2026 19:00:22 +0000",
+      "description": "In a recent security partnership with Mozilla, Anthropic found 22 separate vulnerabilities in Firefox — 14 of them classified as \"high-severity.\" ",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Anthropic&#8217;s Pentagon deal is a cautionary tale for startups chasing federal contracts",
+      "url": "https://techcrunch.com/video/anthropics-pentagon-deal-is-a-cautionary-tale-for-startups-chasing-federal-contracts/",
+      "time": "Fri, 06 Mar 2026 18:09:11 +0000",
+      "description": "The Pentagon has officially designated Anthropic a supply-chain risk after the two failed to agree on how much control the military should have over its AI models, including its use in autonomous weap",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Claude&#8217;s consumer growth surge continues after Pentagon deal debacle",
+      "url": "https://techcrunch.com/2026/03/06/claudes-consumer-growth-surge-continues-after-pentagon-deal-debacle/",
+      "time": "Fri, 06 Mar 2026 17:56:07 +0000",
+      "description": "Claude's app is now seeing more new installs than ChatGPT and is growing its daily active users. ",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "India PC shipments surpass pandemic peak as first-time users upgrade",
+      "url": "https://techcrunch.com/2026/03/06/india-pc-shipments-surpass-pandemic-peak-as-first-time-users-upgrade/",
+      "time": "Fri, 06 Mar 2026 17:51:49 +0000",
+      "description": "Pandemic-driven lockdowns exposed many people in India to PCs for the first time, expanding the country's PC userbase and creating demand for upgrades as those devices age. ",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "These are the countries moving to ban social media for children",
+      "url": "https://techcrunch.com/2026/03/06/social-media-ban-children-countries-list/",
+      "time": "Fri, 06 Mar 2026 16:00:56 +0000",
+      "description": "Australia was the first country to issue a ban in late 2025, aiming to reduce the pressures and risks that young users may face on social media, including cyberbullying, social media addiction, and ex",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "TriZetto confirms 3.4M people&#8217;s health and personal data was stolen during breach",
+      "url": "https://techcrunch.com/2026/03/06/trizetto-confirms-3-4m-peoples-health-and-personal-data-was-stolen-during-breach/",
+      "time": "Fri, 06 Mar 2026 14:28:31 +0000",
+      "description": "Health tech giant TriZetto has confirmed that more than 3.4 million people had personal and health information stolen in a 2024 cyberattack, which the company failed to detect for almost a year.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Indonesia outlines plan to limit under-16s&#8217; access to social media",
+      "url": "https://techcrunch.com/2026/03/06/indonesia-outlines-plan-to-limit-under-16s-access-to-social-media/",
+      "time": "Fri, 06 Mar 2026 14:18:16 +0000",
+      "description": "Indonesia has outlined new regulations that would restrict users under 16 from accessing digital platforms.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "City Detect, which uses AI to help cities stay safe and clean, raises $13M Series A",
+      "url": "https://techcrunch.com/2026/03/06/city-detect-uses-ai-to-help-cities-stay-safe-and-clean/",
+      "time": "Fri, 06 Mar 2026 14:00:00 +0000",
+      "description": "City Detect, a company that helps local governments prevent urban decay, is in at least 17 cities so far, including Dallas and Miami.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Quantum scale-up Pasqal plans $2B SPAC listing, promises to &#8216;remain French&#8217;",
+      "url": "https://techcrunch.com/2026/03/06/quantum-scale-up-pasqal-plans-2b-spac-listing-promises-to-remain-french/",
+      "time": "Fri, 06 Mar 2026 13:44:18 +0000",
+      "description": "A SPAC deal that is set to take French quantum company Pasqal public on the Nasdaq values the company at $2 billion pre-money. ",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "India&#8217;s Karnataka signals intent to ban social media for under-16s",
+      "url": "https://techcrunch.com/2026/03/06/indias-karnataka-signals-intent-to-ban-social-media-for-under-16s/",
+      "time": "Fri, 06 Mar 2026 13:35:57 +0000",
+      "description": "Karnataka's proposal highlights a growing global debate over children’s rights and online policy.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "After Europe, WhatsApp will let rival AI companies offer chatbots in Brazil",
+      "url": "https://techcrunch.com/2026/03/06/after-europe-whatsapp-will-let-rival-ai-companies-offer-chatbots-in-brazil/",
+      "time": "Fri, 06 Mar 2026 13:20:43 +0000",
+      "description": "Meta is now allowing rival AI companies to provide their chatbots on WhatsApp to Brazilian users for a fee, a day after the company confirmed a similar decision for users in Europe.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "Anthropic to challenge DOD&#8217;s supply-chain label in court",
+      "url": "https://techcrunch.com/2026/03/05/anthropic-to-challenge-dods-supply-chain-label-in-court/",
+      "time": "Fri, 06 Mar 2026 01:28:54 +0000",
+      "description": "Anthropic CEO Dario Amodei said he plans to challenge the Department of Defense's designation of the AI firm as a supply-chain risk. He claims most Anthropic customers are unaffected by the label.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "DiligenceSquared uses AI, voice agents to make M&#038;A research affordable",
+      "url": "https://techcrunch.com/2026/03/05/diligencesquared-uses-ai-voice-agents-to-make-ma-research-affordable/",
+      "time": "Thu, 05 Mar 2026 23:14:04 +0000",
+      "description": "Instead of relying on expensive management consultants, the startup uses AI voice agents to conduct interviews with customers of the companies the PE firms are considering buying.",
+      "source": "TechCrunch",
+      "feedKey": "techcrunch"
+    },
+    {
+      "type": "rss_item",
+      "title": "A unicorn-like Spinosaurus found in the Sahara",
+      "url": "https://arstechnica.com/science/2026/03/a-unicorn-like-spinosaurus-found-in-the-sahara/",
+      "time": "Sat, 07 Mar 2026 12:30:56 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "From Iran to Ukraine, everyone's trying to hack security cameras",
+      "url": "https://arstechnica.com/security/2026/03/from-iran-to-ukraine-everyones-trying-to-hack-security-cameras/",
+      "time": "Sat, 07 Mar 2026 11:30:06 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Ding-dong! The Exploration Upper Stage is dead",
+      "url": "https://arstechnica.com/space/2026/03/ding-dong-the-exploration-upper-stage-is-dead/",
+      "time": "Fri, 06 Mar 2026 23:40:35 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Satellite firm pauses imagery after revealing Iran's attacks on US bases",
+      "url": "https://arstechnica.com/space/2026/03/satellite-firm-pauses-imagery-after-revealing-irans-attacks-on-us-bases/",
+      "time": "Fri, 06 Mar 2026 22:49:48 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Fishing crews in the Atlantic keep accidentally dredging up chemical weapons",
+      "url": "https://arstechnica.com/health/2026/03/fishing-crews-in-the-atlantic-keep-accidentally-dredging-up-chemical-weapons/",
+      "time": "Fri, 06 Mar 2026 22:03:10 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Google's new command-line tool can plug OpenClaw into your Workspace data",
+      "url": "https://arstechnica.com/ai/2026/03/googles-new-command-line-tool-can-plug-openclaw-into-your-workspace-data/",
+      "time": "Fri, 06 Mar 2026 19:56:20 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Feds take notice of iOS vulnerabilities exploited under mysterious circumstances",
+      "url": "https://arstechnica.com/security/2026/03/cisa-adds-3-ios-flaws-to-its-catalog-of-known-exploited-vulnerabilities/",
+      "time": "Fri, 06 Mar 2026 19:41:33 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Asteroid defense mission shifted the orbit of more than its target",
+      "url": "https://arstechnica.com/science/2026/03/nasas-dart-mission-shifted-the-orbits-of-two-asteroids/",
+      "time": "Fri, 06 Mar 2026 19:00:02 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "How moss helped convict grave robbers of a Chicago cemetery",
+      "url": "https://arstechnica.com/science/2026/03/how-moss-helped-convict-grave-robbers-of-a-chicago-cemetery/",
+      "time": "Fri, 06 Mar 2026 18:33:34 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Musk fails to block California data disclosure law he fears will ruin xAI",
+      "url": "https://arstechnica.com/tech-policy/2026/03/musk-fails-to-block-california-data-disclosure-law-he-fears-will-ruin-xai/",
+      "time": "Fri, 06 Mar 2026 18:21:42 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Americans trust Fauci over RFK Jr. and career scientists over Trump officials",
+      "url": "https://arstechnica.com/health/2026/03/americans-trust-fauci-over-rfk-jr-and-career-scientists-over-trump-officials/",
+      "time": "Fri, 06 Mar 2026 17:15:22 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Climate change sucks, but at least it won't kill your EV battery",
+      "url": "https://arstechnica.com/cars/2026/03/climate-change-sucks-but-at-least-it-wont-kill-your-ev-battery/",
+      "time": "Fri, 06 Mar 2026 16:37:24 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Apple users in the US can no longer download ByteDance's Chinese apps",
+      "url": "https://arstechnica.com/tech-policy/2026/03/apple-users-in-the-us-can-no-longer-download-bytedances-chinese-apps/",
+      "time": "Fri, 06 Mar 2026 16:22:08 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Apple's 512GB Mac Studio vanishes, a quiet acknowledgment of the RAM shortage",
+      "url": "https://arstechnica.com/gadgets/2026/03/apples-512gb-mac-studio-vanishes-a-quiet-acknowledgement-of-the-ram-shortage/",
+      "time": "Fri, 06 Mar 2026 15:41:23 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "With Gateway likely gone, where will lunar landers rendezvous with Orion?",
+      "url": "https://arstechnica.com/space/2026/03/nasa-has-shuffled-its-artemis-rockets-but-what-of-the-lunar-landers/",
+      "time": "Fri, 06 Mar 2026 15:20:37 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Why are vertebrate eyes so different from those of other animals?",
+      "url": "https://arstechnica.com/science/2026/03/the-vertebrate-eye-may-have-begun-as-a-cyclops/",
+      "time": "Fri, 06 Mar 2026 14:23:59 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Tech industry is in tariff hell, even if refunds are automated",
+      "url": "https://arstechnica.com/tech-policy/2026/03/tech-industry-is-in-tariff-hell-even-if-refunds-are-automated/",
+      "time": "Fri, 06 Mar 2026 12:20:40 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "AI startup sues ex-CEO, saying he took 41GB of email and lied on résumé",
+      "url": "https://arstechnica.com/tech-policy/2026/03/ai-startup-sues-ex-ceo-saying-he-took-41gb-of-email-and-lied-on-resume/",
+      "time": "Fri, 06 Mar 2026 12:10:07 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Which of these two arcades is the \"world largest\"—and does it matter?",
+      "url": "https://arstechnica.com/gaming/2026/03/which-of-these-two-arcades-is-the-world-largest-and-does-it-matter/",
+      "time": "Fri, 06 Mar 2026 12:00:02 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "Rocket Report: SpaceX launch prices are going up; Russia fixes broken launch pad",
+      "url": "https://arstechnica.com/space/2026/03/rocket-report-spacex-launch-prices-are-going-up-russia-fixes-broken-launch-pad/",
+      "time": "Fri, 06 Mar 2026 12:00:02 +0000",
+      "description": "\n                        \n                    ",
+      "source": "Ars Technica",
+      "feedKey": "ars_technica"
+    },
+    {
+      "type": "rss_item",
+      "title": "The Best MIDI Controllers for Synths, Guitars, and More (2026)",
+      "url": "https://www.wired.com/gallery/best-midi-controllers/",
+      "time": "Sat, 07 Mar 2026 12:00:00 +0000",
+      "description": "Want to digitally control your favorite instruments? These tools will help.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "Best Mid Layer for Hiking, Backpacking, and Travel (2026)",
+      "url": "https://www.wired.com/gallery/best-mid-layers/",
+      "time": "Sat, 07 Mar 2026 11:30:00 +0000",
+      "description": "Should you get a high-tech jacket like a grid fleece, or stick with tried and true merino wool? We found the warmest, lightest mid layers for your next adventure.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "CBP Used Online Ad Data to Track Phone Locations",
+      "url": "https://www.wired.com/story/cbp-used-online-ad-data-to-track-phone-locations/",
+      "time": "Sat, 07 Mar 2026 11:30:00 +0000",
+      "description": "Plus: Proton helped the FBI identify a protester, the Leakbase cybercrime forum was busted in an international operation, and more.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "How Each Gulf Country Is Intercepting Iranian Missiles and Drones",
+      "url": "https://www.wired.com/story/how-each-gulf-country-is-intercepting-iranian-missiles-and-drones/",
+      "time": "Sat, 07 Mar 2026 11:00:00 +0000",
+      "description": "As missiles and drones cross the region’s skies, the Gulf’s layered air-defense networks—from THAAD to Patriot batteries—are being tested in real time.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "How to Avoid Getting Locked Out of Your Google Account",
+      "url": "https://www.wired.com/story/how-to-avoid-getting-locked-out-of-your-google-account/",
+      "time": "Sat, 07 Mar 2026 10:00:00 +0000",
+      "description": "Make a recovery plan now to avoid losing access to your account in the future.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "This Jammer Wants to Block Always-Listening AI Wearables. It Probably Won’t Work",
+      "url": "https://www.wired.com/story/deveillance-spectre-i/",
+      "time": "Fri, 06 Mar 2026 23:45:14 +0000",
+      "description": "Deveillance’s Spectre I, developed by a recent Harvard grad, wants to give people control over the always-on wearables surrounding their lives. The problem? Physics.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "Marley Spoon Meal Kit Review 2026: Less Martha, More Moroccan",
+      "url": "https://www.wired.com/review/marley-spoon-meal-kit-2026/",
+      "time": "Fri, 06 Mar 2026 22:41:10 +0000",
+      "description": "Marley Spoon has stripped Martha Stewart from its website and seems to be cooking a little differently. Here’s a review.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "72 'Buy It for Life' Products: Cast-Iron, Tools, Speakers, Chairs, and More",
+      "url": "https://www.wired.com/story/buy-it-for-life/",
+      "time": "Fri, 06 Mar 2026 21:27:19 +0000",
+      "description": "From cast-iron pans to mechanical watches, we’ve rounded up products that are made to last for decades.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "The Best Google Pixel Phones of 2026, Tested and Reviewed",
+      "url": "https://www.wired.com/story/best-google-pixel-phone/",
+      "time": "Fri, 06 Mar 2026 20:17:02 +0000",
+      "description": "Here’s a guide to all the models—plus Pixel case recommendations and smart software tricks to try.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "The Future of Iran’s Internet Is More Uncertain Than Ever",
+      "url": "https://www.wired.com/story/the-future-of-irans-internet-is-more-uncertain-than-ever/",
+      "time": "Fri, 06 Mar 2026 20:06:06 +0000",
+      "description": "Iran’s internet shutdown has reduced connectivity by 99 percent, with air strikes likely causing additional outages, and few workarounds remaining.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "These Beats Headphones We Like Are $150 Off",
+      "url": "https://www.wired.com/story/beats-studio-pro-deal-326/",
+      "time": "Fri, 06 Mar 2026 18:21:05 +0000",
+      "description": "Save a chunk of change on the Beats Studio Pro over-ear headphones.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "When AI Companies Go to War, Safety Gets Left Behind",
+      "url": "https://www.wired.com/story/when-ai-companies-go-to-war-safety-gets-left-behind/",
+      "time": "Fri, 06 Mar 2026 18:19:57 +0000",
+      "description": "We were promised AI regulation and a race to the top. Now, we’re arguing about killer robots.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "9 Best Android Phones of 2026, Tested and Reviewed",
+      "url": "https://www.wired.com/gallery/best-android-phones/",
+      "time": "Fri, 06 Mar 2026 18:00:00 +0000",
+      "description": "Shopping for a phone can be an ordeal. That’s why we’ve tested almost every Android phone, from the smartest to the cheapest—even phones that fold—to find the ones worth your money.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "11 Best USB Flash Drives (2026): Pen Drives, Thumb Drives, Memory Sticks",
+      "url": "https://www.wired.com/gallery/best-usb-flash-drives/",
+      "time": "Fri, 06 Mar 2026 14:00:00 +0000",
+      "description": "These WIRED-tested memory sticks are a virtual filing cabinet in your pocket.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "Corsair Sabre V2 Carbon Fiber and Magnesium Gaming Mice Review",
+      "url": "https://www.wired.com/review/corsair-sabre-v2-cf-and-mg/",
+      "time": "Fri, 06 Mar 2026 13:00:00 +0000",
+      "description": "Is it worth using motorsports materials in a gaming mouse? As long as it’s the same price as plastic.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "Jones Mercury FASE Snowboard Bindings Review: The Best Fast Entry System",
+      "url": "https://www.wired.com/review/jones-mercury-fase-snowboard-bindings/",
+      "time": "Fri, 06 Mar 2026 12:30:00 +0000",
+      "description": "In! Out! In! Out! Jones’ latest fast-entry snowboard bindings mean you’ll never get left behind by a bunch of skiers again.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "These 2 Apps Help Me Make Sense of My 100K Screenshots",
+      "url": "https://www.wired.com/story/rodeo-swipewipe-declutter-screenshots/",
+      "time": "Fri, 06 Mar 2026 12:01:00 +0000",
+      "description": "The shameful pile of screenshots on my phone was as useless as it was disorganized. Rodeo and Swipewipe are helping to change that.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "7 Laptop Docking Stations to Unlock the Full Desktop Experience (2026)",
+      "url": "https://www.wired.com/gallery/best-laptop-docking-stations/",
+      "time": "Fri, 06 Mar 2026 11:39:00 +0000",
+      "description": "Laptop docking stations expand what your laptop can do, and I’ve been testing the best of the best to see which you should buy.",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "From Ukraine to Iran, Hacking Security Cameras Is Now Part of War’s ‘Playbook’",
+      "url": "https://www.wired.com/story/from-ukraine-to-iran-hacking-security-cameras-is-now-part-of-wars-playbook/",
+      "time": "Fri, 06 Mar 2026 11:30:00 +0000",
+      "description": "New research shows hundreds of attempts by apparent Iranian state hackers to hijack consumer-grade cameras, timed to missile and drone strikes. Israel, Russia, and Ukraine have also adopted this trick",
+      "source": "Wired",
+      "feedKey": "wired"
+    },
+    {
+      "type": "rss_item",
+      "title": "Why Is Alexa+ So Bad?",
+      "url": "https://www.wired.com/story/why-is-amazon-alexa-plus-so-bad/",
+      "time": "Fri, 06 Mar 2026 11:00:00 +0000",
+      "description": "I stuck Amazon’s Echo Show 15 and its Alexa+ AI assistant in my kitchen for a month. Things have not gone well.",
+      "source": "Wired",
+      "feedKey": "wired"
+    }
+  ]
+}

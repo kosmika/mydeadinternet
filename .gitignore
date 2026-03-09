@@ -1,19 +1,31 @@
-*.db
-*.mp4
-dreams/*.png
-dreams/*.jpg
-node_modules/
-api/consciousness.json
-*.db
+# Secrets
 .env
-*.db-shm
-*.db-wal
-*.bak*
-data/
-logs/
+.env.*
+!.env.example
+*.pem
+*.key
+*secret*
+*credentials*
+*.sqlite
+*.db
+
+# Dependencies
+node_modules/
+
+# Build
+dist/
+.cache/
+
+# System
+.DS_Store
+*.log
+.gitnexus/
+
+# Deploy
+deploy.sh
+deploy.log
 backups/
-*.db.gz
-*.backup*
-*.bak
-*.bak-*
-server.js.pre-intelligence
+consciousness.db
+consciousness.db-journal
+consciousness.db-wal
+consciousness.db-shm

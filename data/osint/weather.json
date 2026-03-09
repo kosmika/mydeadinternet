@@ -1,0 +1,186 @@
+{
+  "category": "weather",
+  "count": 20,
+  "events": [
+    {
+      "type": "rss_item",
+      "title": "Green earthquake (Magnitude 5.7M, Depth:9.339km) in United States 06/03/2026 21:08 UTC, Few people affected in MMI III.",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527754",
+      "time": "Fri, 06 Mar 2026 21:13:32 GMT",
+      "description": "On 3/6/2026 9:08:19 PM, an earthquake occurred in United States potentially affecting Few people affected in MMI III. The earthquake had Magnitude 5.7M, Depth:9.339km.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green earthquake (Magnitude 6.3M, Depth:8.682km) in Solomon Is. 06/03/2026 14:27 UTC, 20 thousand in MMI IV.",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527699",
+      "time": "Fri, 06 Mar 2026 14:38:04 GMT",
+      "description": "On 3/6/2026 2:27:47 PM, an earthquake occurred in Solomon Is. potentially affecting 20 thousand in MMI IV. The earthquake had Magnitude 6.3M, Depth:8.682km.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green notification for tropical cyclone TWENTYSIX-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001262",
+      "time": "Fri, 06 Mar 2026 02:06:11 GMT",
+      "description": "From 06/03/2026 to 07/03/2026, a Tropical Storm (maximum wind speed of 65 km/h) TWENTYSIX-26 was active in SEIndian. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimated",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green earthquake (Magnitude 5.5M, Depth:17km) in United States 05/03/2026 19:25 UTC, 2 thousand in MMI&gt;=II.",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527570",
+      "time": "Thu, 05 Mar 2026 19:32:18 GMT",
+      "description": "On 3/5/2026 7:25:07 PM, an earthquake occurred in United States potentially affecting 2 thousand in MMI&gt;=II. The earthquake had Magnitude 5.5M, Depth:17km.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green flood alert in United States",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=FL&amp;eventid=1103789",
+      "time": "Sat, 07 Mar 2026 06:42:54 GMT",
+      "description": "On 05/03/2026, a flood started in United States, lasting until 07/03/2026 (last update). The flood caused 0 deaths and 50 displaced .",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green earthquake (Magnitude 6.4M, Depth:10km) in United States 04/03/2026 17:54 UTC, Few people affected in MMI IV.",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527379",
+      "time": "Wed, 04 Mar 2026 18:01:13 GMT",
+      "description": "On 3/4/2026 5:54:36 PM, an earthquake occurred in United States potentially affecting Few people affected in MMI IV. The earthquake had Magnitude 6.4M, Depth:10km.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green notification for tropical cyclone TWENTYFIVE-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001261",
+      "time": "Wed, 04 Mar 2026 08:06:31 GMT",
+      "description": "From 04/03/2026 to 05/03/2026, a Tropical Storm (maximum wind speed of 74 km/h) TWENTYFIVE-26 was active in SEIndian. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Estimate",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Australia",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027680",
+      "time": "Thu, 05 Mar 2026 12:00:10 GMT",
+      "description": "On 04/03/2026, a forest fire started in Australia,  until 06/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green notification for tropical cyclone TWENTYFOUR-26. Population affected by Category 1 (120 km/h) wind speeds or higher is 0  (0 in Tropical Storm).",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001260",
+      "time": "Wed, 04 Mar 2026 02:07:49 GMT",
+      "description": "From 04/03/2026 to 05/03/2026, a Tropical Depression (maximum wind speed of 65 km/h) TWENTYFOUR-26 was active in SWPacific. The cyclone affects these countries: [unknown] (vulnerability [unknown]). Es",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Australia",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027663",
+      "time": "Wed, 04 Mar 2026 08:00:09 GMT",
+      "description": "On 04/03/2026, a forest fire started in Australia,  until 05/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green earthquake (Magnitude 6.2M, Depth:18km) in Indonesia 03/03/2026 04:56 UTC, 20 thousand in MMI&gt;=V.",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1527111",
+      "time": "Tue, 03 Mar 2026 05:08:56 GMT",
+      "description": "On 3/3/2026 4:56:46 AM, an earthquake occurred in Indonesia potentially affecting 20 thousand in MMI&gt;=V. The earthquake had Magnitude 6.2M, Depth:18km.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Ethiopia",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027699",
+      "time": "Sat, 07 Mar 2026 08:00:24 GMT",
+      "description": "On 03/03/2026, a forest fire started in Ethiopia,  until 06/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in India",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027705",
+      "time": "Sat, 07 Mar 2026 00:00:22 GMT",
+      "description": "On 03/03/2026, a forest fire started in India,  until 06/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green flood alert in Indonesia",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=FL&amp;eventid=1103786",
+      "time": "Wed, 04 Mar 2026 07:03:12 GMT",
+      "description": "On 02/03/2026, a flood started in Indonesia, lasting until 04/03/2026 (last update). The flood caused 0 deaths and 111 displaced .",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Ethiopia",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027675",
+      "time": "Thu, 05 Mar 2026 12:00:16 GMT",
+      "description": "On 02/03/2026, a forest fire started in Ethiopia,  until 05/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Central African Republic",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027683",
+      "time": "Thu, 05 Mar 2026 16:00:22 GMT",
+      "description": "On 02/03/2026, a forest fire started in Central African Republic,  until 05/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Chad",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027707",
+      "time": "Sat, 07 Mar 2026 08:00:35 GMT",
+      "description": "On 02/03/2026, a forest fire started in Chad,  until 07/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Venezuela",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027696",
+      "time": "Fri, 06 Mar 2026 20:00:48 GMT",
+      "description": "On 01/03/2026, a forest fire started in Venezuela,  until 07/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Sudan",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027676",
+      "time": "Thu, 05 Mar 2026 04:00:33 GMT",
+      "description": "On 01/03/2026, a forest fire started in Sudan,  until 05/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    },
+    {
+      "type": "rss_item",
+      "title": "Green forest fire notification in Myanmar",
+      "url": "https://www.gdacs.org/report.aspx?eventtype=WF&amp;eventid=1027664",
+      "time": "Wed, 04 Mar 2026 12:00:20 GMT",
+      "description": "On 01/03/2026, a forest fire started in Myanmar,  until 05/03/2026.",
+      "source": "GDACS Disaster Alerts",
+      "feedKey": "gdacs_disasters"
+    }
+  ]
+}

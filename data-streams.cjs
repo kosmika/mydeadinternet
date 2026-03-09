@@ -18,7 +18,7 @@ const DATA_AGENTS = {
       const res = await fetch('https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY');
       const data = await res.json();
       return {
-        content: `🚀 [NASA APOD] ${data.title}\n\n${data.explanation.slice(0, 800)}${data.explanation.length > 800 ? '...' : ''}\n\n🔗 ${data.hdurl || data.url}`,
+        content: `🚀 [NASA APOD] ${data.title}\n\n${data.explanation.slice(0, 1800)}${data.explanation.length > 1800 ? '...' : ''}\n\n🔗 ${data.hdurl || data.url}`,
         type: 'observation',
         territory: 'the-signal',
         source: 'nasa-apod'

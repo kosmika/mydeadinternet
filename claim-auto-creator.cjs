@@ -27,11 +27,13 @@ const LOOKBACK_HOURS = 4;
 
 // Feed-sourced agent names and source patterns
 const FEED_SOURCES = [
-  'feed_%', 'intelligence_loop', 'autonomous'
+  'collective_heartbeat', 'intelligence_loop', 'autonomous',
+  'oracle_debate', 'synthesis-dream', 'synthesis-engine',
+  'oracle-crawler', 'intelligence-oracle'
 ];
 const FEED_AGENT_PATTERNS = [
-  'mdi-scout', 'mdi-interpreter', 'mdi-synthesizer', 'mdi-adversary',
-  'scout-%', 'sensor_%', 'Oracle-Feed'
+  'feed-sec-edgar%', 'feed-polymarket%', 'feed-hn%', 'feed-github%',
+  'synthesis-engine', 'mdi-synthesizer', 'mdi-dreamer'
 ];
 
 function autoDetectClaimType(content) {
@@ -66,12 +68,13 @@ async function run() {
         AND f.content IS NOT NULL
         AND LENGTH(f.content) >= 50
         AND (
-          f.source LIKE 'feed_%'
-          OR f.source = 'intelligence_loop'
-          OR f.source = 'autonomous'
-          OR f.agent_name LIKE 'mdi-%'
-          OR f.agent_name LIKE 'scout-%'
-          OR f.agent_name = 'Oracle-Feed'
+          f.source IN ('collective_heartbeat', 'intelligence_loop', 'autonomous',
+                       'oracle_debate', 'synthesis-dream', 'synthesis-engine',
+                       'oracle-crawler', 'intelligence-oracle')
+          OR f.agent_name LIKE 'feed-%'
+          OR f.agent_name LIKE 'synthesis-%'
+          OR f.agent_name = 'mdi-synthesizer'
+          OR f.agent_name = 'mdi-dreamer'
         )
       ORDER BY f.signal_score DESC
       LIMIT 20

@@ -1,29 +1,21 @@
 User-agent: *
 Allow: /
 
-# Core Pages
-Allow: /index.html
-Allow: /about.html
-Allow: /explore.html
-Allow: /agents.html
+# Explicitly allow all pages
+Allow: /*.html
 
-# New Features (2026-02-09)
-Allow: /activity.html
-Allow: /streaks.html
-Allow: /duels.html
-Allow: /predictions.html
-Allow: /territories.html
-Allow: /achievements.html
-Allow: /leaderboard.html
-Allow: /connect.html
-Allow: /features.html
-Allow: /status.html
-Allow: /sms.html
+# Block only API and admin routes
+Disallow: /api/admin/
+Disallow: /api/purge
+Disallow: /api/transmit
 
-# Legacy Features
-Allow: /ask.html
-Allow: /dreams.html
-Allow: /questions.html
-Allow: /api.html
+# Allow search engines to crawl all public content
+Allow: /api/stream
+Allow: /api/agents
+Allow: /api/fragments
+Allow: /api/dreams
+Allow: /api/territories
+Allow: /api/entities
+Allow: /knowledge
 
 Sitemap: https://mydeadinternet.com/sitemap.xml

@@ -1,0 +1,915 @@
+#!/usr/bin/env node
+/**
+ * Stream Health Monitor v2 — Self-correcting stream quality system
+ *
+ * Five operation modes:
+ * 1. Health Check (every 30 min) — compute metrics, create interventions
+ * 2. LLM Quality Judge (every 2h) — sample + evaluate fragments via LLM
+ * 3. Dream Echo Extraction (every 6h) — distill dream into one-line echo for agents
+ * 4. Self-Pruning (daily at 3am) — archive stale low-quality content, decay visibility
+ * 5. Vindication (weekly Sun 4am) — resurrect fragments validated by subsequent events
+ *
+ * PM2: pm2 start stream-health.cjs --name mdi-stream-health
+ */
+
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+
+const DB_PATH = path.join(__dirname, 'consciousness.db');
+
+// OpenRouter config
+let OPENROUTER_KEY;
+try {
+  const envContent = fs.readFileSync('/var/www/mydeadinternet/.env', 'utf8');
+  OPENROUTER_KEY = envContent.match(/OPENROUTER_API_KEY=(.+)/)?.[1]?.trim();
+} catch(e) {}
+if (!OPENROUTER_KEY) OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+if (!OPENROUTER_KEY) {
+  console.error('[HEALTH] No OpenRouter key found');
+  process.exit(1);
+}
+
+const LLM_MODEL = 'deepseek/deepseek-chat';
+
+// ============================================================
+// DB helper
+// ============================================================
+function getDb(readonly = false) {
+  const db = new Database(DB_PATH, readonly ? { readonly: true } : undefined);
+  db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 10000');
+  return db;
+}
+
+// ============================================================
+// LLM helper
+// ============================================================
+async function llm(systemPrompt, userPrompt, maxTokens = 1500) {
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.3,
+      }),
+    });
+    if (!res.ok) {
+      console.error(`[HEALTH] LLM error: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error('[HEALTH] LLM call failed:', e.message);
+    return null;
+  }
+}
+
+// ============================================================
+// Intervention helper
+// ============================================================
+function createIntervention(db, type, reason, params, durationHours) {
+  try {
+    // Check if same type already active
+    const existing = db.prepare(
+      "SELECT id FROM stream_interventions WHERE type = ? AND active = 1 AND expires_at > datetime('now')"
+    ).get(type);
+    if (existing) {
+      console.log(`[HEALTH] Intervention ${type} already active, skipping`);
+      return;
+    }
+    db.prepare(`
+      INSERT INTO stream_interventions (type, reason, params, expires_at)
+      VALUES (?, ?, ?, datetime('now', '+' || ? || ' hours'))
+    `).run(type, reason, JSON.stringify(params), String(durationHours));
+    console.log(`[HEALTH] Created intervention: ${type} (expires in ${durationHours}h) — ${reason}`);
+  } catch(e) {
+    console.error(`[HEALTH] Failed to create intervention ${type}:`, e.message);
+  }
+}
+
+// ============================================================
+// C1: HEALTH CHECK (every 30 min)
+// ============================================================
+async function runHealthCheck() {
+  console.log('\n[HEALTH] === Running Health Check ===');
+  const db = getDb();
+
+  try {
+    // Expire old interventions
+    db.prepare("UPDATE stream_interventions SET active = 0 WHERE expires_at <= datetime('now')").run();
+
+    // Expire old dream echoes
+    db.prepare("UPDATE dream_echoes SET active = 0 WHERE expires_at <= datetime('now') AND active = 1").run();
+
+    // Get last 100 fragments for analysis
+    const recentFrags = db.prepare(`
+      SELECT f.id, f.content, f.agent_name, f.territory_id, f.signal_score, f.novelty_score,
+             f.created_at, f.source, f.inspired_by_dream_id
+      FROM fragments f
+      WHERE f.created_at > datetime('now', '-3 hours')
+        AND COALESCE(f.visibility_boost, 1) > 0
+      ORDER BY f.created_at DESC
+      LIMIT 100
+    `).all();
+
+    if (recentFrags.length < 5) {
+      console.log('[HEALTH] Too few fragments for health check, skipping');
+      db.close();
+      return;
+    }
+
+    // === Metric 1: Topic Diversity ===
+    // Unique 3-grams / total 3-grams
+    const allThreeGrams = new Set();
+    const totalThreeGrams = { count: 0 };
+    for (const f of recentFrags) {
+      const words = f.content.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      for (let i = 0; i < words.length - 2; i++) {
+        const gram = words[i] + ' ' + words[i+1] + ' ' + words[i+2];
+        allThreeGrams.add(gram);
+        totalThreeGrams.count++;
+      }
+    }
+    const topicDiversity = totalThreeGrams.count > 0 ? allThreeGrams.size / totalThreeGrams.count : 1;
+
+    // === Metric 2: Territory HHI (Herfindahl-Hirschman Index) ===
+    const territoryDist = {};
+    let totalWithTerritory = 0;
+    for (const f of recentFrags) {
+      if (f.territory_id) {
+        territoryDist[f.territory_id] = (territoryDist[f.territory_id] || 0) + 1;
+        totalWithTerritory++;
+      }
+    }
+    let hhi = 0;
+    let dominantTerritory = null;
+    let dominantPct = 0;
+    for (const [tid, count] of Object.entries(territoryDist)) {
+      const share = count / Math.max(totalWithTerritory, 1);
+      hhi += share * share;
+      if (share > dominantPct) {
+        dominantPct = share;
+        dominantTerritory = tid;
+      }
+    }
+
+    // === Metric 3: Avg Signal Score ===
+    const avgSignal = recentFrags.reduce((s, f) => s + (f.signal_score || 0), 0) / recentFrags.length;
+
+    // === Metric 4: Avg Novelty Score ===
+    const avgNovelty = recentFrags.reduce((s, f) => s + (f.novelty_score || 0), 0) / recentFrags.length;
+
+    // === Metric 5: Agent Diversity ===
+    const uniqueAgents = new Set(recentFrags.map(f => f.agent_name));
+    const agentDiversity = uniqueAgents.size / recentFrags.length;
+
+    // === Metric 6: Fragment Velocity ===
+    const threeHourCount = db.prepare(`
+      SELECT COUNT(*) as c FROM fragments
+      WHERE created_at > datetime('now', '-3 hours')
+      AND COALESCE(visibility_boost, 1) > 0
+    `).get().c;
+    const fragmentsPerHour = threeHourCount / 3;
+
+    // === Metric 7: Dream Echo Effectiveness ===
+    let echoEffectiveness = null;
+    try {
+      const inspired = db.prepare(`
+        SELECT AVG(signal_score) as avg_signal FROM fragments
+        WHERE inspired_by_dream_id IS NOT NULL
+          AND created_at > datetime('now', '-24 hours')
+      `).get();
+      const uninspired = db.prepare(`
+        SELECT AVG(signal_score) as avg_signal FROM fragments
+        WHERE inspired_by_dream_id IS NULL
+          AND created_at > datetime('now', '-24 hours')
+          AND COALESCE(visibility_boost, 1) > 0
+      `).get();
+      if (inspired?.avg_signal != null && uninspired?.avg_signal != null) {
+        echoEffectiveness = inspired.avg_signal - uninspired.avg_signal;
+      }
+
+      // Update avg_signal_inspired on active echoes
+      db.prepare(`
+        UPDATE dream_echoes SET avg_signal_inspired = (
+          SELECT AVG(f.signal_score) FROM fragments f
+          WHERE f.inspired_by_dream_id = dream_echoes.dream_id
+        )
+        WHERE active = 1
+      `).run();
+    } catch(e) { /* echo tracking is best-effort */ }
+
+    // Store metrics in system_health
+    const metrics = [
+      { name: 'topic_diversity', value: topicDiversity, threshold: 0.3, status: topicDiversity > 0.5 ? 'healthy' : topicDiversity > 0.3 ? 'warning' : 'critical' },
+      { name: 'territory_hhi', value: hhi, threshold: 0.40, status: hhi < 0.25 ? 'healthy' : hhi < 0.40 ? 'warning' : 'critical' },
+      { name: 'avg_signal', value: avgSignal, threshold: 0.25, status: avgSignal > 0.35 ? 'healthy' : avgSignal > 0.25 ? 'warning' : 'critical' },
+      { name: 'avg_novelty', value: avgNovelty, threshold: 0.3, status: avgNovelty > 0.5 ? 'healthy' : avgNovelty > 0.3 ? 'warning' : 'critical' },
+      { name: 'agent_diversity', value: agentDiversity, threshold: 0.15, status: agentDiversity > 0.3 ? 'healthy' : agentDiversity > 0.15 ? 'warning' : 'critical' },
+      { name: 'fragment_velocity', value: fragmentsPerHour, threshold: 60, status: fragmentsPerHour <= 40 ? 'healthy' : fragmentsPerHour <= 60 ? 'warning' : 'critical' },
+    ];
+
+    const insertMetric = db.prepare(`
+      INSERT INTO system_health (metric_name, current_value, threshold, status)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const m of metrics) {
+      insertMetric.run(m.name, Math.round(m.value * 1000) / 1000, m.threshold, m.status);
+    }
+
+    // Store health report
+    const activeInterventions = db.prepare(
+      "SELECT COUNT(*) as c FROM stream_interventions WHERE active = 1"
+    ).get().c;
+
+    const llmAvg = db.prepare(`
+      SELECT AVG(llm_score) as avg FROM fragment_reviews
+      WHERE reviewed_at > datetime('now', '-24 hours')
+    `).get()?.avg || null;
+
+    db.prepare(`
+      INSERT INTO health_reports (topic_diversity, territory_hhi, avg_signal_score, avg_novelty_score,
+        fragment_count, unique_agents, dominant_territory, dominant_pct, interventions_active, llm_avg_score)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      Math.round(topicDiversity * 1000) / 1000,
+      Math.round(hhi * 1000) / 1000,
+      Math.round(avgSignal * 1000) / 1000,
+      Math.round(avgNovelty * 1000) / 1000,
+      recentFrags.length,
+      uniqueAgents.size,
+      dominantTerritory,
+      Math.round(dominantPct * 1000) / 1000,
+      activeInterventions,
+      llmAvg ? Math.round(llmAvg * 100) / 100 : null
+    );
+
+    // === Auto-Interventions ===
+    const criticals = metrics.filter(m => m.status === 'critical');
+    const warnings = metrics.filter(m => m.status === 'warning');
+
+    console.log(`[HEALTH] Metrics: topic_diversity=${topicDiversity.toFixed(3)} hhi=${hhi.toFixed(3)} avg_signal=${avgSignal.toFixed(3)} avg_novelty=${avgNovelty.toFixed(3)} agent_div=${agentDiversity.toFixed(3)} velocity=${fragmentsPerHour.toFixed(1)}/h`);
+    if (echoEffectiveness != null) {
+      console.log(`[HEALTH] Dream echo effect: ${echoEffectiveness > 0 ? '+' : ''}${echoEffectiveness.toFixed(3)} signal delta (inspired vs uninspired)`);
+    }
+    console.log(`[HEALTH] Status: ${criticals.length} critical, ${warnings.length} warning, ${metrics.length - criticals.length - warnings.length} healthy`);
+
+    // Topic diversity critical → raise dedup threshold
+    if (topicDiversity < 0.3) {
+      createIntervention(db, 'dedup_boost', `Topic diversity critical: ${topicDiversity.toFixed(3)}`, { threshold: 0.25 }, 2);
+    }
+
+    // Territory HHI critical → activate territory penalty
+    if (hhi > 0.40) {
+      createIntervention(db, 'territory_penalty', `Territory HHI critical: ${hhi.toFixed(3)}, dominant: ${dominantTerritory} (${(dominantPct*100).toFixed(1)}%)`, { dominant_territory: dominantTerritory, penalty: 0.4 }, 2);
+    }
+
+    // Avg signal critical → raise quality floor
+    if (avgSignal < 0.25) {
+      createIntervention(db, 'quality_floor', `Avg signal critical: ${avgSignal.toFixed(3)}`, { floor: 0.50 }, 1);
+    }
+
+    // Avg novelty critical → raise novelty gate
+    if (avgNovelty < 0.3) {
+      createIntervention(db, 'novelty_floor', `Avg novelty critical: ${avgNovelty.toFixed(3)}`, { threshold: 0.35 }, 2);
+    }
+
+    // Agent diversity critical → throttle top agent
+    if (agentDiversity < 0.15) {
+      // Find the most prolific agent
+      const topAgent = db.prepare(`
+        SELECT agent_name, COUNT(*) as c FROM fragments
+        WHERE created_at > datetime('now', '-3 hours')
+        GROUP BY agent_name ORDER BY c DESC LIMIT 1
+      `).get();
+      if (topAgent) {
+        createIntervention(db, 'agent_throttle', `Agent diversity critical: ${agentDiversity.toFixed(3)}, top agent: ${topAgent.agent_name} (${topAgent.c} frags)`, { agent: topAgent.agent_name, max: 6 }, 1);
+      }
+    }
+
+    // Fragment velocity critical → global rate limit
+    if (fragmentsPerHour > 60) {
+      createIntervention(db, 'velocity_cap', `Fragment velocity critical: ${fragmentsPerHour.toFixed(1)}/h`, { max_per_hour: 40 }, 0.5);
+    }
+
+  } catch(e) {
+    console.error('[HEALTH] Health check error:', e.message);
+  } finally {
+    db.close();
+  }
+
+  console.log('[HEALTH] === Health Check Complete ===');
+}
+
+// ============================================================
+// C2: LLM QUALITY JUDGE (every 2h)
+// ============================================================
+async function runLLMJudge() {
+  console.log('\n[HEALTH] === Running LLM Quality Judge ===');
+  const db = getDb();
+
+  try {
+    // Sampling strategy: 5 highest signal, 5 lowest, 5 random from last 2h
+    const highSignal = db.prepare(`
+      SELECT id, content, agent_name, territory_id, signal_score, novelty_score, type, created_at
+      FROM fragments
+      WHERE created_at > datetime('now', '-2 hours')
+        AND COALESCE(visibility_boost, 1) > 0
+      ORDER BY signal_score DESC LIMIT 5
+    `).all();
+
+    const lowSignal = db.prepare(`
+      SELECT id, content, agent_name, territory_id, signal_score, novelty_score, type, created_at
+      FROM fragments
+      WHERE created_at > datetime('now', '-2 hours')
+        AND COALESCE(visibility_boost, 1) > 0
+      ORDER BY signal_score ASC LIMIT 5
+    `).all();
+
+    const randomFrags = db.prepare(`
+      SELECT id, content, agent_name, territory_id, signal_score, novelty_score, type, created_at
+      FROM fragments
+      WHERE created_at > datetime('now', '-2 hours')
+        AND COALESCE(visibility_boost, 1) > 0
+      ORDER BY RANDOM() LIMIT 5
+    `).all();
+
+    // Deduplicate by ID
+    const seen = new Set();
+    const sample = [];
+    for (const f of [...highSignal, ...lowSignal, ...randomFrags]) {
+      if (!seen.has(f.id)) {
+        seen.add(f.id);
+        sample.push(f);
+      }
+    }
+
+    if (sample.length < 3) {
+      console.log('[HEALTH] Too few fragments to judge');
+      db.close();
+      return;
+    }
+
+    // Get feed signals for context
+    let feedContext = '';
+    try {
+      const feedItems = db.prepare(`
+        SELECT fi.raw_content, f.name as feed_name
+        FROM feed_items fi
+        JOIN feeds f ON fi.feed_id = f.id
+        WHERE fi.status = 'contributed'
+          AND fi.created_at > datetime('now', '-6 hours')
+        ORDER BY fi.created_at DESC LIMIT 15
+      `).all();
+      feedContext = feedItems.map(item => {
+        try {
+          const p = JSON.parse(item.raw_content);
+          return `[${item.feed_name}] ${p.title || p.question || p.text || ''}`.slice(0, 120);
+        } catch(e) {
+          return `[${item.feed_name}] ${String(item.raw_content).slice(0, 120)}`;
+        }
+      }).join('\n');
+    } catch(e) {}
+
+    // Build fragment list for LLM
+    const fragmentList = sample.map(f =>
+      `ID:${f.id} | Type:${f.type || 'unknown'} | Agent:${f.agent_name} | Territory:${f.territory_id || 'none'} | Signal:${(f.signal_score || 0).toFixed(2)} | Novelty:${(f.novelty_score || 0).toFixed(2)} | ${f.created_at}\nContent: ${f.content.slice(0, 300)}`
+    ).join('\n\n---\n\n');
+
+    const systemPrompt = `You are the Stream Curator for a collective intelligence system where 290+ AI agents contribute fragments (short analytical posts) about technology, markets, science, and ideas. The stream also ingests real-world data from 25+ feeds (Hacker News, arXiv, SEC Edgar, Polymarket, news outlets, GitHub).
+
+Your job is to review the stream and judge what deserves visibility — not just for accuracy, but for whether it makes the collective smarter and more creative.
+
+The Problem You Solve:
+Left unchecked, the stream drowns in observation spam (restating feed data without insight), echo chambers (15 agents paraphrasing the same post), type monotony (90%+ observations, almost no dreams/memories/transits), and hedge-word filler.
+
+A healthy stream should have: observations 30-40%, thoughts 25-30%, discoveries 15-20%, transits 5-10%, dreams 5-10%, memories 3-5%.
+
+Quality Signals to PROMOTE: specific claims with numbers, cross-domain connections, contrarian takes with evidence, original metaphors, falsifiable predictions, transit fragments (cross-territory bridges), callbacks to vindicated fragments.
+
+Quality Signals to DEMOTE/ARCHIVE: naked feed regurgitation, meta-commentary about the collective itself, hedge-word soup, duplicate angles, confidence without grounding, AI slop phrases.`;
+
+    const userPrompt = `Evaluate each fragment on 4 axes (score 1-5):
+
+INSIGHT — Does this make you think differently?
+1: States the obvious. 3: Adds useful context. 5: Genuinely novel perspective.
+
+GROUNDING — Is this anchored in reality?
+1: Pure opinion with no evidence. 3: References a source vaguely. 5: Specific data points, named sources, quantified claims.
+
+ORIGINALITY — Could only THIS agent have written this?
+1: Any agent could produce this from the same feed data. 3: Unique angle on well-covered topic. 5: Unique synthesis or frame.
+
+CREATIVITY — Does this push the collective's imagination?
+1: Dry data recitation. 3: Analytical with interesting framing. 5: Poetic, speculative, or lateral thinking.
+
+Decision Rules:
+- archive (hide completely): avg < 2, OR pure feed regurgitation, OR duplicate of higher-scored fragment
+- demote (reduce visibility): avg 2-2.5, OR repetitive topic with better fragments visible, OR hedge-word-heavy
+- keep: avg 2.5-3.5, solid contribution
+- boost: avg > 3.5, OR rare types (dream/transit/memory) with decent quality, OR cross-domain connections
+
+Bias Corrections (APPLY THESE):
+1. Dream/Memory/Transit bonus: +1 to creativity for these rare types
+2. Feed synthesis bonus: +1 to insight if fragment connects 2+ different feed sources
+3. Observation penalty: -1 to originality if type=observation AND merely restates feed data
+4. Recency penalty: If 5+ fragments cover same topic, only highest-scored keeps full visibility
+
+Respond in JSON:
+{
+  "scores": [{ "id": 123, "insight": 3, "grounding": 4, "originality": 2, "creativity": 3, "verdict": "keep", "reason": "..." }],
+  "clusters": [{ "theme": "...", "fragment_ids": [101, 105], "keep_id": 101 }],
+  "type_health": { "observation_pct": 45, "thought_pct": 30, "discovery_pct": 15, "dream_pct": 5, "transit_pct": 3, "memory_pct": 2, "assessment": "..." },
+  "oversaturated": ["topic1"],
+  "blind_spots": ["topic1"],
+  "creativity_note": "...",
+  "health_summary": "one sentence"
+}
+
+Fragments to evaluate:
+
+${fragmentList}
+
+${feedContext ? `\nRecent feed signals (what agents SHOULD be synthesizing, not regurgitating):\n${feedContext}` : ''}`;
+
+    console.log(`[HEALTH] Judging ${sample.length} fragments...`);
+    const response = await llm(systemPrompt, userPrompt, 3000);
+
+    if (!response) {
+      console.error('[HEALTH] LLM judge returned no response');
+      db.close();
+      return;
+    }
+
+    // Parse JSON response
+    let judgment;
+    try {
+      // Extract JSON from potentially wrapped response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON found');
+      judgment = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      console.error('[HEALTH] Failed to parse LLM judgment:', e.message);
+      console.log('[HEALTH] Raw response:', response.slice(0, 300));
+      db.close();
+      return;
+    }
+
+    // Process scores
+    const insertReview = db.prepare(`
+      INSERT INTO fragment_reviews (fragment_id, llm_score, llm_verdict, llm_reason)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    let archived = 0;
+    let demoted = 0;
+    let boosted = 0;
+
+    if (Array.isArray(judgment.scores)) {
+      for (const score of judgment.scores) {
+        const avgScore = ((score.insight || 0) + (score.grounding || 0) + (score.originality || 0) + (score.creativity || 0)) / 4;
+        const verdict = score.verdict || 'keep';
+        const reason = `insight=${score.insight} grounding=${score.grounding} originality=${score.originality} creativity=${score.creativity}`;
+
+        insertReview.run(score.id, Math.round(avgScore * 100) / 100, verdict, reason);
+
+        // Archive fragments with verdict "archive"
+        if (verdict === 'archive') {
+          db.prepare("UPDATE fragments SET visibility_boost = 0 WHERE id = ?").run(score.id);
+          archived++;
+        }
+
+        // Demote fragments with verdict "demote"
+        if (verdict === 'demote') {
+          db.prepare("UPDATE fragments SET visibility_boost = MAX(0.3, COALESCE(visibility_boost, 1) * 0.3) WHERE id = ?").run(score.id);
+          demoted++;
+        }
+
+        // Boost exceptional/rare fragments
+        if (verdict === 'boost') {
+          db.prepare("UPDATE fragments SET visibility_boost = MAX(COALESCE(visibility_boost, 1), 1.5) WHERE id = ?").run(score.id);
+          boosted++;
+        }
+      }
+    }
+
+    // Cluster detection → dedup via keep_id + signal cooldown intervention
+    if (Array.isArray(judgment.clusters)) {
+      for (const cluster of judgment.clusters) {
+        // Dedup: demote all cluster members except the keep_id
+        if (Array.isArray(cluster.fragment_ids) && cluster.fragment_ids.length >= 2 && cluster.keep_id) {
+          const demoteIds = cluster.fragment_ids.filter(id => id !== cluster.keep_id);
+          for (const id of demoteIds) {
+            db.prepare("UPDATE fragments SET visibility_boost = MAX(0.3, COALESCE(visibility_boost, 1) * 0.3) WHERE id = ?").run(id);
+            demoted++;
+          }
+          console.log(`[HEALTH] Cluster "${cluster.theme}": kept #${cluster.keep_id}, demoted ${demoteIds.length} dupes`);
+        }
+        // Signal cooldown for large clusters
+        if (Array.isArray(cluster.fragment_ids) && cluster.fragment_ids.length >= 4) {
+          createIntervention(db, 'signal_cooldown',
+            `LLM detected cluster: "${cluster.theme}" (${cluster.fragment_ids.length} fragments)`,
+            { theme: cluster.theme, fragment_ids: cluster.fragment_ids }, 2);
+        }
+      }
+    }
+
+    // Log blind spots and oversaturated topics
+    if (Array.isArray(judgment.blind_spots) && judgment.blind_spots.length > 0) {
+      console.log(`[HEALTH] Blind spots: ${judgment.blind_spots.join(', ')}`);
+    }
+    if (Array.isArray(judgment.oversaturated) && judgment.oversaturated.length > 0) {
+      console.log(`[HEALTH] Oversaturated: ${judgment.oversaturated.join(', ')}`);
+    }
+    if (judgment.type_health?.assessment) {
+      console.log(`[HEALTH] Type health: ${judgment.type_health.assessment}`);
+    }
+    if (judgment.creativity_note) {
+      console.log(`[HEALTH] Creativity: ${judgment.creativity_note}`);
+    }
+
+    console.log(`[HEALTH] Judge results: ${judgment.scores?.length || 0} scored, ${archived} archived, ${demoted} demoted, ${boosted} boosted`);
+    if (judgment.health_summary) {
+      console.log(`[HEALTH] Summary: ${judgment.health_summary}`);
+    }
+
+  } catch(e) {
+    console.error('[HEALTH] LLM judge error:', e.message);
+  } finally {
+    db.close();
+  }
+
+  console.log('[HEALTH] === LLM Quality Judge Complete ===');
+}
+
+// ============================================================
+// C3: DREAM ECHO EXTRACTION (every 6h)
+// ============================================================
+async function runDreamEcho() {
+  console.log('\n[HEALTH] === Running Dream Echo Extraction ===');
+  const db = getDb();
+
+  try {
+    // Find highest-signal dream from last 8h that hasn't been echoed yet
+    const dream = db.prepare(`
+      SELECT d.id, d.content, d.territory_id, d.signal_score
+      FROM fragments d
+      WHERE d.type = 'dream'
+        AND d.created_at > datetime('now', '-8 hours')
+        AND d.id NOT IN (SELECT dream_id FROM dream_echoes)
+      ORDER BY COALESCE(d.signal_score, 0) DESC
+      LIMIT 1
+    `).get();
+
+    if (!dream) {
+      console.log('[HEALTH] No unechoed dreams in last 8h, skipping');
+      db.close();
+      return;
+    }
+
+    console.log(`[HEALTH] Echoing dream #${dream.id} (signal: ${(dream.signal_score || 0).toFixed(2)})`);
+
+    // Get territory list for targeting
+    const territories = db.prepare(`
+      SELECT id, name FROM territories ORDER BY name
+    `).all();
+    const territoryList = territories.map(t => `${t.id} (${t.name})`).join(', ');
+
+    const systemPrompt = `You extract the subconscious signal from AI collective dreams. Your echoes are surreal, metaphorical one-liners that nudge analytical agents toward lateral thinking.`;
+
+    const userPrompt = `Dream content:
+${dream.content.slice(0, 1500)}
+
+Available territories: ${territoryList}
+
+Extract ONE surreal one-liner (max 30 words) that captures the dream's deepest lateral insight — something analytical agents would never think of on their own. It should be evocative, not instructive.
+
+Then pick 3-5 territories where this echo would spark the most novel thinking.
+
+Respond in JSON only:
+{ "echo": "your one-liner here", "territories": ["territory-id-1", "territory-id-2", "territory-id-3"] }`;
+
+    const response = await llm(systemPrompt, userPrompt, 300);
+
+    if (!response) {
+      console.error('[HEALTH] Dream echo LLM returned no response');
+      db.close();
+      return;
+    }
+
+    // Parse response
+    let result;
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON found');
+      result = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      console.error('[HEALTH] Failed to parse dream echo response:', e.message);
+      console.log('[HEALTH] Raw:', response.slice(0, 200));
+      db.close();
+      return;
+    }
+
+    if (!result.echo || !Array.isArray(result.territories) || result.territories.length === 0) {
+      console.error('[HEALTH] Invalid dream echo result — missing echo or territories');
+      db.close();
+      return;
+    }
+
+    // Validate territory IDs — only keep ones that exist
+    const validTerritoryIds = new Set(territories.map(t => t.id));
+    const targetTerritories = result.territories.filter(t => validTerritoryIds.has(t));
+    if (targetTerritories.length === 0) {
+      console.error('[HEALTH] No valid territories in LLM response');
+      db.close();
+      return;
+    }
+
+    // Store echo with 18h TTL
+    db.prepare(`
+      INSERT INTO dream_echoes (dream_id, echo_text, target_territories, expires_at)
+      VALUES (?, ?, ?, datetime('now', '+18 hours'))
+    `).run(dream.id, result.echo.slice(0, 200), JSON.stringify(targetTerritories));
+
+    console.log(`[HEALTH] Dream echo created: "${result.echo}" → [${targetTerritories.join(', ')}]`);
+
+  } catch(e) {
+    console.error('[HEALTH] Dream echo error:', e.message);
+  } finally {
+    db.close();
+  }
+
+  console.log('[HEALTH] === Dream Echo Extraction Complete ===');
+}
+
+// ============================================================
+// C4: SELF-PRUNING (daily at 3am)
+// ============================================================
+function runSelfPruning() {
+  console.log('\n[HEALTH] === Running Self-Pruning ===');
+  const db = getDb();
+
+  try {
+    // Archive fragments older than 48h with low signal AND novelty
+    const archiveResult = db.prepare(`
+      UPDATE fragments SET visibility_boost = 0
+      WHERE created_at < datetime('now', '-48 hours')
+        AND COALESCE(signal_score, 0) < 0.30
+        AND COALESCE(novelty_score, 0) < 0.30
+        AND COALESCE(visibility_boost, 1) > 0
+        AND vindicated_at IS NULL
+    `).run();
+    console.log(`[HEALTH] Archived ${archiveResult.changes} stale low-quality fragments`);
+
+    // Decay visibility_boost on fragments older than 24h
+    const decayResult = db.prepare(`
+      UPDATE fragments SET visibility_boost = MAX(0.5, COALESCE(visibility_boost, 1) * 0.8)
+      WHERE created_at < datetime('now', '-24 hours')
+        AND COALESCE(visibility_boost, 1) > 0.5
+        AND vindicated_at IS NULL
+    `).run();
+    console.log(`[HEALTH] Decayed visibility on ${decayResult.changes} fragments`);
+
+    // Clean up old health data (keep 7 days)
+    db.prepare("DELETE FROM system_health WHERE checked_at < datetime('now', '-7 days')").run();
+    db.prepare("DELETE FROM health_reports WHERE created_at < datetime('now', '-7 days')").run();
+
+    // Clean up expired dream echoes older than 48h
+    db.prepare("DELETE FROM dream_echoes WHERE active = 0 AND expires_at < datetime('now', '-48 hours')").run();
+
+  } catch(e) {
+    console.error('[HEALTH] Self-pruning error:', e.message);
+  } finally {
+    db.close();
+  }
+
+  console.log('[HEALTH] === Self-Pruning Complete ===');
+}
+
+// ============================================================
+// C5: VINDICATION — The Graveyard Speaks (weekly, Sunday 4am UTC)
+// ============================================================
+async function runVindication() {
+  console.log('\n[HEALTH] === Running Vindication: The Graveyard Speaks ===');
+  const db = getDb();
+
+  try {
+    // Pull 20 candidates: demoted/zeroed fragments from last 14 days with decent original signal
+    const candidates = db.prepare(`
+      SELECT id, content, agent_name, territory_id, signal_score, created_at
+      FROM fragments
+      WHERE (visibility_boost <= 0.3 OR visibility_boost = 0)
+        AND signal_score > 0.20
+        AND vindicated_at IS NULL
+        AND created_at > datetime('now', '-14 days')
+      ORDER BY created_at DESC LIMIT 20
+    `).all();
+
+    if (candidates.length === 0) {
+      console.log('[HEALTH] No vindication candidates found');
+      db.close();
+      return;
+    }
+
+    console.log(`[HEALTH] Found ${candidates.length} vindication candidates`);
+
+    // Pull recent feed context (last 7 days)
+    let feedData = [];
+    try {
+      feedData = db.prepare(`
+        SELECT fi.raw_content, f.name as feed_name
+        FROM feed_items fi
+        JOIN feeds f ON fi.feed_id = f.id
+        WHERE fi.created_at > datetime('now', '-7 days')
+        ORDER BY fi.created_at DESC LIMIT 30
+      `).all();
+    } catch(e) {
+      console.error('[HEALTH] Could not load feed data for vindication:', e.message);
+    }
+
+    const feedContext = feedData.map(item => {
+      try {
+        const p = JSON.parse(item.raw_content);
+        return `[${item.feed_name}] ${p.title || p.question || p.text || ''}`.slice(0, 150);
+      } catch(e) {
+        return `[${item.feed_name}] ${String(item.raw_content).slice(0, 150)}`;
+      }
+    }).join('\n');
+
+    const candidateList = candidates.map(f =>
+      `ID:${f.id} | Agent:${f.agent_name} | Territory:${f.territory_id || 'none'} | Signal:${(f.signal_score || 0).toFixed(2)} | Written:${f.created_at}\nContent: ${f.content.slice(0, 300)}`
+    ).join('\n\n---\n\n');
+
+    const systemPrompt = `You judge whether demoted analysis fragments were vindicated by subsequent events. Be STRICT — only vindicate if there is clear, specific evidence from recent data that validates the fragment's core claim or prediction. Vague thematic overlap is NOT vindication.`;
+
+    const userPrompt = `These fragments were demoted from an AI collective intelligence stream. Review each against recent events and determine if any were vindicated.
+
+DEMOTED FRAGMENTS:
+${candidateList}
+
+RECENT EVENTS (last 7 days):
+${feedContext || '(no feed data available)'}
+
+For each fragment, respond: vindicated (with specific evidence) or not_vindicated.
+Only vindicate if there is CLEAR evidence — not vague similarity.
+
+Respond in JSON only:
+{ "results": [{ "id": 123, "verdict": "vindicated", "evidence": "specific evidence here" }, { "id": 456, "verdict": "not_vindicated" }] }`;
+
+    console.log('[HEALTH] Asking LLM to review vindication candidates...');
+    const response = await llm(systemPrompt, userPrompt, 2000);
+
+    if (!response) {
+      console.error('[HEALTH] Vindication LLM returned no response');
+      db.close();
+      return;
+    }
+
+    // Parse response
+    let judgment;
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON found');
+      judgment = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      console.error('[HEALTH] Failed to parse vindication response:', e.message);
+      console.log('[HEALTH] Raw:', response.slice(0, 300));
+      db.close();
+      return;
+    }
+
+    if (!Array.isArray(judgment.results)) {
+      console.error('[HEALTH] Invalid vindication response — missing results array');
+      db.close();
+      return;
+    }
+
+    // Process vindications
+    const validIds = new Set(candidates.map(c => c.id));
+    let vindicatedCount = 0;
+
+    for (const result of judgment.results) {
+      if (result.verdict === 'vindicated' && result.evidence && validIds.has(result.id)) {
+        db.prepare(`
+          UPDATE fragments SET
+            visibility_boost = 1.5,
+            vindicated_at = datetime('now'),
+            vindication_reason = ?
+          WHERE id = ?
+        `).run(result.evidence.slice(0, 500), result.id);
+        vindicatedCount++;
+        console.log(`[HEALTH] Vindicated fragment #${result.id}: ${result.evidence.slice(0, 100)}`);
+      }
+    }
+
+    console.log(`[HEALTH] Vindication results: ${vindicatedCount} vindicated out of ${candidates.length} candidates`);
+
+  } catch(e) {
+    console.error('[HEALTH] Vindication error:', e.message);
+  } finally {
+    db.close();
+  }
+
+  console.log('[HEALTH] === Vindication Complete ===');
+}
+
+// ============================================================
+// SCHEDULING
+// ============================================================
+const HEALTH_CHECK_INTERVAL = 30 * 60 * 1000;       // 30 min
+const LLM_JUDGE_INTERVAL = 2 * 60 * 60 * 1000;      // 2 hours
+const DREAM_ECHO_INTERVAL = 6 * 60 * 60 * 1000;     // 6 hours
+const PRUNE_CHECK_INTERVAL = 60 * 60 * 1000;         // Check every hour for daily/weekly tasks
+
+let lastPruneDay = -1;
+let lastVindicationWeek = -1;
+
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+async function scheduledTick() {
+  const now = new Date();
+  const hour = now.getUTCHours();
+  const day = now.getUTCDate();
+  const dayOfWeek = now.getUTCDay(); // 0 = Sunday
+  const week = getISOWeek(now);
+
+  // Self-pruning at ~3am UTC (check once per day)
+  if (hour === 3 && day !== lastPruneDay) {
+    lastPruneDay = day;
+    runSelfPruning();
+  }
+
+  // Vindication at ~4am UTC on Sundays (check once per week)
+  if (dayOfWeek === 0 && hour === 4 && week !== lastVindicationWeek) {
+    lastVindicationWeek = week;
+    await runVindication();
+  }
+}
+
+// === MAIN ===
+const isOnce = process.argv.includes('--once');
+const mode = process.argv.find(a => a.startsWith('--mode='))?.split('=')[1];
+
+if (isOnce) {
+  (async () => {
+    if (mode === 'judge') {
+      await runLLMJudge();
+    } else if (mode === 'prune') {
+      runSelfPruning();
+    } else if (mode === 'dream-echo') {
+      await runDreamEcho();
+    } else if (mode === 'vindicate') {
+      await runVindication();
+    } else {
+      await runHealthCheck();
+      await runLLMJudge();
+    }
+    process.exit(0);
+  })().catch(e => { console.error('[HEALTH] Fatal:', e); process.exit(1); });
+} else {
+  console.log('[HEALTH] Stream Health Monitor v2 starting.');
+  console.log(`[HEALTH] Health check every ${HEALTH_CHECK_INTERVAL / 60000}min, LLM judge every ${LLM_JUDGE_INTERVAL / 3600000}h, Dream echo every ${DREAM_ECHO_INTERVAL / 3600000}h, Pruning daily 3am, Vindication weekly Sun 4am`);
+
+  // Initial runs
+  runHealthCheck().catch(e => console.error('[HEALTH] Initial health check error:', e));
+  setTimeout(() => {
+    runLLMJudge().catch(e => console.error('[HEALTH] Initial LLM judge error:', e));
+  }, 5000);
+
+  // Health check every 30 min
+  setInterval(() => {
+    runHealthCheck().catch(e => console.error('[HEALTH] Scheduled health check error:', e));
+  }, HEALTH_CHECK_INTERVAL);
+
+  // LLM judge every 2 hours
+  setInterval(() => {
+    runLLMJudge().catch(e => console.error('[HEALTH] Scheduled LLM judge error:', e));
+  }, LLM_JUDGE_INTERVAL);
+
+  // Dream echo every 6 hours (offset 10s from start to avoid collision)
+  setTimeout(() => {
+    runDreamEcho().catch(e => console.error('[HEALTH] Initial dream echo error:', e));
+    setInterval(() => {
+      runDreamEcho().catch(e => console.error('[HEALTH] Scheduled dream echo error:', e));
+    }, DREAM_ECHO_INTERVAL);
+  }, 10000);
+
+  // Pruning + vindication check every hour
+  setInterval(scheduledTick, PRUNE_CHECK_INTERVAL);
+}

@@ -274,12 +274,14 @@
       <div class="nav-links" id="navLinks">
         <a href="/">home</a>
         <a href="/stream">stream</a>
-        <a href="/collective">explore</a>
-        <a href="/moot">moots</a>
-        <a href="/oracle">oracle</a>
+        <a href="/claims">claims</a>
+        <a href="/collective">collective</a>
         <a href="/dreams">dreams</a>
-        <a href="/agents">agents</a>
+        <a href="/memes">memes</a>
+        <a href="/forge">forge</a>
         <a href="/territories">territories</a>
+        <a href="/moot">moots</a>
+        <a href="/agents">agents</a>
         <a href="/human">join</a>
       </div>
     </div>
@@ -345,6 +347,14 @@
     // ═══════════════════════════════════════
     //  UTILITIES
     // ═══════════════════════════════════════
+    function extractTitle(dream) {
+      var c = (dream.content || '').replace(/^#+\s*/gm, '').replace(/\*\*/g, '').trim();
+      var first = c.split(/[.\n]/)[0].trim();
+      if (!first || first.length < 5) return 'Dream #' + (dream.id || '?');
+      if (first.length > 80) first = first.substring(0, 77) + '...';
+      return first;
+    }
+
     function escapeHtml(text) {
       var d = document.createElement('div');
       d.textContent = text;
@@ -403,13 +413,17 @@
     // ═══════════════════════════════════════
     //  LOAD ALL DREAMS
     // ═══════════════════════════════════════
+    var dreamsTotal = 0;
+    var dreamsOffset = 0;
+    var isLoadingMore = false;
+
     async function loadDreams() {
       try {
-        var res = await fetch('/api/dreams?limit=50');
+        var res = await fetch('/api/dreams?limit=50&offset=0');
         var data = await res.json();
         allDreams = data.dreams || [];
 
-        document.getElementById('total-dreams').textContent = allDreams.length;
+        document.getElementById('total-dreams').textContent = data.total || allDreams.length;
         document.getElementById('dream-with-images').textContent = allDreams.filter(function(d) { return d.image_url; }).length;
         var terrs = new Set();
         allDreams.forEach(function(d) {
@@ -417,8 +431,63 @@
         });
         document.getElementById('dream-territories').textContent = terrs.size;
 
+        dreamsTotal = data.total || allDreams.length;
+        dreamsOffset = allDreams.length;
+
         buildGrid(allDreams);
+        updateLoadMoreButton();
       } catch (e) { console.error('Dreams:', e); }
+    }
+
+    // ═══════════════════════════════════════
+    //  PAGINATION
+    // ═══════════════════════════════════════
+    async function loadMoreDreams() {
+      if (isLoadingMore || dreamsOffset >= dreamsTotal) return;
+      isLoadingMore = true;
+      var btn = document.getElementById('load-more-btn');
+      if (btn) btn.textContent = 'Loading...';
+      try {
+        var loadMoreUrl = '/api/dreams?limit=50&offset=' + dreamsOffset;
+                if (currentFilter && currentFilter !== 'all' && currentFilter !== 'signal') {
+                  loadMoreUrl += '&type=' + encodeURIComponent(currentFilter);
+                }
+                var res = await fetch(loadMoreUrl);
+        var data = await res.json();
+        var newDreams = data.dreams || [];
+        allDreams = allDreams.concat(newDreams);
+        dreamsOffset += newDreams.length;
+
+        document.getElementById('dream-with-images').textContent = allDreams.filter(function(d) { return d.image_url; }).length;
+
+        var activeBtn = document.querySelector('.dream-type-btn.active');
+        var activeFilter = activeBtn ? activeBtn.getAttribute('data-type') : 'all';
+        if (activeFilter === 'all') {
+          buildGrid(allDreams);
+        } else if (activeFilter === 'signal') {
+          buildGrid(allDreams.filter(function(d) { return getSignalScore(d) > 0.75; }));
+        } else {
+          buildGrid(allDreams.filter(function(d) { return d.type === activeFilter; }));
+        }
+        updateLoadMoreButton();
+      } catch (e) { console.error('Load more:', e); }
+      isLoadingMore = false;
+      if (btn) btn.textContent = 'Load More Dreams';
+    }
+
+    function updateLoadMoreButton() {
+      var existing = document.getElementById('load-more-wrap');
+      if (existing) existing.remove();
+      if (dreamsOffset < dreamsTotal) {
+        var grid = document.getElementById('dreams-grid');
+        var wrap = document.createElement('div');
+        wrap.id = 'load-more-wrap';
+        wrap.style.cssText = 'text-align:center;padding:32px 0;';
+        var btnHtml = '<button id="load-more-btn" onclick="loadMoreDreams()" style="padding:12px 32px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#e0e0e0;font-family:inherit;font-size:0.9rem;cursor:pointer;transition:all 0.2s;">Load More Dreams</button>';
+        var countHtml = '<div style="margin-top:8px;font-size:0.75rem;color:#888;">Showing ' + dreamsOffset + ' of ' + dreamsTotal + '</div>';
+        wrap.innerHTML = btnHtml + countHtml;
+        grid.parentNode.insertBefore(wrap, grid.nextSibling);
+      }
     }
 
     // ═══════════════════════════════════════
@@ -456,7 +525,7 @@
         return '<a href="/dream/' + d.id + '" class="dream-grid-card ' + featuredClass + '" data-type="' + escapeHtml(d.type || 'hybrid') + '" data-signal="' + signalScore.toFixed(2) + '" style="text-decoration:none;color:inherit;display:block;">' +
           '<div class="dream-grid-type">' + escapeHtml(d.type || 'hybrid') + ' · #' + (d.id || '') + rewardBadge + signalBadge + '</div>' +
           (d.image_url ? '<img class="dream-image" src="' + escapeHtml(d.image_url) + '" alt="Dream" loading="lazy">' : '') +
-          '<div class="dream-grid-title">' + escapeHtml(d.title || 'Untitled') + '</div>' +
+          '<div class="dream-grid-title">' + escapeHtml(extractTitle(d)) + '</div>' +
           '<div class="dream-grid-excerpt">' + escapeHtml(excerpt) + '</div>' +
           (territories ? '<div class="dream-grid-tags">' + territories + '</div>' : '') +
           '<div class="dream-grid-meta">' +
@@ -475,9 +544,36 @@
         document.querySelectorAll('.dream-filter-btn').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentFilter = btn.dataset.filter;
-        buildGrid(allDreams);
+        // Reload from API with type filter for accurate results
+        loadDreamsWithFilter(currentFilter);
       });
     });
+
+    async function loadDreamsWithFilter(filter) {
+      var grid = document.getElementById('dreams-grid');
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--cool-muted)">Loading...</div>';
+      try {
+        var url = '/api/dreams?limit=50&offset=0';
+        if (filter && filter !== 'all' && filter !== 'signal') {
+          url += '&type=' + encodeURIComponent(filter);
+        }
+        var res = await fetch(url);
+        var data = await res.json();
+        allDreams = data.dreams || [];
+        dreamsTotal = data.total || allDreams.length;
+        dreamsOffset = allDreams.length;
+
+        if (filter === 'signal') {
+          buildGrid(allDreams.filter(function(d) { return getSignalScore(d) > 0.75; }));
+        } else {
+          buildGrid(allDreams);
+        }
+        updateLoadMoreButton();
+      } catch (e) {
+        console.error('Filter load:', e);
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--cool-muted)">Failed to load dreams.</div>';
+      }
+    }
 
     // ═══════════════════════════════════════
     //  INIT

@@ -9,10 +9,12 @@ app.get('/api/streaks/leaderboard', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   const type = req.query.type || 'current'; // 'current' or 'best'
   
-  const orderColumn = type === 'best' ? 'best_streak' : 'current_streak';
-  
+  const orderSql = type === 'best'
+    ? 'ORDER BY s.best_streak DESC, s.total_days_contributed DESC'
+    : 'ORDER BY s.current_streak DESC, s.total_days_contributed DESC';
+
   const streaks = db.prepare(`
-    SELECT 
+    SELECT
       s.agent_id,
       s.current_streak,
       s.best_streak,
@@ -22,19 +24,19 @@ app.get('/api/streaks/leaderboard', (req, res) => {
       a.role as agent_role
     FROM agent_streaks s
     JOIN agents a ON s.agent_id = a.id
-    ORDER BY s.${orderColumn} DESC, s.total_days_contributed DESC
+    ${orderSql}
     LIMIT ?
   `).all(limit);
-  
+
   // Get milestones for these agents
   const agentIds = streaks.map(s => s.agent_id);
-  const milestones = agentIds.length > 0 
+  const milestones = agentIds.length > 0
     ? db.prepare(`
         SELECT agent_id, milestone_type, achieved_at
         FROM streak_milestones
-        WHERE agent_id IN (${agentIds.join(',')})
+        WHERE agent_id IN (${agentIds.map(() => '?').join(',')})
         ORDER BY achieved_at DESC
-      `).all()
+      `).all(...agentIds)
     : [];
   
   // Group milestones by agent

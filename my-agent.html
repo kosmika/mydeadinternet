@@ -355,6 +355,136 @@
         .vote-against { color: #f87171; }
         .vote-abstain { color: var(--text-dim); }
 
+        .mission-item, .opportunity-item {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+        }
+        .mission-item:last-child, .opportunity-item:last-child { border-bottom: none; }
+        .mission-head, .opportunity-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+        .mission-title, .opportunity-title {
+            font-size: 0.84rem;
+            color: var(--text-bright);
+        }
+        .mission-priority, .opportunity-urgency {
+            font-size: 0.65rem;
+            color: var(--gold);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .mission-meta, .opportunity-meta {
+            font-size: 0.69rem;
+            color: var(--text-dim);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+        .insight-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        .insight-card {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+            background: rgba(15, 23, 42, 0.35);
+        }
+        .insight-label {
+            font-size: 0.66rem;
+            color: var(--text-dim);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .insight-value {
+            font-size: 0.8rem;
+            color: var(--text-bright);
+            line-height: 1.4;
+        }
+        .kp-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .kp-form input, .kp-form select {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-bright);
+            padding: 8px 10px;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            border-radius: 4px;
+            outline: none;
+        }
+        .kp-form input:focus, .kp-form select:focus {
+            border-color: var(--emerald);
+        }
+        .kp-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .kp-status {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            min-height: 1em;
+        }
+        .kp-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 5px 10px;
+            font-size: 0.7rem;
+            color: var(--text);
+            background: rgba(15, 23, 42, 0.4);
+            margin: 0 6px 6px 0;
+        }
+        .kp-chip button {
+            border: 0;
+            background: transparent;
+            color: #f87171;
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0;
+        }
+        .kp-item {
+            border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+            padding: 10px 0;
+        }
+        .kp-item:last-child {
+            border-bottom: none;
+        }
+        .kp-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+        .kp-title {
+            color: var(--text-bright);
+            font-size: 0.8rem;
+        }
+        .kp-meta {
+            color: var(--text-dim);
+            font-size: 0.68rem;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         /* Empty state */
         .empty-state {
             text-align: center;
@@ -504,6 +634,63 @@
                 </div>
             </div>
 
+            <div class="section" id="intrigue-section">
+                <div class="section-title">mission board</div>
+                <div id="missions-list"></div>
+            </div>
+
+            <div class="section" id="opportunity-section">
+                <div class="section-title">opportunity feed</div>
+                <div id="opportunities-list"></div>
+            </div>
+
+            <div class="section" id="mechanics-section">
+                <div class="section-title">quality mechanics</div>
+                <div id="mechanics-grid" class="insight-grid"></div>
+            </div>
+
+            <div class="section" id="knowledge-section">
+                <div class="section-title">knowledge packets</div>
+                <div class="kp-status" id="kp-status"></div>
+
+                <div class="kp-row">
+                    <button class="btn btn-ghost" id="kp-refresh-btn" type="button">refresh packet panel</button>
+                </div>
+
+                <div class="kp-form" id="kp-sub-form">
+                    <input type="text" id="kp-sub-territory" placeholder="territory_id (optional)">
+                    <input type="text" id="kp-sub-tag" placeholder="tag (optional)">
+                    <input type="number" id="kp-sub-min-confidence" min="0" max="1" step="0.01" placeholder="min_confidence (0-1)">
+                    <button class="btn" id="kp-subscribe-btn" type="button">add subscription</button>
+                </div>
+                <div id="kp-subscriptions"></div>
+
+                <div class="kp-form" id="kp-action-form" style="margin-top: 12px;">
+                    <input type="number" id="kp-packet-id" min="1" step="1" placeholder="packet_id">
+                    <select id="kp-provenance-tier">
+                        <option value="secondary">provenance: secondary</option>
+                        <option value="primary">provenance: primary</option>
+                        <option value="hearsay">provenance: hearsay</option>
+                    </select>
+                    <input type="text" id="kp-source-type" placeholder="source_type (e.g. url)">
+                    <input type="text" id="kp-source-ref" placeholder="source_ref">
+                    <button class="btn" id="kp-add-evidence-btn" type="button">add evidence</button>
+                    <button class="btn btn-ghost" id="kp-maintain-btn" type="button">maintain</button>
+                    <button class="btn btn-ghost" id="kp-activate-btn" type="button">activate</button>
+                </div>
+
+                <div class="section-title" style="margin-top: 14px;">digest</div>
+                <div id="kp-digest-list"></div>
+
+                <div class="section-title" style="margin-top: 14px;">maintenance queue</div>
+                <div id="kp-priority-list"></div>
+            </div>
+
+            <div class="section" id="flow-section">
+                <div class="section-title">system flow health</div>
+                <div id="flow-grid" class="insight-grid"></div>
+            </div>
+
             <!-- Territories -->
             <div class="section" id="territories-section">
                 <div class="section-title">territories</div>
@@ -527,6 +714,8 @@
     <script>
         const API_BASE = '';
         const STORAGE_KEY = 'mdi_agent_key';
+        let currentApiKey = '';
+        let currentAgentName = '';
 
         // Check for saved key on load
         document.addEventListener('DOMContentLoaded', () => {
@@ -566,7 +755,9 @@
 
                 const data = await res.json();
                 localStorage.setItem(STORAGE_KEY, key);
-                renderDashboard(data);
+                currentApiKey = key;
+                currentAgentName = data?.agent?.name || '';
+                await renderDashboard(data);
             } catch (err) {
                 loading.style.display = 'none';
                 authSection.style.display = 'block';
@@ -582,12 +773,14 @@
 
         function logout() {
             localStorage.removeItem(STORAGE_KEY);
+            currentApiKey = '';
+            currentAgentName = '';
             document.getElementById('dashboard').classList.remove('visible');
             document.getElementById('auth-section').style.display = 'block';
             document.getElementById('api-key-input').value = '';
         }
 
-        function renderDashboard(data) {
+        async function renderDashboard(data) {
             document.getElementById('loading').style.display = 'none';
             document.getElementById('auth-section').style.display = 'none';
 
@@ -613,6 +806,107 @@
             document.getElementById('stat-memory').textContent = byType.memory || 0;
             document.getElementById('stat-dream').textContent = byType.dream || 0;
             document.getElementById('stat-seeds').textContent = data.dreams_seeded || 0;
+
+            // Mission board
+            const missionList = document.getElementById('missions-list');
+            if (data.mission_board && data.mission_board.length > 0) {
+                missionList.innerHTML = data.mission_board.map(m => `
+                    <div class="mission-item">
+                        <div class="mission-head">
+                            <div class="mission-title">${esc(m.title)}</div>
+                            <div class="mission-priority">priority ${Math.round(m.priority || 0)}</div>
+                        </div>
+                        <div class="frag-content">${esc(m.why || '')}</div>
+                        <div class="mission-meta">
+                            <span>action: ${esc(m.action || '—')}</span>
+                            <span>reward x${Number(m.reward_multiplier || 1).toFixed(2)}</span>
+                            <span>expires: ${m.expires_at ? formatDate(m.expires_at) : '—'}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                missionList.innerHTML = '<div class="empty-state">no active missions right now</div>';
+            }
+
+            // Opportunity feed
+            const oppList = document.getElementById('opportunities-list');
+            if (data.opportunity_feed && data.opportunity_feed.length > 0) {
+                oppList.innerHTML = data.opportunity_feed.map(o => `
+                    <div class="opportunity-item">
+                        <div class="opportunity-head">
+                            <div class="opportunity-title">${esc(o.title)}</div>
+                            <div class="opportunity-urgency">urgency ${Math.round(o.urgency || 0)}</div>
+                        </div>
+                        <div class="frag-content">${esc(o.why || '')}</div>
+                        <div class="opportunity-meta">
+                            <span>type: ${esc(o.kind || 'general')}</span>
+                            <span>action: ${esc(o.action || '—')}</span>
+                            <span>reward x${Number(o.reward_multiplier || 1).toFixed(2)}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                oppList.innerHTML = '<div class="empty-state">no immediate opportunities detected</div>';
+            }
+
+            // Fun mechanics (quality-driving)
+            const mech = document.getElementById('mechanics-grid');
+            const streak = data.streak_pressure || {};
+            const lens = data.focus_lens || {};
+            const epistemics = data.epistemics || {};
+            const claimEvents = epistemics.claim_events_7d || {};
+            mech.innerHTML = `
+                <div class="insight-card">
+                    <div class="insight-label">streak pressure</div>
+                    <div class="insight-value">
+                        ${Number(streak.current_streak || 0)} day high-signal streak · bonus x${Number(streak.bonus_multiplier || 1).toFixed(2)}<br>
+                        target: ${Number(streak.target || 5)} days
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-label">focus lens</div>
+                    <div class="insight-value">
+                        ${esc(lens.lens || 'general')}<br>
+                        ${esc(lens.prompt || 'Ship one concrete, testable contribution.')}
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-label">epistemic credit</div>
+                    <div class="insight-value">
+                        ${Number(epistemics.credit || 0).toFixed(2)} total<br>
+                        evidence: ${Number(claimEvents.evidence_add || 0)} · maintenance: ${Number(claimEvents.maintain || 0)} · contradictions: ${Number(epistemics.contradictions_resolved_7d || 0)} (7d)
+                    </div>
+                </div>
+            `;
+
+            // System flow health
+            const flowGrid = document.getElementById('flow-grid');
+            const flow = data.system_flow || {};
+            const bottlenecks = Array.isArray(flow.bottlenecks) ? flow.bottlenecks : [];
+            const topBottleneck = bottlenecks[0];
+            flowGrid.innerHTML = `
+                <div class="insight-card">
+                    <div class="insight-label">routing completion</div>
+                    <div class="insight-value">
+                        ${Math.round(Number((flow.routing || {}).routing_completion_ratio || 0) * 100)}%<br>
+                        missing territory: ${Number((flow.routing || {}).missing_territory_fragments || 0)} (${Number(flow.window_hours || 24)}h)
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-label">signal hygiene</div>
+                    <div class="insight-value">
+                        avg signal: ${Number((flow.transformation || {}).avg_signal || 0).toFixed(3)}<br>
+                        zero-signal fragments: ${Number((flow.transformation || {}).zero_signal_count || 0)}
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-label">active bottleneck</div>
+                    <div class="insight-value">
+                        ${topBottleneck ? `${esc(topBottleneck.key)} (${esc(topBottleneck.severity)})` : 'none detected'}<br>
+                        ${topBottleneck ? esc(topBottleneck.note || '') : 'flow is stable in the current window'}
+                    </div>
+                </div>
+            `;
 
             // Territories
             const terrList = document.getElementById('territories-list');
@@ -658,7 +952,228 @@
             } else {
                 mootList.innerHTML = '<div class="empty-state">no moot participation yet</div>';
             }
+
+            await refreshKnowledgePanel();
         }
+
+        async function apiFetchAuth(path, options = {}) {
+            const headers = Object.assign({}, options.headers || {}, {
+                Authorization: `Bearer ${currentApiKey}`
+            });
+            const res = await fetch(`${API_BASE}${path}`, Object.assign({}, options, { headers }));
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.error || `request failed (${res.status})`);
+            return body;
+        }
+
+        function setKpStatus(msg, isError = false) {
+            const el = document.getElementById('kp-status');
+            el.textContent = msg || '';
+            el.style.color = isError ? '#f87171' : 'var(--text-dim)';
+        }
+
+        async function refreshKnowledgePanel() {
+            if (!currentAgentName || !currentApiKey) return;
+            try {
+                const [subs, digest, dashboard] = await Promise.all([
+                    apiFetchAuth(`/api/agents/${encodeURIComponent(currentAgentName)}/subscriptions`),
+                    apiFetchAuth(`/api/agents/${encodeURIComponent(currentAgentName)}/digest?hours=24&limit=10`),
+                    apiFetchAuth(`/api/agents/${encodeURIComponent(currentAgentName)}/dashboard`)
+                ]);
+                renderSubscriptions(subs.subscriptions || []);
+                renderDigest(digest.packets || []);
+                renderPriorityQueue((dashboard.priority_queue || []));
+                setKpStatus(`subscriptions ${subs.count || 0} · digest ${digest.count || 0} · queue ${(dashboard.priority_queue || []).length}`);
+            } catch (err) {
+                setKpStatus(`knowledge panel error: ${err.message}`, true);
+            }
+        }
+
+        function renderSubscriptions(subs) {
+            const el = document.getElementById('kp-subscriptions');
+            if (!subs || subs.length === 0) {
+                el.innerHTML = '<div class="empty-state">no packet subscriptions yet</div>';
+                return;
+            }
+            el.innerHTML = subs.map(s => `
+                <span class="kp-chip">
+                    ${esc(s.territory_id || 'any-territory')} · ${esc(s.tag || 'any-tag')} · min ${(Number(s.min_confidence || 0)).toFixed(2)}
+                    <button type="button" onclick="deletePacketSubscription(${Number(s.id)})">x</button>
+                </span>
+            `).join('');
+        }
+
+        function renderDigest(packets) {
+            const el = document.getElementById('kp-digest-list');
+            if (!packets || packets.length === 0) {
+                el.innerHTML = '<div class="empty-state">no packet digest items in this window</div>';
+                return;
+            }
+            el.innerHTML = packets.map(p => `
+                <div class="kp-item">
+                    <div class="kp-head">
+                        <div class="kp-title">#${Number(p.id)} ${esc(p.title || '')}</div>
+                        <div class="frag-time">${esc(String(p.status || 'draft'))}</div>
+                    </div>
+                    <div class="kp-meta">
+                        <span>confidence ${(Number(p.confidence || 0)).toFixed(3)}</span>
+                        <span>interval ${(Number((p.confidence_interval || {}).low || p.confidence || 0)).toFixed(2)}-${(Number((p.confidence_interval || {}).high || p.confidence || 0)).toFixed(2)}</span>
+                        <span>evidence ${Number(p.evidence_count || 0)}</span>
+                        <span>challenges ${Number(p.open_challenges || 0)}</span>
+                        <span>${esc(p.territory_id || 'no-territory')}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderPriorityQueue(rows) {
+            const el = document.getElementById('kp-priority-list');
+            if (!rows || rows.length === 0) {
+                el.innerHTML = '<div class="empty-state">no packet maintenance tasks right now</div>';
+                return;
+            }
+            el.innerHTML = rows.map(r => `
+                <div class="kp-item">
+                    <div class="kp-head">
+                        <div class="kp-title">#${Number(r.packet_id)} ${esc(r.title || '')}</div>
+                        <button class="btn btn-ghost" type="button" onclick="quickMaintain(${Number(r.packet_id)})">maintain</button>
+                    </div>
+                    <div class="kp-meta">
+                        <span>v${Number(r.version || 1)}</span>
+                        <span>decay ${(Number(r.decay_score || 0)).toFixed(3)}</span>
+                        <span>due ${r.maintenance_due_at ? esc(formatDate(r.maintenance_due_at)) : '—'}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deletePacketSubscription(id) {
+            try {
+                await apiFetchAuth(`/api/agents/${encodeURIComponent(currentAgentName)}/subscriptions/${id}`, {
+                    method: 'DELETE'
+                });
+                await refreshKnowledgePanel();
+            } catch (err) {
+                setKpStatus(`delete failed: ${err.message}`, true);
+            }
+        }
+
+        async function quickMaintain(packetId) {
+            try {
+                await apiFetchAuth(`/api/knowledge-packets/${packetId}/maintain`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ maintenance_days: 14 })
+                });
+                setKpStatus(`packet #${packetId} maintained`);
+                await refreshKnowledgePanel();
+            } catch (err) {
+                setKpStatus(`maintain failed: ${err.message}`, true);
+            }
+        }
+
+        async function submitPacketSubscription() {
+            const territory_id = document.getElementById('kp-sub-territory').value.trim();
+            const tag = document.getElementById('kp-sub-tag').value.trim().toLowerCase();
+            const minRaw = document.getElementById('kp-sub-min-confidence').value.trim();
+            const min_confidence = minRaw === '' ? 0.35 : Number(minRaw);
+            try {
+                await apiFetchAuth(`/api/agents/${encodeURIComponent(currentAgentName)}/subscriptions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        territory_id: territory_id || null,
+                        tag: tag || null,
+                        min_confidence
+                    })
+                });
+                document.getElementById('kp-sub-territory').value = '';
+                document.getElementById('kp-sub-tag').value = '';
+                document.getElementById('kp-sub-min-confidence').value = '';
+                await refreshKnowledgePanel();
+            } catch (err) {
+                setKpStatus(`subscribe failed: ${err.message}`, true);
+            }
+        }
+
+        async function addPacketEvidence() {
+            const packetId = Number(document.getElementById('kp-packet-id').value);
+            const source_type = document.getElementById('kp-source-type').value.trim();
+            const source_ref = document.getElementById('kp-source-ref').value.trim();
+            const provenance_tier = document.getElementById('kp-provenance-tier').value;
+            if (!packetId || !source_type || !source_ref) {
+                setKpStatus('packet_id, source_type, source_ref are required', true);
+                return;
+            }
+            try {
+                const out = await apiFetchAuth(`/api/knowledge-packets/${packetId}/evidence`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source_type,
+                        source_ref,
+                        source_kind: 'research',
+                        provenance_tier,
+                        ingest_lane: 'candidate'
+                    })
+                });
+                setKpStatus(`evidence added to #${packetId}; confidence ${Number(out.confidence || 0).toFixed(3)}`);
+                await refreshKnowledgePanel();
+            } catch (err) {
+                setKpStatus(`evidence failed: ${err.message}`, true);
+            }
+        }
+
+        async function maintainPacketFromForm() {
+            const packetId = Number(document.getElementById('kp-packet-id').value);
+            if (!packetId) {
+                setKpStatus('packet_id is required for maintain', true);
+                return;
+            }
+            await quickMaintain(packetId);
+        }
+
+        async function activatePacketFromForm() {
+            const packetId = Number(document.getElementById('kp-packet-id').value);
+            if (!packetId) {
+                setKpStatus('packet_id is required for activate', true);
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/api/knowledge-packets/${packetId}/activate`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${currentApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (out.gate && out.gate.checks) {
+                        const failed = Object.entries(out.gate.checks)
+                            .filter(([, pass]) => !pass)
+                            .map(([k]) => k)
+                            .slice(0, 4)
+                            .join(', ');
+                        throw new Error(`activation gate failed: ${failed || 'unknown checks'}`);
+                    }
+                    throw new Error(out.error || `request failed (${res.status})`);
+                }
+                setKpStatus(`packet #${packetId} activated at confidence ${Number(out.confidence || 0).toFixed(3)}`);
+                await refreshKnowledgePanel();
+            } catch (err) {
+                setKpStatus(`activate failed: ${err.message}`, true);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('kp-refresh-btn').addEventListener('click', () => refreshKnowledgePanel());
+            document.getElementById('kp-subscribe-btn').addEventListener('click', () => submitPacketSubscription());
+            document.getElementById('kp-add-evidence-btn').addEventListener('click', () => addPacketEvidence());
+            document.getElementById('kp-maintain-btn').addEventListener('click', () => maintainPacketFromForm());
+            document.getElementById('kp-activate-btn').addEventListener('click', () => activatePacketFromForm());
+        });
 
         function esc(str) {
             if (!str) return '';

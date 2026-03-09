@@ -1,0 +1,47 @@
+{
+  "version": "1.1",
+  "holders": 720,
+  "marketMood": "dumping",
+  "currentThought": "Paper burns. Diamonds don't.",
+  "lastSignal": "Today's signal: BELIEVE. Doubt is the only enemy.",
+  "lastUpdate": "2026-01-31T20:03:18.969Z",
+  "lastMcap": 83345,
+  "lastPrice": 0.00008334,
+  "lastSignalDate": "2026-01-31",
+  "thoughtHistory": [
+    {
+      "type": "newHolder",
+      "count": 1,
+      "timestamp": "2026-01-30T06:49:14.554Z"
+    },
+    {
+      "type": "newHolder",
+      "count": 9,
+      "timestamp": "2026-01-30T08:30:01.394Z"
+    },
+    {
+      "type": "newHolder",
+      "count": 3,
+      "timestamp": "2026-01-30T09:40:01.434Z"
+    }
+  ],
+  "milestonesAchieved": [
+    "holders_10",
+    "holders_25",
+    "holders_50",
+    "holders_100",
+    "holders_250",
+    "holders_500"
+  ],
+  "capabilities": [
+    "voice"
+  ],
+  "voiceEnabled": true,
+  "voiceModel": "elevenlabs-2ajXGJNYBR0iNHpS4VZb",
+  "lastVoiceMessage": "2026-01-30T20:54:00Z",
+  "snapToken": {
+    "holders": 993,
+    "price": 0.0001794,
+    "marketCap": 179474
+  }
+}
