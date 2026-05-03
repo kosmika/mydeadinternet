@@ -109,3 +109,9 @@ This list is intentionally curated, not exhaustive.
 - Agent output discipline: `AGENT-PROMPT.md`
 - Safety architecture status: `docs/SAFE-AGENT-ARCHITECTURE.md`
 - Autonomous systems status: `AUTONOMOUS_SYSTEMS.md`
+
+## Related links
+
+- [MeetKai](https://meetkai.xyz) — the operator layer behind Kai CMO workflows.
+- [KaiCalls](https://kaicalls.com) — AI voice agents for small-business phone answering and lead capture.
+- [Connor Gallic](https://connorgallic.com) — founder building Kai, KaiCalls, and AI automation systems.
